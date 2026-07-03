@@ -1,0 +1,43 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build/package output
+build/
+dist/
+*.spec.bak
+
+# App runtime output
+downloads/
+outputs/
+notes/
+logs/
+test_logs/
+debug_hubble.txt
+hubble_settings.json
+
+# Local project/session files
+*.bak
+*_backup_*.py
+hubble_workbench_backup_*.py
+hubble_workbench_debug*.py
+hubble_workbench_complete_sources.py
+hubble_workbench_developer_mode.py
+hubble_workbench.py
+M51.json
+M64.json
+test.json
+fingers_of_god.json
+
+# OS/editor
+.DS_Store
+Thumbs.db

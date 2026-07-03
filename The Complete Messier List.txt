@@ -1,0 +1,115 @@
+The Complete Messier List (M1 - M110)
+M1: Crab Nebula (Supernova Remnant) - Taurus
+M2: Globular Cluster - Aquarius
+M3: Globular Cluster - Canes Venatici
+M4: Globular Cluster - Scorpius
+M5: Globular Cluster - Serpens
+M6: Butterfly Cluster (Open Cluster) - Scorpius
+M7: Ptolemy Cluster (Open Cluster) - Scorpius
+M8: Lagoon Nebula (Emission Nebula) - Sagittarius
+M9: Globular Cluster - Ophiuchus
+M10: Globular Cluster - Ophiuchus
+M11: Wild Duck Cluster (Open Cluster) - Scutum
+M12: Globular Cluster - Ophiuchus
+M13: Great Globular Cluster in Hercules - Hercules
+M14: Globular Cluster - Ophiuchus
+M15: Globular Cluster - Pegasus
+M16: Eagle Nebula (Emission Nebula) - Serpens
+M17: Omega or Swan Nebula (Emission Nebula) - Sagittarius
+M18: Open Cluster - Sagittarius
+M19: Globular Cluster - Ophiuchus
+M20: Trifid Nebula (Emission/Reflection Nebula) - Sagittarius
+M21: Open Cluster - Sagittarius
+M22: Globular Cluster - Sagittarius
+M23: Open Cluster - Sagittarius
+M24: Small Sagittarius Star Cloud - Sagittarius
+M25: Open Cluster - Sagittarius
+M26: Open Cluster - Scutum
+M27: Dumbbell Nebula (Planetary Nebula) - Vulpecula
+M28: Globular Cluster - Sagittarius
+M29: Open Cluster - Cygnus
+M30: Globular Cluster - Capricornus
+M31: Andromeda Galaxy (Spiral Galaxy) - Andromeda
+M32: Satellite Galaxy to M31 (Elliptical Galaxy) - Andromeda
+M33: Triangulum Galaxy (Spiral Galaxy) - Triangulum
+M34: Open Cluster - Perseus
+M35: Open Cluster - Gemini
+M36: Open Cluster - Auriga
+M37: Open Cluster - Auriga
+M38: Open Cluster - Auriga
+M39: Open Cluster - Cygnus
+M40: Double Star (Winnecke 4) - Ursa Major
+M41: Open Cluster - Canis Major
+M42: Orion Nebula (Emission Nebula) - Orion
+M43: De Mairan's Nebula (Emission Nebula) - Orion
+M44: Beehive Cluster (Open Cluster) - Cancer
+M45: Pleiades or Seven Sisters (Open Cluster) - Taurus
+M46: Open Cluster - Puppis
+M47: Open Cluster - Puppis
+M48: Open Cluster - Hydra
+M49: Elliptical Galaxy - Virgo
+M50: Open Cluster - Monoceros
+M51: Whirlpool Galaxy (Spiral Galaxy) - Canes Venatici
+M52: Open Cluster - Cassiopeia
+M53: Globular Cluster - Coma Berenices
+M54: Globular Cluster - Sagittarius
+M55: Globular Cluster - Sagittarius
+M56: Globular Cluster - Lyra
+M57: Ring Nebula (Planetary Nebula) - Lyra
+M58: Barred Spiral Galaxy - Virgo
+M59: Elliptical Galaxy - Virgo
+M60: Elliptical Galaxy - Virgo
+M61: Spiral Galaxy - Virgo
+M62: Globular Cluster - Ophiuchus
+M63: Sunflower Galaxy (Spiral Galaxy) - Canes Venatici
+M64: Black Eye Galaxy (Spiral Galaxy) - Coma Berenices
+M65: Spiral Galaxy - Leo
+M66: Spiral Galaxy - Leo
+M67: Open Cluster - Cancer
+M68: Globular Cluster - Hydra
+M69: Globular Cluster - Sagittarius
+M70: Globular Cluster - Sagittarius
+M71: Globular Cluster - Sagitta
+M72: Globular Cluster - Aquarius
+M73: Asterism - Aquarius
+M74: Phantom Galaxy (Spiral Galaxy) - Pisces
+M75: Globular Cluster - Sagittarius
+M76: Little Dumbbell Nebula (Planetary Nebula) - Perseus
+M77: Spiral Galaxy - Cetus
+M78: Reflection Nebula - Orion
+M79: Globular Cluster - Lepus
+M80: Globular Cluster - Scorpius
+M81: Bode's Galaxy (Spiral Galaxy) - Ursa Major
+M82: Cigar Galaxy (Starburst Galaxy) - Ursa Major
+M83: Southern Pinwheel Galaxy (Barred Spiral) - Hydra
+M84: Lenticular Galaxy - Virgo
+M85: Lenticular Galaxy - Coma Berenices
+M86: Lenticular Galaxy - Virgo
+M87: Elliptical Galaxy - Virgo
+M88: Spiral Galaxy - Coma Berenices
+M89: Elliptical Galaxy - Virgo
+M90: Spiral Galaxy - Virgo
+M91: Barred Spiral Galaxy - Coma Berenices
+M92: Globular Cluster - Hercules
+M93: Open Cluster - Puppis
+M94: Spiral Galaxy - Canes Venatici
+M95: Barred Spiral Galaxy - Leo
+M96: Spiral Galaxy - Leo
+M97: Owl Nebula (Planetary Nebula) - Ursa Major
+M98: Spiral Galaxy - Coma Berenices
+M99: Spiral Galaxy - Coma Berenices
+M100: Spiral Galaxy - Coma Berenices
+M101: Pinwheel Galaxy (Spiral Galaxy) - Ursa Major
+M102: Usually identified as Spiral Galaxy NGC 5866 - Draco
+M103: Open Cluster - Cassiopeia
+M104: Sombrero Galaxy (Spiral Galaxy) - Virgo
+M105: Elliptical Galaxy - Leo
+M106: Spiral Galaxy - Canes Venatici
+M107: Globular Cluster - Ophiuchus
+M108: Spiral Galaxy - Ursa Major
+M109: Barred Spiral Galaxy - Ursa Major
+M110: Satellite Galaxy to M31 (Elliptical Galaxy) - Andromeda [1, 2, 3, 4, 5]
+
+
+
+https://mast.stsci.edu/docs/#/

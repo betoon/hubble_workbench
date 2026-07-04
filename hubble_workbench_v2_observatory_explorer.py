@@ -22,7 +22,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 import numpy as np
-from PIL import Image, ImageTk
+from PIL import Image
 
 # Disable the decompression bomb protection entirely
 
@@ -66,6 +66,7 @@ from hubble_workbench_app.image_processing import (
     blended_gap_image,
     crop_black_border,
 )
+from hubble_workbench_app.app_utilities import AppUtilitiesMixin
 from hubble_workbench_app.quality_settings import QualitySettingsMixin
 from hubble_workbench_app.target_gallery import TargetGalleryMixin
 from hubble_workbench_app.dependency_status import DependencyStatusMixin
@@ -272,7 +273,7 @@ atexit.register(log_shutdown)
 
 
 
-class HubbleWorkbench(QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
+class HubbleWorkbench(AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -1979,53 +1980,18 @@ class HubbleWorkbench(QualitySettingsMixin, TargetGalleryMixin, DependencyStatus
 
     def open_project_file(self):
         return super().open_project_file()
+
     def show_image_on_canvas(self, canvas, image, attr_name, zoom=1.0):
-        canvas.delete("all")
-        width = max(320, canvas.winfo_width())
-        height = max(240, canvas.winfo_height())
-        preview = image.copy()
-        if zoom <= 1.01:
-            preview.thumbnail((width, height), Image.Resampling.LANCZOS)
-        else:
-            base = image.copy()
-            base.thumbnail((width, height), Image.Resampling.LANCZOS)
-            size = (max(1, int(base.width * zoom)), max(1, int(base.height * zoom)))
-            preview = base.resize(size, Image.Resampling.LANCZOS)
-        photo = ImageTk.PhotoImage(preview)
-        setattr(self, attr_name, photo)
-        canvas.create_image(width / 2, height / 2, image=photo, anchor="center")
+        return super().show_image_on_canvas(canvas, image, attr_name, zoom)
 
     def open_folder(self, folder):
-        folder.mkdir(exist_ok=True)
-        try:
-            import os
-            os.startfile(str(folder))
-        except Exception:
-            messagebox.showinfo("Folder", str(folder))
+        return super().open_folder(folder)
+
+    def open_file(self, path):
+        return super().open_file(path)
 
     def on_close(self):
-        if self.browser_busy_job:
-            try:
-                self.after_cancel(self.browser_busy_job)
-            except Exception:
-                pass
-            self.browser_busy_job = None
-        if hasattr(self, "compose_progress"):
-            try:
-                self.compose_progress.stop()
-            except Exception:
-                pass
-        SETTINGS["geometry"] = self.geometry()
-        if hasattr(self, "auto_compose_var"):
-            SETTINGS["auto_compose_after_load"] = bool(self.auto_compose_var.get())
-        if hasattr(self, "composite_size_var"):
-            SETTINGS["composite_size"] = self.composite_size_var.get()
-        if hasattr(self, "save_quality_settings"):
-            self.save_quality_settings()
-        save_settings(SETTINGS)
-        self.destroy()
-
-
+        return super().on_close()
 
 def instrument_debug_methods():
     """Wrap selected high-value methods with logging without cluttering the UI code."""

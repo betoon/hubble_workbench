@@ -12,5 +12,7 @@ def load_settings():
     return {}
 
 
+SETTINGS = load_settings()
+
 def save_settings(settings):
     SETTINGS_PATH.write_text(json.dumps(settings, indent=2), encoding="utf-8")

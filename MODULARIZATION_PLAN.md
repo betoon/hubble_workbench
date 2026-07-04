@@ -1,148 +1,164 @@
-﻿# Hubble Workbench Modularization Plan
+# Hubble Workbench Modularization Plan
 
 Branch: `v2.0.1-development`
 
-This plan is based on the working app copy at:
+This branch now contains the working Space Telescope Workbench application from the original local app folder, with the large main script split into focused helper modules.
 
-`C:\Users\brian\Documents\Codex\my_programs\Astronomy\Hubble_Workbench\hubble_workbench.py`
+Main launcher/app file:
 
-The GitHub checkout at `C:\Users\brian\Documents\GitHub\hubble_workbench` is connected to `https://github.com/betoon/hubble_workbench.git`, but it does not yet contain the application source files. This document intentionally does not modify the existing app code.
+`hubble_workbench_v2_observatory_explorer.py`
+
+Package folder:
+
+`hubble_workbench_app/`
 
 ## Current Shape
 
-`hubble_workbench.py` is about 3,487 lines.
+The main file is now mostly the Tkinter app shell and UI construction. It keeps:
 
-The top of the file contains imports, app constants, settings helpers, target galleries, filter/catalog constants, FITS helpers, and image-processing helpers.
+- app startup and `HubbleWorkbench` class setup
+- tab/layout builders
+- direct callback wrapper methods used by Tkinter buttons and smoke tests
+- final app startup helpers such as `run_app`
 
-The main app class starts at `class HubbleWorkbench(tk.Tk)` around line 603 and contains most of the behavior: Tkinter setup, tab construction, dependency checks, MAST/HLA searches, product scoring, RGB candidate selection, downloads, FITS preview/conversion, RGB composition, tuning, presets, project save/load, and export.
+Most non-UI behavior has moved into mixin modules under `hubble_workbench_app/`.
 
-## Target Layout
+## Current Module Map
 
-Use a package while keeping `hubble_workbench.py` as the public launcher until the refactor is proven stable.
+`paths.py`
 
-```text
-hubble_workbench.py
-hubble_workbench_app/
-  __init__.py
-  app.py
-  paths.py
-  settings.py
-  catalogs.py
-  dependencies.py
-  fits_io.py
-  image_processing.py
-  mast_search.py
-  product_scoring.py
-  downloads.py
-  project_files.py
-  ui/
-    __init__.py
-    setup_tab.py
-    browser_tab.py
-    convert_tab.py
-    compose_tab.py
-    widgets.py
-```
+- App folders, runtime output folders, log folders, settings path, preview-size constants, and product token constants.
 
-## Module Responsibilities
+`settings.py`
 
-`hubble_workbench.py`
+- Shared `SETTINGS`, `load_settings`, and `save_settings`.
 
-- Thin compatibility launcher.
-- Imports `HubbleWorkbench` from `hubble_workbench_app.app`.
-- Keeps `python hubble_workbench.py`, the batch launcher, and the PyInstaller spec working.
+`catalogs.py`
 
-`hubble_workbench_app/paths.py`
+- Target galleries, telescope choices, Messier loading, filter constants, RGB filter tokens, and target recipes.
 
-- `APP_DIR`, `DOWNLOAD_DIR`, `OUTPUT_DIR`, `NOTES_DIR`, `SETTINGS_PATH`, `MESSIER_LIST_PATH`.
-- Preview-size constants.
+`fits_io.py`
 
-`hubble_workbench_app/settings.py`
+- Optional astronomy imports, FITS reading, FITS Liberator detection and channel loading.
 
-- `load_settings`, `save_settings`, and `SETTINGS`.
+`image_processing.py`
 
-`hubble_workbench_app/catalogs.py`
+- Image normalization, preview downsampling, RGB conversion, resizing, gap fill, and crop helpers.
 
-- `messier_radius`, `load_messier_gallery_items`.
-- `TARGET_GALLERY`, `JWST_TARGET_GALLERY`, `TELESCOPE_CHOICES`, `SOLAR_SYSTEM_TARGETS`, `TARGET_ALIASES`.
-- JWST/HST filter constants, `RGB_FILTER_TOKENS`, and `TARGET_RECIPES`.
+`app_logging.py`
 
-`hubble_workbench_app/dependencies.py`
+- Debug log setup, timing log, global exception logging, path diagnostics, and debug method wrapping.
 
-- `optional_imports`.
-- Late-bound optional dependency names such as `FITS`, `OBSERVATIONS`, and `TIF_FILE` if they are currently assigned globally.
+`developer_tools.py`
 
-`hubble_workbench_app/fits_io.py`
+- Developer Tools menu, developer setting saves, diagnostic JSON writing, and current target names for logs.
 
-- `first_image_hdu`.
-- `find_fits_liberator_cli`.
-- `fits_liberator_stretch_args`.
-- `read_liberated_channel`.
-- `run_fits_liberator_channel`.
+`dependency_status.py`
 
-`hubble_workbench_app/image_processing.py`
+- Dependency status panel and checks for missing `astroquery` / `astropy`.
 
-- `normalize_image`, `normalize_float_channel`.
-- `resize_to_match`, `resize_float_to_match`.
-- Preview downsampling helpers.
-- `float_rgb_to_uint8`, `float_rgb_to_uint16`.
-- Border/gap/presentation cleanup helpers.
+`browser_activity.py`
 
-`hubble_workbench_app/mast_search.py`
+- Busy state, Stop button behavior, progress text, timeout handling, and download progress UI.
 
-- Target parsing and search helpers.
-- MAST/HLA query flow can move here as a mixin while preserving method names.
+`target_gallery.py`
 
-`hubble_workbench_app/product_scoring.py`
+- Hubble/JWST gallery selection, target recipe lookup, target loading, HLA gallery search helper, and output prefix helper.
 
-- Product identity, filtering, labels, scoring, RGB grouping, and candidate selection.
+`quality_settings.py`
 
-`hubble_workbench_app/downloads.py`
+- High-quality options, stretch setting saves, auto-compose trigger, and advanced stretch reset.
 
-- Download orchestration, HLA download handling, MAST individual downloads, manifest extraction, and RGB path matching.
+`mast_helpers.py`
 
-`hubble_workbench_app/project_files.py`
+- Target variants, radius parsing, MAST observation query helpers, product classification helpers, labels, and RGB group helpers.
 
-- Output prefixing, project state, project save/open, latest output opening, composite exports, and notes/output filename handling.
+`product_scoring.py`
 
-`hubble_workbench_app/ui/`
+- Product identity, product quality scoring, RGB set scoring, extra download row selection, and Easy RGB explanation text.
 
-- Move UI construction last because it depends heavily on `self.*` state and callback names.
-- Start with mixins so callbacks keep their existing names.
-- Candidate split: setup tab, browser tab, convert tab, compose tab, and shared widgets.
+`search_workflow.py`
 
-## Migration Sequence
+- Search MAST, Easy RGB Image, Easy High Quality, table value conversion, and normal MAST search completion.
 
-1. Copy the current application source into the GitHub checkout.
-2. Commit that baseline unchanged on `v2.0.1-development`.
-3. Keep `hubble_workbench.py` as the launcher.
-4. Extract pure modules first: `paths.py`, `settings.py`, `catalogs.py`, `image_processing.py`, and `fits_io.py`.
-5. After each extraction, run smoke tests and a compile check.
-6. Extract method groups as mixins while leaving method names unchanged.
-7. Move UI construction last.
-8. Only after behavior is stable, consider renaming files or changing the PyInstaller entry point.
+`hla_workflow.py`
+
+- Hubble Legacy Archive fallback search, HLA product fetching/parsing, HLA filename/sort helpers, and HLA search completion.
+
+`product_browser.py`
+
+- Product filtering/list refresh, RGB candidates and suggested sets, copy/select actions, Get Products, Get All Products, product row normalization/sorting, and product-load completion.
+
+`better_sources.py`
+
+- Find Better Sources, better-source scoring, better-source completion, Completeness Check, completeness reports, and completion handling.
+
+`download_workflow.py`
+
+- Selected product downloads, HLA product downloads, manifest extraction, RGB path matching, and download completion.
+
+`preview_workflow.py`
+
+- FITS preview/convert workflow, preview output saves, channel selection, and loading latest RGB sets.
+
+`compose_workflow.py`
+
+- RGB composition, image tuning, presets, preview updates, Easy RGB completion, and output preparation.
+
+`project_workflow.py`
+
+- Composite export, latest output opening, project save, and project open.
+
+`app_utilities.py`
+
+- Canvas image display, opening folders/files, and close/save behavior.
+
+## What Remains In The Main File
+
+The main file intentionally still owns UI construction:
+
+- `setup_style`
+- `build_ui`
+- `build_setup_tab`
+- `build_browser_tab`
+- `build_rgb_candidate_column`
+- `build_observatory_tab`
+- `build_convert_tab`
+- `build_compose_tab`
+- `build_tuning_slider`
+
+This is deliberate. The UI builders are the clearest wiring diagram for the app and heavily reference `self.*` state and callback names. Moving them should be optional and lower priority than preserving a stable working app.
+
+The main file also keeps small wrapper methods for button callbacks. These wrappers preserve existing method names and keep the generated smoke test happy while the real implementations live in mixins.
 
 ## Preservation Rules
 
-- Do not change button callback names during the first pass.
-- Do not rename `self.*` attributes during the first pass.
-- Do not change launch behavior: `python hubble_workbench.py` must still start the app.
-- Do not change output folders or settings filenames.
-- Do not change `Hubble_Workbench.spec` until the package import path is proven.
+- Keep button callback method names unchanged.
+- Keep `self.*` attribute names unchanged.
+- Keep launch behavior unchanged: `launch_hubble_workbench.bat` and the PyInstaller spec still point at `hubble_workbench_v2_observatory_explorer.py`.
+- Keep output folders and settings filenames unchanged.
 - Prefer mechanical moves over rewrites.
-- Validate after every small extraction.
+- Validate after every extraction.
 
-## Suggested Verification
+## Verification
 
 Run after each extraction:
 
 ```text
-python -m py_compile hubble_workbench.py
+python -m py_compile hubble_workbench_v2_observatory_explorer.py hubble_workbench_app\*.py
 python -m unittest tests.test_generated_smoke
 ```
 
-Then manually verify that the app opens, dependency status loads, MAST searches run, product lists refresh, FITS preview works, RGB composition renders, project save/load works, and PNG/TIFF exports write to `outputs/`.
+On Windows PowerShell, expand the module list if the wildcard is not accepted by `py_compile`:
+
+```text
+$files = @('hubble_workbench_v2_observatory_explorer.py') + (Get-ChildItem .\hubble_workbench_app -Filter *.py | ForEach-Object { $_.FullName })
+python -m py_compile @files
+python -m unittest tests.test_generated_smoke
+```
+
+Manual verification should still include opening the app, checking dependency status, running a target search, loading products, previewing a FITS file, composing RGB, saving/loading a project, and exporting PNG/TIFF outputs.
 
 ## Files To Keep Out Of Source Control By Default
 
-The working app folder contains generated/runtime artifacts such as `build/`, `dist/`, `downloads/`, `logs/`, `outputs/`, `test_logs/`, and `__pycache__/`. Those should not be brought into the GitHub repo as source unless there is a specific reason.
+Generated/runtime artifacts such as `build/`, `dist/`, `downloads/`, `logs/`, `outputs/`, `test_logs/`, and `__pycache__/` should stay out of source control unless there is a specific reason.

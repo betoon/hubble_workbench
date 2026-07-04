@@ -1,4 +1,3 @@
-import json
 import math
 import threading
 import sys
@@ -61,6 +60,7 @@ from hubble_workbench_app.image_processing import (
     blended_gap_image,
     crop_black_border,
 )
+from hubble_workbench_app.developer_tools import DeveloperToolsMixin
 from hubble_workbench_app.better_sources import BetterSourcesMixin
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.search_workflow import SearchWorkflowMixin
@@ -179,27 +179,6 @@ def check_path(path, label="path"):
     return path
 
 
-def safe_log_name(text, fallback="hubble"):
-    text = str(text or fallback).strip() or fallback
-    safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in text)
-    return safe[:80].strip("_") or fallback
-
-
-def write_developer_json(folder, prefix, payload):
-    """Save diagnostics as JSON. This must never interrupt the application."""
-    try:
-        folder = Path(folder)
-        folder.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = folder / f"{safe_log_name(prefix)}_{stamp}.json"
-        path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-        info_log("Developer diagnostic saved: %s", path)
-        return path
-    except Exception:
-        log_exception("Could not write developer JSON diagnostic")
-        return None
-
-
 def append_timing_log(label, elapsed_seconds, detail=""):
     try:
         TIMING_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -272,7 +251,7 @@ atexit.register(log_shutdown)
 
 
 
-class HubbleWorkbench(BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
+class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -315,52 +294,8 @@ class HubbleWorkbench(BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMix
         self.refresh_dependency_status()
         info_log("HubbleWorkbench initialization finished")
 
-    def setup_developer_menu(self):
-        """Tools menu for permanent diagnostics and developer-mode logging."""
-        try:
-            menu_bar = tk.Menu(self)
-            tools_menu = tk.Menu(menu_bar, tearoff=0)
-            tools_menu.add_checkbutton(label="Enable Developer Mode", variable=self.developer_mode_var, command=self.save_developer_settings)
-            tools_menu.add_checkbutton(label="Verbose MAST Logging", variable=self.verbose_mast_log_var, command=self.save_developer_settings)
-            tools_menu.add_checkbutton(label="Save Search History", variable=self.save_search_history_var, command=self.save_developer_settings)
-            tools_menu.add_checkbutton(label="Save Product Lists", variable=self.save_product_lists_var, command=self.save_developer_settings)
-            tools_menu.add_checkbutton(label="Save Download Logs", variable=self.save_download_logs_var, command=self.save_developer_settings)
-            tools_menu.add_checkbutton(label="Timing Statistics", variable=self.save_timing_stats_var, command=self.save_developer_settings)
-            tools_menu.add_separator()
-            tools_menu.add_command(label="Open Logs Folder", command=lambda: self.open_folder(LOG_DIR))
-            tools_menu.add_command(label="Open debug_hubble.txt", command=lambda: self.open_file(DEBUG_LOG_PATH))
-            menu_bar.add_cascade(label="Tools", menu=tools_menu)
-            self.config(menu=menu_bar)
-            info_log("Developer Tools menu installed")
-        except Exception:
-            log_exception("Could not create Developer Tools menu")
-
     def save_developer_settings(self):
-        SETTINGS["developer_mode"] = bool(self.developer_mode_var.get())
-        SETTINGS["verbose_mast_logging"] = bool(self.verbose_mast_log_var.get())
-        SETTINGS["save_search_history"] = bool(self.save_search_history_var.get())
-        SETTINGS["save_product_lists"] = bool(self.save_product_lists_var.get())
-        SETTINGS["save_download_logs"] = bool(self.save_download_logs_var.get())
-        SETTINGS["save_timing_stats"] = bool(self.save_timing_stats_var.get())
-        save_settings(SETTINGS)
-        info_log("Developer settings saved: %s", {key: SETTINGS.get(key) for key in ("developer_mode", "verbose_mast_logging", "save_search_history", "save_product_lists", "save_download_logs", "save_timing_stats")})
-
-    def developer_enabled(self):
-        try:
-            return bool(self.developer_mode_var.get())
-        except Exception:
-            return True
-
-    def save_diagnostic_json(self, folder, prefix, payload):
-        if not self.developer_enabled():
-            return None
-        return write_developer_json(folder, prefix, payload)
-
-    def current_target_for_log(self):
-        try:
-            return self.target_var.get().strip() or "target"
-        except Exception:
-            return "target"
+        return super().save_developer_settings()
 
     def setup_style(self):
         self.configure(bg="#f3f3f3")

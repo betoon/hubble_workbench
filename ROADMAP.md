@@ -72,6 +72,7 @@ Planned capabilities:
 - Added CSV export for the currently selected sky mosaic layer.
 - Added clipboard copy for the currently selected sky mosaic rows.
 - Added clickable sky mosaic markers that show observation details and select the matching observation row.
+- Added a Get Marker Products action for the selected mosaic observation.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

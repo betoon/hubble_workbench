@@ -91,6 +91,25 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Build at least one complete", report)
 
 
+
+    def test_marker_products_requires_selected_marker(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Status:
+            def __init__(self):
+                self.value = ""
+
+            def set(self, value):
+                self.value = value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            pass
+
+        app = Dummy()
+        app.mosaic_status_var = Status()
+        self.assertFalse(app.observatory_get_marker_products())
+        self.assertIn("Click a mosaic marker first", app.mosaic_status_var.value)
+
     def test_mosaic_marker_detail_includes_observation_fields(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

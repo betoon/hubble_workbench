@@ -442,8 +442,29 @@ class ObservatoryWorkflowMixin:
             self.observatory_report_text.see("end")
         except Exception:
             pass
+        self.selected_mosaic_row = row
         self.observatory_select_observation_row(row)
         return row
+
+    def observatory_get_marker_products(self):
+        row = getattr(self, "selected_mosaic_row", None)
+        if row is None:
+            message = "Click a mosaic marker first, then use Get Marker Products."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        if not self.observatory_select_observation_row(row):
+            message = "The selected mosaic marker is not available in the current observation list."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        try:
+            self.notebook.select(self.browser_tab)
+        except Exception:
+            pass
+        self.products_async()
+        return True
+
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum

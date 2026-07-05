@@ -64,6 +64,7 @@ Planned capabilities:
 - Added layer readiness checks for active sources, including observations, products, RGB coverage, and next action.
 - Saved structured project state in Observatory Explorer diagnostics for future multi-telescope project tools.
 - Added a project checklist that turns layer status into immediate next actions.
+- Added activation requirements for planned Chandra, Pan-STARRS, and DSS layers.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

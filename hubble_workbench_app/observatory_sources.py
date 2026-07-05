@@ -5,6 +5,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "space telescope",
         "status": "active",
         "role": "Visible/near-UV imaging and legacy HLA enhanced products.",
+        "activation": "Already available through MAST/HLA workflows.",
     },
     {
         "name": "James Webb",
@@ -12,6 +13,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "space telescope",
         "status": "active",
         "role": "Infrared imaging and high-quality i2d/calibrated products.",
+        "activation": "Already available through MAST product workflows.",
     },
     {
         "name": "Chandra",
@@ -19,6 +21,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "space telescope",
         "status": "planned",
         "role": "X-ray context layer for energetic sources and galaxy clusters.",
+        "activation": "Needs Chandra archive search, product selection, and X-ray overlay handling.",
     },
     {
         "name": "Pan-STARRS",
@@ -26,6 +29,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "planned",
         "role": "Optical sky-survey context and color-reference layer.",
+        "activation": "Needs survey cutout retrieval, registration, and color-reference handling.",
     },
     {
         "name": "DSS",
@@ -33,6 +37,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "planned",
         "role": "Broad reference imagery for target identification and framing.",
+        "activation": "Needs reference image retrieval, registration, and framing controls.",
     },
 ]
 
@@ -43,6 +48,13 @@ def active_sources():
 
 def planned_sources():
     return [source for source in MULTI_TELESCOPE_SOURCES if source["status"] != "active"]
+
+
+def planned_activation_lines():
+    lines = []
+    for source in planned_sources():
+        lines.append(f"- {source['name']} ({source['code']}): {source.get('activation', 'Needs implementation plan.')}")
+    return lines
 
 
 def source_status_lines():
@@ -109,6 +121,7 @@ def source_layer_state(summary, source):
         "kind": source["kind"],
         "status": source["status"],
         "role": source["role"],
+        "activation": source.get("activation", ""),
         "observations": source_observation_count(summary, source),
         "products": source_product_count(summary, source),
         "rgb": rgb,
@@ -191,6 +204,8 @@ def project_plan_lines(summary=None):
     lines.append("Planned context layers:")
     for source in state["planned_sources"]:
         lines.append(f"- {source['name']} ({source['code']}): {source['role']} [planned]")
+        if source.get("activation"):
+            lines.append(f"  Activation needed: {source['activation']}")
 
     lines.append("Project guidance:")
     if not summary or not summary.get("observations"):

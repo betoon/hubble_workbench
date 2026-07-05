@@ -2,6 +2,7 @@ import unittest
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
+    planned_activation_lines,
     project_checklist_lines,
     project_plan_lines,
     project_state,
@@ -64,6 +65,15 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("RGB blue=1, green=1, red=0", line)
         self.assertIn("missing red coverage", line)
 
+    def test_planned_sources_explain_activation_requirements(self):
+        report = "\n".join(planned_activation_lines())
+        self.assertIn("Chandra (CHANDRA)", report)
+        self.assertIn("archive search", report)
+        self.assertIn("Pan-STARRS (PANSTARRS)", report)
+        self.assertIn("survey cutout", report)
+        self.assertIn("DSS (DSS)", report)
+        self.assertIn("reference image", report)
+
     def test_project_checklist_names_immediate_actions(self):
         empty_lines = project_checklist_lines({"observations": 0})
         self.assertIn("Search Hubble or JWST", "\n".join(empty_lines))
@@ -97,6 +107,7 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Planned context layers:", report)
         self.assertIn("Chandra (CHANDRA)", report)
         self.assertIn("[planned]", report)
+        self.assertIn("Activation needed:", report)
 
 
 if __name__ == "__main__":

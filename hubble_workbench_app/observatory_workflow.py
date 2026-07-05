@@ -241,6 +241,36 @@ class ObservatoryWorkflowMixin:
             logging.exception("Observatory Explorer analysis failed")
             messagebox.showerror("Observatory Explorer", self.format_error_message(exc))
 
+
+    def observatory_current_report_text(self):
+        widget = getattr(self, "observatory_report_text", None)
+        if widget is None:
+            return self.observatory_summary_text()
+        text = widget.get("1.0", "end").strip()
+        if text:
+            return text
+        return self.observatory_summary_text()
+
+    def observatory_copy_report(self):
+        report = self.observatory_current_report_text()
+        self.clipboard_clear()
+        self.clipboard_append(report)
+        self.update()
+        message = "Copied Observatory Explorer report to the clipboard."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return report
+
+    def observatory_save_report(self):
+        report = self.observatory_current_report_text()
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_observatory_explorer_report.txt"
+        path.write_text(report + "\n", encoding="utf-8")
+        message = f"Saved Observatory Explorer report to {path.name}."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
+
     def observatory_marker_style(self, row):
         mission = str(row.get("obs_collection", "")).upper()
         bucket = self.observation_filter_bucket(row)

@@ -90,6 +90,15 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("missing red", report)
         self.assertIn("Build at least one complete", report)
 
+
+    def test_observatory_report_text_falls_back_to_summary(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Dummy(ObservatoryWorkflowMixin):
+            def observatory_summary_text(self):
+                return "fallback report"
+
+        self.assertEqual(Dummy().observatory_current_report_text(), "fallback report")
     def test_project_plan_marks_loaded_and_planned_sources(self):
         summary = {
             "observations": 3,

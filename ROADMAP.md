@@ -68,6 +68,7 @@ Planned capabilities:
 - Added an Observatory Explorer action to prepare the best RGB layer from loaded products.
 - Added a sky mosaic layer selector for all active sources, Hubble, and JWST.
 - Added a best-candidates-only option for the sky mosaic viewer.
+- Added copy and save actions for the Observatory Explorer report.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

@@ -5,7 +5,7 @@ from tkinter import messagebox
 
 from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
-from hubble_workbench_app.observatory_sources import active_sources, planned_sources, source_status_lines
+from hubble_workbench_app.observatory_sources import active_sources, planned_sources, project_plan_lines
 
 
 class ObservatoryWorkflowMixin:
@@ -204,13 +204,13 @@ class ObservatoryWorkflowMixin:
         for recommendation in self.observatory_recommendations(summary):
             lines.append(f"- {recommendation}")
         lines.append("")
-        lines.append("Multi-Telescope Project Sources:")
-        for source_line in source_status_lines():
+        lines.append("Multi-Telescope Project Plan:")
+        for source_line in project_plan_lines(summary):
             lines.append(source_line)
         lines.append("")
         lines.append(
             f"Phase 3 foundation: {len(active_sources())} active source(s), "
-            f"{len(planned_sources())} planned source layer(s). Planned sources are listed for project tracking and are not searched yet."
+            f"{len(planned_sources())} planned source layer(s). Planned sources are visible for project tracking and are not searched yet."
         )
         return "\n".join(lines)
 

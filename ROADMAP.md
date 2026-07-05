@@ -71,6 +71,7 @@ Planned capabilities:
 - Added copy and save actions for the Observatory Explorer report.
 - Added CSV export for the currently selected sky mosaic layer.
 - Added clipboard copy for the currently selected sky mosaic rows.
+- Added clickable sky mosaic markers that show observation details and select the matching observation row.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

@@ -524,12 +524,16 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")
         ttk.Label(right, textvariable=self.mosaic_status_var, wraplength=720).pack(anchor="w", pady=(6, 0))
         self.mosaic_canvas.bind("<Configure>", lambda _event: self.observatory_draw_current_mosaic())
+        self.mosaic_canvas.bind("<Button-1>", self.observatory_mosaic_click)
 
     def observatory_analyze_current(self):
         return super().observatory_analyze_current()
 
     def observatory_draw_current_mosaic(self):
         return super().observatory_draw_current_mosaic()
+
+    def observatory_mosaic_click(self, event):
+        return super().observatory_mosaic_click(event)
 
     def observatory_copy_report(self):
         return super().observatory_copy_report()

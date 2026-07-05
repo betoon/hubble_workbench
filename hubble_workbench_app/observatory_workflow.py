@@ -380,6 +380,70 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(message)
         return path
 
+    def observatory_mosaic_marker_detail(self, row):
+        ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+        dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+        ra_text = f"{ra:.6f}" if ra is not None else "not listed"
+        dec_text = f"{dec:.6f}" if dec is not None else "not listed"
+        return "\n".join([
+            "Selected Mosaic Observation:",
+            f"- Mission: {row.get('obs_collection', '') or 'Unknown'}",
+            f"- Observation ID: {row.get('obs_id', '') or row.get('obsid', '') or 'unknown'}",
+            f"- Instrument: {row.get('instrument_name', '') or 'Unknown'}",
+            f"- Filter: {row.get('filters', '') or row.get('Spectral_Elt', '') or 'not listed'}",
+            f"- Exposure: {row.get('t_exptime', '') or '?'} seconds",
+            f"- RA/Dec: {ra_text}, {dec_text}",
+            f"- Wavelength bucket: {self.observation_filter_bucket(row)}",
+        ])
+
+    def observatory_mosaic_row_matches(self, left, right):
+        for key in ("obs_id", "obsid", "obsID"):
+            left_value = str(left.get(key, "") or "")
+            right_value = str(right.get(key, "") or "")
+            if left_value and right_value and left_value == right_value:
+                return True
+        return left is right
+
+    def observatory_select_observation_row(self, row):
+        widget = getattr(self, "obs_list", None)
+        if widget is None:
+            return False
+        for index, candidate in enumerate(list(getattr(self, "search_results", []) or [])[:500]):
+            if self.observatory_mosaic_row_matches(row, candidate):
+                widget.selection_clear(0, "end")
+                widget.selection_set(index)
+                widget.see(index)
+                return True
+        return False
+
+    def observatory_mosaic_click(self, event):
+        markers = list(getattr(self, "mosaic_marker_points", []) or [])
+        if not markers:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("No mosaic marker is available to select yet.")
+            return None
+        nearest = None
+        nearest_distance = None
+        for marker in markers:
+            distance = math.hypot(event.x - marker["x"], event.y - marker["y"])
+            if nearest is None or distance < nearest_distance:
+                nearest = marker
+                nearest_distance = distance
+        if nearest is None or nearest_distance > max(14, nearest.get("size", 4) + 8):
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("Click closer to a mosaic marker to select an observation.")
+            return None
+        row = nearest["row"]
+        detail = self.observatory_mosaic_marker_detail(row)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(detail.replace("\n", " "))
+        try:
+            self.observatory_report_text.insert("end", "\n\n" + detail)
+            self.observatory_report_text.see("end")
+        except Exception:
+            pass
+        self.observatory_select_observation_row(row)
+        return row
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum
@@ -393,6 +457,7 @@ class ObservatoryWorkflowMixin:
         if canvas is None:
             return
         canvas.delete("all")
+        self.mosaic_marker_points = []
         width = max(400, int(canvas.winfo_width() or 700))
         height = max(300, int(canvas.winfo_height() or 500))
         rows = self.observatory_current_mosaic_rows()
@@ -478,6 +543,7 @@ class ObservatoryWorkflowMixin:
             except Exception:
                 pass
             canvas.create_oval(x - size, y - size, x + size, y + size, fill=fill, outline=outline, width=1)
+            self.mosaic_marker_points.append({"x": x, "y": y, "size": size, "row": row})
 
         legend_x = plot_x1 - 225
         legend_y = plot_y0 + 12

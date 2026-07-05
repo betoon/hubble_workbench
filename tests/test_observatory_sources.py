@@ -91,6 +91,27 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Build at least one complete", report)
 
 
+    def test_mosaic_marker_detail_includes_observation_fields(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Dummy(ObservatoryWorkflowMixin):
+            def observation_filter_bucket(self, row):
+                return "Blue/short wavelength"
+
+        detail = Dummy().observatory_mosaic_marker_detail({
+            "obs_collection": "HST",
+            "obs_id": "obs-1",
+            "instrument_name": "WFC3",
+            "filters": "F555W",
+            "t_exptime": "1200",
+            "s_ra": "1.5",
+            "s_dec": "-2.25",
+        })
+        self.assertIn("Selected Mosaic Observation", detail)
+        self.assertIn("obs-1", detail)
+        self.assertIn("1.500000, -2.250000", detail)
+        self.assertIn("Blue/short wavelength", detail)
+
     def test_mosaic_export_rows_include_coordinates(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

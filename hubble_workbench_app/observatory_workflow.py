@@ -372,6 +372,45 @@ class ObservatoryWorkflowMixin:
             f"Plotted {len(points)} observation centers. Missions: {mission_text}. Wavelength buckets: {bucket_text}. "
             "True footprint polygons remain a later Phase 2 upgrade."
         )
+
+    def observatory_prepare_best_rgb_layer(self):
+        product_rows = list(getattr(self, "product_results", []) or [])
+        if not product_rows:
+            self.observatory_analyze_current()
+            message = "Get Products or Find Better Sources first, then prepare the best RGB layer."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            try:
+                self.observatory_report_text.insert("end", "\n\nPrepare Best RGB Layer:\n- " + message)
+                self.observatory_report_text.see("end")
+            except Exception:
+                pass
+            return
+
+        self.refresh_product_list()
+        self.select_best_rgb_products()
+        selected_count = 0
+        try:
+            selected_count = len(self.product_list.curselection())
+        except Exception:
+            selected_count = 0
+
+        if selected_count:
+            message = f"Prepared {selected_count} RGB product(s). Review the selected products in the MAST Browser RGB Picker, then download or compose."
+        else:
+            message = "No complete RGB layer could be prepared yet. Try Get All Products, Find Better Sources, or loosen product filters."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        try:
+            self.browser_status.set(message)
+        except Exception:
+            pass
+        try:
+            self.notebook.select(self.browser_tab)
+        except Exception:
+            pass
+        self.observatory_analyze_current()
+
     def observatory_search_wider_async(self):
         if not self.require_astroquery():
             return

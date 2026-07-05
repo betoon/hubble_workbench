@@ -470,6 +470,7 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ttk.Button(controls, text="Search Wider Radius", command=self.observatory_search_wider_async).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Find Better Sources", command=self.better_sources_async).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Completeness Check", command=self.completeness_check_async).pack(side="left", padx=(8, 0))
+        ttk.Button(controls, text="Prepare Best RGB Layer", command=self.observatory_prepare_best_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
 
         body = ttk.PanedWindow(self.observatory_tab, orient="horizontal")
         body.pack(fill="both", expand=True)
@@ -506,6 +507,9 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_search_wider_async(self):
         return super().observatory_search_wider_async()
+
+    def observatory_prepare_best_rgb_layer(self):
+        return super().observatory_prepare_best_rgb_layer()
 
     def build_convert_tab(self):
         top = ttk.Frame(self.convert_tab)

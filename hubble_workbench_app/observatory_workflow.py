@@ -257,6 +257,25 @@ class ObservatoryWorkflowMixin:
         outline = "#facc15" if mission == "JWST" else "#111827"
         return fill, outline, bucket
 
+
+    def observatory_selected_mosaic_rows(self, rows):
+        layer = "All active sources"
+        try:
+            layer = self.mosaic_layer_var.get()
+        except Exception:
+            pass
+        if layer == "Hubble / HST":
+            return [row for row in rows if str(row.get("obs_collection", "")).upper() == "HST"]
+        if layer == "JWST":
+            return [row for row in rows if str(row.get("obs_collection", "")).upper() == "JWST"]
+        return [row for row in rows if str(row.get("obs_collection", "")).upper() in ("HST", "JWST")]
+
+    def observatory_selected_mosaic_label(self):
+        try:
+            return self.mosaic_layer_var.get()
+        except Exception:
+            return "All active sources"
+
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum
@@ -272,7 +291,9 @@ class ObservatoryWorkflowMixin:
         canvas.delete("all")
         width = max(400, int(canvas.winfo_width() or 700))
         height = max(300, int(canvas.winfo_height() or 500))
-        rows = list(getattr(self, "search_results", []) or [])
+        all_rows = list(getattr(self, "search_results", []) or [])
+        rows = self.observatory_selected_mosaic_rows(all_rows)
+        layer_label = self.observatory_selected_mosaic_label()
         points = []
         mission_counts = {}
         bucket_counts = {}
@@ -287,17 +308,17 @@ class ObservatoryWorkflowMixin:
             bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
             points.append((ra, dec, row))
 
-        canvas.create_text(width // 2, 22, text="Sky Mosaic / Coverage Map", fill="#ffffff", font=("Segoe UI", 14, "bold"))
+        canvas.create_text(width // 2, 22, text=f"Sky Mosaic / Coverage Map - {layer_label}", fill="#ffffff", font=("Segoe UI", 14, "bold"))
         if not points:
             canvas.create_text(
                 width // 2,
                 height // 2,
-                text="No observation coordinates loaded yet.\nRun Search MAST, Search Wider Radius, or Find Better Sources.",
+                text=f"No observation coordinates loaded for {layer_label}.\nRun Search MAST, Search Wider Radius, or Find Better Sources.",
                 fill="#ffffff",
                 font=("Segoe UI", 11),
                 justify="center",
             )
-            self.mosaic_status_var.set("No coordinate-bearing observations available yet.")
+            self.mosaic_status_var.set(f"No coordinate-bearing observations available for {layer_label}.")
             return
 
         ras = [p[0] for p in points]
@@ -369,7 +390,7 @@ class ObservatoryWorkflowMixin:
         mission_text = self.observatory_top_counts(mission_counts, limit=5)
         bucket_text = self.observatory_top_counts(bucket_counts, limit=4)
         self.mosaic_status_var.set(
-            f"Plotted {len(points)} observation centers. Missions: {mission_text}. Wavelength buckets: {bucket_text}. "
+            f"Plotted {len(points)} observation centers for {layer_label}. Missions: {mission_text}. Wavelength buckets: {bucket_text}. "
             "True footprint polygons remain a later Phase 2 upgrade."
         )
 

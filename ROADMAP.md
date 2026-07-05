@@ -66,6 +66,7 @@ Planned capabilities:
 - Added a project checklist that turns layer status into immediate next actions.
 - Added activation requirements for planned Chandra, Pan-STARRS, and DSS layers.
 - Added an Observatory Explorer action to prepare the best RGB layer from loaded products.
+- Added a sky mosaic layer selector for all active sources, Hubble, and JWST.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

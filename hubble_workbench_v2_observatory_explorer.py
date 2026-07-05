@@ -492,7 +492,20 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         )
         self.observatory_report_text.pack(fill="both", expand=True, pady=(4, 0))
 
-        ttk.Label(right, text="Sky Mosaic / Coverage Map", style="Section.TLabel").pack(anchor="w")
+        mosaic_tools = ttk.Frame(right)
+        mosaic_tools.pack(fill="x")
+        ttk.Label(mosaic_tools, text="Sky Mosaic / Coverage Map", style="Section.TLabel").pack(side="left")
+        ttk.Label(mosaic_tools, text="Layer").pack(side="left", padx=(18, 6))
+        self.mosaic_layer_var = tk.StringVar(value="All active sources")
+        self.mosaic_layer_combo = ttk.Combobox(
+            mosaic_tools,
+            textvariable=self.mosaic_layer_var,
+            values=["All active sources", "Hubble / HST", "JWST"],
+            state="readonly",
+            width=18,
+        )
+        self.mosaic_layer_combo.pack(side="left")
+        self.mosaic_layer_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")

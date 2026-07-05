@@ -276,6 +276,12 @@ class ObservatoryWorkflowMixin:
         except Exception:
             return "All active sources"
 
+    def observatory_mosaic_best_only(self):
+        try:
+            return bool(self.mosaic_best_only_var.get())
+        except Exception:
+            return False
+
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum
@@ -294,6 +300,10 @@ class ObservatoryWorkflowMixin:
         all_rows = list(getattr(self, "search_results", []) or [])
         rows = self.observatory_selected_mosaic_rows(all_rows)
         layer_label = self.observatory_selected_mosaic_label()
+        best_only = self.observatory_mosaic_best_only()
+        if best_only:
+            rows = self.observatory_best_observations(rows, limit=12)
+            layer_label = f"{layer_label} - best candidates"
         points = []
         mission_counts = {}
         bucket_counts = {}
@@ -357,7 +367,10 @@ class ObservatoryWorkflowMixin:
         mid_x, mid_y = map_point(ra_mid, dec_mid)
         canvas.create_line(mid_x, plot_y0, mid_x, plot_y1, fill="#374151", dash=(3, 4))
         canvas.create_line(plot_x0, mid_y, plot_x1, mid_y, fill="#374151", dash=(3, 4))
-        canvas.create_text(plot_x0, 38, anchor="w", text="Marker size hints exposure time; color hints likely wavelength bucket.", fill="#d1d5db")
+        guide_text = "Marker size hints exposure time; color hints likely wavelength bucket."
+        if best_only:
+            guide_text = "Showing the strongest observation candidates by coordinates, exposure, wavelength, and mission."
+        canvas.create_text(plot_x0, 38, anchor="w", text=guide_text, fill="#d1d5db")
 
         for ra, dec, row in points[:1000]:
             x, y = map_point(ra, dec)

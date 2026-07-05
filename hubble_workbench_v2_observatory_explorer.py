@@ -506,6 +506,13 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         )
         self.mosaic_layer_combo.pack(side="left")
         self.mosaic_layer_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
+        self.mosaic_best_only_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            mosaic_tools,
+            text="Best candidates only",
+            variable=self.mosaic_best_only_var,
+            command=self.observatory_draw_current_mosaic,
+        ).pack(side="left", padx=(14, 0))
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")

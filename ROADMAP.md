@@ -32,14 +32,14 @@ Goal: support target projects that combine data and context from multiple observ
 
 Initial sources:
 
-- Hubble / HST
-- James Webb / JWST
-- DSS reference imagery
-- Pan-STARRS context imagery
+- Hubble / HST: active
+- James Webb / JWST: active
+- DSS reference imagery: planned
+- Pan-STARRS context imagery: planned
+- Chandra: planned X-ray context layer
 
 Later sources:
 
-- Chandra
 - GALEX
 - WISE
 - Additional observatories as useful APIs and workflows are identified
@@ -55,6 +55,12 @@ Planned capabilities:
 - Guided RGB/LRGB composition
 - Product-quality explanations
 - Saved project notes explaining what data was used and why
+
+### Phase 3 Foundation
+
+- Added `hubble_workbench_app/observatory_sources.py` as the source registry for active and planned observatories.
+- Observatory Explorer reports now show active versus planned multi-telescope sources.
+- Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes
 

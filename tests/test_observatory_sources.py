@@ -90,6 +90,27 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("missing red", report)
         self.assertIn("Build at least one complete", report)
 
+
+    def test_mosaic_export_rows_include_coordinates(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = [{"obs_collection": "HST", "obs_id": "o1", "s_ra": "1.25", "s_dec": "-2.5"}]
+
+            def observatory_mosaic_best_only(self):
+                return False
+
+            def observatory_selected_mosaic_rows(self, rows):
+                return rows
+
+            def observation_filter_bucket(self, row):
+                return "Unknown/other"
+
+        rows = Dummy().observatory_mosaic_export_rows()
+        self.assertEqual(rows[0]["ra"], "1.25000000")
+        self.assertEqual(rows[0]["dec"], "-2.50000000")
+        self.assertEqual(rows[0]["obs_id"], "o1")
+
     def test_mosaic_rows_respect_layer_filter(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

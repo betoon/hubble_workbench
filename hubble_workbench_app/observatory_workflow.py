@@ -319,7 +319,7 @@ class ObservatoryWorkflowMixin:
             rows = self.observatory_best_observations(rows, limit=12)
         return rows
 
-    def observatory_export_mosaic_csv(self):
+    def observatory_mosaic_export_rows(self):
         rows = []
         for row in self.observatory_current_mosaic_rows():
             ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
@@ -336,6 +336,30 @@ class ObservatoryWorkflowMixin:
                 "ra": f"{ra:.8f}",
                 "dec": f"{dec:.8f}",
             })
+        return rows
+
+    def observatory_copy_mosaic_rows(self):
+        rows = self.observatory_mosaic_export_rows()
+        if not rows:
+            message = "No coordinate-bearing mosaic rows are available to copy."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return ""
+        headers = list(rows[0].keys())
+        lines = ["\t".join(headers)]
+        for row in rows:
+            lines.append("\t".join(str(row.get(header, "")) for header in headers))
+        text = "\n".join(lines)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = f"Copied {len(rows)} mosaic row(s) to the clipboard."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return text
+
+    def observatory_export_mosaic_csv(self):
+        rows = self.observatory_mosaic_export_rows()
         if not rows:
             message = "No coordinate-bearing mosaic rows are available to export."
             if hasattr(self, "mosaic_status_var"):

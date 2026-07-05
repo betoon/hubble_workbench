@@ -517,7 +517,8 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
             variable=self.mosaic_best_only_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(14, 0))
-        ttk.Button(mosaic_tools, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_tools, text="Copy Mosaic Rows", command=self.observatory_copy_mosaic_rows).pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_tools, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")
@@ -538,6 +539,9 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_export_mosaic_csv(self):
         return super().observatory_export_mosaic_csv()
+
+    def observatory_copy_mosaic_rows(self):
+        return super().observatory_copy_mosaic_rows()
 
     def observatory_search_wider_async(self):
         return super().observatory_search_wider_async()

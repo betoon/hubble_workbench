@@ -221,6 +221,30 @@ class ObservatoryWorkflowMixin:
             logging.exception("Observatory Explorer analysis failed")
             messagebox.showerror("Observatory Explorer", self.format_error_message(exc))
 
+    def observatory_marker_style(self, row):
+        mission = str(row.get("obs_collection", "")).upper()
+        bucket = self.observation_filter_bucket(row)
+        if "Blue" in bucket:
+            fill = "skyblue"
+        elif "Green" in bucket:
+            fill = "lightgreen"
+        elif "Red" in bucket:
+            fill = "salmon"
+        elif mission == "JWST":
+            fill = "cyan"
+        else:
+            fill = "white"
+        outline = "#facc15" if mission == "JWST" else "#111827"
+        return fill, outline, bucket
+
+    @staticmethod
+    def observatory_range_padding(minimum, maximum, fraction=0.08):
+        span = maximum - minimum
+        if abs(span) < 1e-6:
+            span = 0.002
+        padding = max(span * fraction, 0.0005)
+        return minimum - padding, maximum + padding
+
     def observatory_draw_current_mosaic(self):
         canvas = getattr(self, "mosaic_canvas", None)
         if canvas is None:
@@ -230,60 +254,104 @@ class ObservatoryWorkflowMixin:
         height = max(300, int(canvas.winfo_height() or 500))
         rows = list(getattr(self, "search_results", []) or [])
         points = []
+        mission_counts = {}
+        bucket_counts = {}
         for row in rows:
             ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
             dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
             if ra is None or dec is None:
                 continue
+            mission = str(row.get("obs_collection", "Unknown") or "Unknown")
+            mission_counts[mission] = mission_counts.get(mission, 0) + 1
+            bucket = self.observation_filter_bucket(row)
+            bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
             points.append((ra, dec, row))
+
         canvas.create_text(width // 2, 22, text="Sky Mosaic / Coverage Map", fill="#ffffff", font=("Segoe UI", 14, "bold"))
         if not points:
-            canvas.create_text(width // 2, height // 2, text="No observation coordinates loaded yet.\nRun Search MAST, Search Wider Radius, or Find Better Sources.", fill="#ffffff", font=("Segoe UI", 11), justify="center")
+            canvas.create_text(
+                width // 2,
+                height // 2,
+                text="No observation coordinates loaded yet.\nRun Search MAST, Search Wider Radius, or Find Better Sources.",
+                fill="#ffffff",
+                font=("Segoe UI", 11),
+                justify="center",
+            )
             self.mosaic_status_var.set("No coordinate-bearing observations available yet.")
             return
+
         ras = [p[0] for p in points]
         decs = [p[1] for p in points]
-        ra_min, ra_max = min(ras), max(ras)
-        dec_min, dec_max = min(decs), max(decs)
-        if abs(ra_max - ra_min) < 1e-6:
-            ra_min -= 0.001; ra_max += 0.001
-        if abs(dec_max - dec_min) < 1e-6:
-            dec_min -= 0.001; dec_max += 0.001
-        margin = 55
-        plot_w = max(1, width - margin * 2)
-        plot_h = max(1, height - margin * 2)
-        canvas.create_rectangle(margin, margin, width - margin, height - margin, outline="#6b7280")
-        # simple grid
-        for i in range(1, 5):
-            x = margin + plot_w * i / 5
-            y = margin + plot_h * i / 5
-            canvas.create_line(x, margin, x, height - margin, fill="#1f2937")
-            canvas.create_line(margin, y, width - margin, y, fill="#1f2937")
-        for ra, dec, row in points[:800]:
-            x = margin + (ra - ra_min) / (ra_max - ra_min) * plot_w
-            y = height - margin - (dec - dec_min) / (dec_max - dec_min) * plot_h
-            mission = str(row.get("obs_collection", "")).upper()
-            bucket = self.observation_filter_bucket(row)
-            # Use built-in Tk color names only; avoid custom style dependencies.
-            fill = "cyan" if mission == "JWST" else "white"
-            if "Blue" in bucket:
-                fill = "skyblue"
-            elif "Green" in bucket:
-                fill = "lightgreen"
-            elif "Red" in bucket:
-                fill = "salmon"
+        ra_min, ra_max = self.observatory_range_padding(min(ras), max(ras))
+        dec_min, dec_max = self.observatory_range_padding(min(decs), max(decs))
+        ra_mid = (ra_min + ra_max) / 2
+        dec_mid = (dec_min + dec_max) / 2
+        margin_left = 72
+        margin_right = 38
+        margin_top = 58
+        margin_bottom = 58
+        plot_x0 = margin_left
+        plot_y0 = margin_top
+        plot_x1 = width - margin_right
+        plot_y1 = height - margin_bottom
+        plot_w = max(1, plot_x1 - plot_x0)
+        plot_h = max(1, plot_y1 - plot_y0)
+
+        def map_point(ra, dec):
+            x = plot_x0 + (ra - ra_min) / (ra_max - ra_min) * plot_w
+            y = plot_y1 - (dec - dec_min) / (dec_max - dec_min) * plot_h
+            return x, y
+
+        canvas.create_rectangle(plot_x0, plot_y0, plot_x1, plot_y1, outline="#6b7280")
+        for i in range(6):
+            x = plot_x0 + plot_w * i / 5
+            y = plot_y0 + plot_h * i / 5
+            ra_tick = ra_min + (ra_max - ra_min) * i / 5
+            dec_tick = dec_max - (dec_max - dec_min) * i / 5
+            canvas.create_line(x, plot_y0, x, plot_y1, fill="#1f2937")
+            canvas.create_line(plot_x0, y, plot_x1, y, fill="#1f2937")
+            canvas.create_text(x, plot_y1 + 16, text=f"{ra_tick:.4f}", fill="#d1d5db", font=("Segoe UI", 8))
+            canvas.create_text(plot_x0 - 12, y, anchor="e", text=f"{dec_tick:.4f}", fill="#d1d5db", font=("Segoe UI", 8))
+
+        mid_x, mid_y = map_point(ra_mid, dec_mid)
+        canvas.create_line(mid_x, plot_y0, mid_x, plot_y1, fill="#374151", dash=(3, 4))
+        canvas.create_line(plot_x0, mid_y, plot_x1, mid_y, fill="#374151", dash=(3, 4))
+        canvas.create_text(plot_x0, 38, anchor="w", text="Marker size hints exposure time; color hints likely wavelength bucket.", fill="#d1d5db")
+
+        for ra, dec, row in points[:1000]:
+            x, y = map_point(ra, dec)
+            fill, outline, _bucket = self.observatory_marker_style(row)
             size = 4
             try:
                 exp = float(row.get("t_exptime", 0) or 0)
-                size = min(10, max(3, int(3 + math.log10(max(exp, 1)))))
+                size = min(12, max(3, int(3 + math.log10(max(exp, 1)))))
             except Exception:
                 pass
-            canvas.create_rectangle(x - size, y - size, x + size, y + size, fill=fill, outline="#111827")
-        canvas.create_text(margin, height - 28, anchor="w", text=f"RA {ra_min:.5f} to {ra_max:.5f} deg", fill="#d1d5db")
-        canvas.create_text(width - margin, height - 28, anchor="e", text=f"Dec {dec_min:.5f} to {dec_max:.5f} deg", fill="#d1d5db")
-        canvas.create_text(margin, 38, anchor="w", text="Color hint: blue/green/red = likely filter bucket, cyan = JWST, white = HST/other", fill="#d1d5db")
-        self.mosaic_status_var.set(f"Plotted {len(points)} observation centers. This is a first-pass mosaic map; true footprint polygons are a future 2.0 upgrade.")
+            canvas.create_oval(x - size, y - size, x + size, y + size, fill=fill, outline=outline, width=1)
 
+        legend_x = plot_x1 - 225
+        legend_y = plot_y0 + 12
+        canvas.create_rectangle(legend_x - 10, legend_y - 8, plot_x1 - 10, legend_y + 102, fill="#111827", outline="#374151")
+        legend_items = [
+            ("skyblue", "Blue/short"),
+            ("lightgreen", "Green/mid"),
+            ("salmon", "Red/IR"),
+            ("cyan", "JWST/other"),
+            ("white", "HST/other"),
+        ]
+        for index, (color, label) in enumerate(legend_items):
+            y = legend_y + index * 20
+            canvas.create_oval(legend_x, y, legend_x + 10, y + 10, fill=color, outline="#111827")
+            canvas.create_text(legend_x + 18, y + 5, anchor="w", text=label, fill="#d1d5db", font=("Segoe UI", 8))
+
+        canvas.create_text(plot_x0, height - 30, anchor="w", text=f"RA {ra_min:.5f} to {ra_max:.5f} deg", fill="#d1d5db")
+        canvas.create_text(plot_x1, height - 30, anchor="e", text=f"Dec {dec_min:.5f} to {dec_max:.5f} deg", fill="#d1d5db")
+        mission_text = self.observatory_top_counts(mission_counts, limit=5)
+        bucket_text = self.observatory_top_counts(bucket_counts, limit=4)
+        self.mosaic_status_var.set(
+            f"Plotted {len(points)} observation centers. Missions: {mission_text}. Wavelength buckets: {bucket_text}. "
+            "True footprint polygons remain a later Phase 2 upgrade."
+        )
     def observatory_search_wider_async(self):
         if not self.require_astroquery():
             return

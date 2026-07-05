@@ -58,4 +58,4 @@ Planned capabilities:
 
 ## Current Implementation Notes
 
-Phase 2 begins in `hubble_workbench_app/observatory_workflow.py`. The first implementation step improves the Observatory Explorer report so it gives clearer observation/product summaries and recommended next actions.
+Phase 2 begins in `hubble_workbench_app/observatory_workflow.py`. The first implementation step improves the Observatory Explorer report so it gives clearer observation/product summaries and recommended next actions. The Sky Mosaic Viewer now has clearer grid labels, marker sizing, and a legend while still using MAST observation-center coordinates.

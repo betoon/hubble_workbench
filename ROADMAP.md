@@ -61,6 +61,7 @@ Planned capabilities:
 - Added `hubble_workbench_app/observatory_sources.py` as the source registry for active and planned observatories.
 - Observatory Explorer reports now show active versus planned multi-telescope sources.
 - Added a project-plan section that explains loaded active sources and planned context layers.
+- Added layer readiness checks for active sources, including observations, products, RGB coverage, and next action.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

@@ -128,8 +128,15 @@ class ObservatoryWorkflowMixin:
         enhanced = 0
         hla = 0
         channels = {"blue": 0, "green": 0, "red": 0}
+        products_by_mission = {}
+        channels_by_mission = {}
         for row in product_rows:
             name = str(row.get("productFilename", "")).lower()
+            mission = str(row.get("obs_collection", "") or row.get("mission", "") or "Unknown").upper()
+            if row.get("_source") == "HLA":
+                mission = "HST"
+            products_by_mission[mission] = products_by_mission.get(mission, 0) + 1
+            channels_by_mission.setdefault(mission, {"blue": 0, "green": 0, "red": 0})
             if any(token in name for token in ENHANCED_PRODUCT_TOKENS):
                 enhanced += 1
             if row.get("_source") == "HLA":
@@ -137,6 +144,7 @@ class ObservatoryWorkflowMixin:
             channel = self.product_rgb_channel(row)
             if channel in channels:
                 channels[channel] += 1
+                channels_by_mission[mission][channel] += 1
         rgb_sets = self.suggest_rgb_sets_for_rows(product_rows, recipe=self.target_recipe(self.target_var.get())) if product_rows else []
         return {
             "observations": len(obs_rows),
@@ -149,6 +157,8 @@ class ObservatoryWorkflowMixin:
             "enhanced_products": enhanced,
             "hla_products": hla,
             "channels": channels,
+            "products_by_mission": products_by_mission,
+            "channels_by_mission": channels_by_mission,
             "rgb_sets": len(rgb_sets),
         }
 

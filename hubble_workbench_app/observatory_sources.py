@@ -54,15 +54,59 @@ def source_status_lines():
 
 
 def source_observation_count(summary, source):
+    return source_count(summary, source, "by_mission")
+
+
+def source_product_count(summary, source):
+    return source_count(summary, source, "products_by_mission")
+
+
+def source_rgb_counts(summary, source):
+    if not summary:
+        return {"blue": 0, "green": 0, "red": 0}
+    mission_counts = summary.get("channels_by_mission", {}) or {}
+    combined = {"blue": 0, "green": 0, "red": 0}
+    for mission in source_names(source):
+        counts = mission_counts.get(mission, {}) or {}
+        for channel in combined:
+            combined[channel] += counts.get(channel, 0)
+    return combined
+
+
+def source_count(summary, source, key):
     if not summary:
         return 0
-    by_mission = summary.get("by_mission", {}) or {}
-    source_names = {source["code"].upper(), source["name"].upper()}
-    count = 0
-    for mission, mission_count in by_mission.items():
-        if str(mission).upper() in source_names:
-            count += mission_count
-    return count
+    counts = summary.get(key, {}) or {}
+    total = 0
+    for mission in source_names(source):
+        total += counts.get(mission, 0)
+    return total
+
+
+def source_names(source):
+    return {str(source["code"]).upper(), str(source["name"]).upper()}
+
+
+def layer_readiness_line(summary, source):
+    observations = source_observation_count(summary, source)
+    products = source_product_count(summary, source)
+    rgb = source_rgb_counts(summary, source)
+    missing = [channel for channel in ("blue", "green", "red") if not rgb[channel]]
+    pieces = [
+        f"observations={observations}",
+        f"products={products}",
+        f"RGB blue={rgb['blue']}, green={rgb['green']}, red={rgb['red']}",
+    ]
+    if not observations:
+        next_step = "next: search this source when useful for the target"
+    elif not products:
+        next_step = "next: get products for this source"
+    elif missing:
+        next_step = "next: look for missing " + ", ".join(missing) + " coverage"
+    else:
+        next_step = "next: ready for RGB review"
+    pieces.append(next_step)
+    return f"- {source['name']} ({source['code']}): " + "; ".join(pieces)
 
 
 def project_plan_lines(summary=None):
@@ -78,6 +122,10 @@ def project_plan_lines(summary=None):
         else:
             status = "ready for normal MAST searching"
         lines.append(f"- {source['name']} ({source['code']}): {source['role']} [{status}]")
+
+    lines.append("Layer readiness:")
+    for source in active:
+        lines.append(layer_readiness_line(summary, source))
 
     lines.append("Planned context layers:")
     for source in planned:

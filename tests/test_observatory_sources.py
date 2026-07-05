@@ -2,6 +2,7 @@ import unittest
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
+    project_checklist_lines,
     project_plan_lines,
     project_state,
     source_layer_state,
@@ -63,6 +64,22 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("RGB blue=1, green=1, red=0", line)
         self.assertIn("missing red coverage", line)
 
+    def test_project_checklist_names_immediate_actions(self):
+        empty_lines = project_checklist_lines({"observations": 0})
+        self.assertIn("Search Hubble or JWST", "\n".join(empty_lines))
+
+        summary = {
+            "observations": 3,
+            "by_mission": {"HST": 3},
+            "products_by_mission": {"HST": 4},
+            "channels_by_mission": {"HST": {"blue": 1, "green": 1, "red": 0}},
+        }
+        lines = project_checklist_lines(summary)
+        report = "\n".join(lines)
+        self.assertIn("Improve Hubble RGB coverage", report)
+        self.assertIn("missing red", report)
+        self.assertIn("Build at least one complete", report)
+
     def test_project_plan_marks_loaded_and_planned_sources(self):
         summary = {
             "observations": 3,
@@ -74,6 +91,7 @@ class ObservatorySourceTests(unittest.TestCase):
         report = "\n".join(lines)
         self.assertIn("Active search sources:", report)
         self.assertIn("Layer readiness:", report)
+        self.assertIn("Project checklist:", report)
         self.assertIn("Hubble (HST)", report)
         self.assertIn("current observations loaded: 3", report)
         self.assertIn("Planned context layers:", report)

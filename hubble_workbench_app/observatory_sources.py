@@ -130,6 +130,36 @@ def project_state(summary=None):
     }
 
 
+def project_checklist_lines(summary=None):
+    state = project_state(summary)
+    lines = []
+    if not summary or not summary.get("observations"):
+        lines.append("- Search Hubble or JWST for the target.")
+        lines.append("- Get products after observations are loaded.")
+        lines.append("- Re-run Observatory Explorer to refresh the project plan.")
+        return lines
+
+    if not state["active_with_observations"]:
+        lines.append("- Review mission names; loaded observations do not match Hubble or JWST yet.")
+
+    for source in state["active_sources"]:
+        if not source["observations"]:
+            lines.append(f"- Optional: search {source['name']} if the project needs its wavelength coverage.")
+        elif not source["products"]:
+            lines.append(f"- Get products for {source['name']}.")
+        elif not source["rgb_complete"]:
+            missing = ", ".join(channel for channel in ("blue", "green", "red") if not source["rgb"][channel])
+            lines.append(f"- Improve {source['name']} RGB coverage: missing {missing}.")
+        else:
+            lines.append(f"- Review {source['name']} RGB candidates and choose the best set.")
+
+    if state["active_ready_for_rgb"]:
+        lines.append("- Try an RGB composition with the ready source before adding planned context layers.")
+    else:
+        lines.append("- Build at least one complete active-source RGB layer before moving to planned context layers.")
+    return lines
+
+
 def layer_readiness_line(summary, source):
     state = source_layer_state(summary, source)
     rgb = state["rgb"]
@@ -172,4 +202,7 @@ def project_plan_lines(summary=None):
     else:
         lines.append("- Observations are loaded, but they do not match the active source registry yet. Review mission names before composing.")
     lines.append("- Keep planned context layers visible here until their search/download workflows are added.")
+
+    lines.append("Project checklist:")
+    lines.extend(project_checklist_lines(summary))
     return lines

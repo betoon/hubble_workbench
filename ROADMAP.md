@@ -63,6 +63,7 @@ Planned capabilities:
 - Added a project-plan section that explains loaded active sources and planned context layers.
 - Added layer readiness checks for active sources, including observations, products, RGB coverage, and next action.
 - Saved structured project state in Observatory Explorer diagnostics for future multi-telescope project tools.
+- Added a project checklist that turns layer status into immediate next actions.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

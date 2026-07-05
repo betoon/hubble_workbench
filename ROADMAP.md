@@ -69,6 +69,7 @@ Planned capabilities:
 - Added a sky mosaic layer selector for all active sources, Hubble, and JWST.
 - Added a best-candidates-only option for the sky mosaic viewer.
 - Added copy and save actions for the Observatory Explorer report.
+- Added CSV export for the currently selected sky mosaic layer.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

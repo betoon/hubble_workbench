@@ -1,3 +1,4 @@
+import csv
 import logging
 import math
 import threading
@@ -312,6 +313,49 @@ class ObservatoryWorkflowMixin:
         except Exception:
             return False
 
+    def observatory_current_mosaic_rows(self):
+        rows = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
+        if self.observatory_mosaic_best_only():
+            rows = self.observatory_best_observations(rows, limit=12)
+        return rows
+
+    def observatory_export_mosaic_csv(self):
+        rows = []
+        for row in self.observatory_current_mosaic_rows():
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is None or dec is None:
+                continue
+            rows.append({
+                "obs_collection": row.get("obs_collection", ""),
+                "obs_id": row.get("obs_id", "") or row.get("obsid", ""),
+                "instrument_name": row.get("instrument_name", ""),
+                "filters": row.get("filters", "") or row.get("Spectral_Elt", ""),
+                "wavelength_bucket": self.observation_filter_bucket(row),
+                "t_exptime": row.get("t_exptime", ""),
+                "ra": f"{ra:.8f}",
+                "dec": f"{dec:.8f}",
+            })
+        if not rows:
+            message = "No coordinate-bearing mosaic rows are available to export."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return None
+
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        layer = self.observatory_selected_mosaic_label().lower().replace(" / ", "_").replace(" ", "_")
+        if self.observatory_mosaic_best_only():
+            layer += "_best_candidates"
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_mosaic_{layer}.csv"
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        message = f"Exported {len(rows)} mosaic row(s) to {path.name}."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
+
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum
@@ -327,12 +371,10 @@ class ObservatoryWorkflowMixin:
         canvas.delete("all")
         width = max(400, int(canvas.winfo_width() or 700))
         height = max(300, int(canvas.winfo_height() or 500))
-        all_rows = list(getattr(self, "search_results", []) or [])
-        rows = self.observatory_selected_mosaic_rows(all_rows)
+        rows = self.observatory_current_mosaic_rows()
         layer_label = self.observatory_selected_mosaic_label()
         best_only = self.observatory_mosaic_best_only()
         if best_only:
-            rows = self.observatory_best_observations(rows, limit=12)
             layer_label = f"{layer_label} - best candidates"
         points = []
         mission_counts = {}

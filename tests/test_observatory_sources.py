@@ -90,6 +90,23 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("missing red", report)
         self.assertIn("Build at least one complete", report)
 
+    def test_mosaic_rows_respect_layer_filter(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Var:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            pass
+
+        app = Dummy()
+        app.mosaic_layer_var = Var("JWST")
+        rows = [{"obs_collection": "HST"}, {"obs_collection": "JWST"}]
+        self.assertEqual(app.observatory_selected_mosaic_rows(rows), [{"obs_collection": "JWST"}])
 
     def test_observatory_report_text_falls_back_to_summary(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
@@ -99,6 +116,7 @@ class ObservatorySourceTests(unittest.TestCase):
                 return "fallback report"
 
         self.assertEqual(Dummy().observatory_current_report_text(), "fallback report")
+
     def test_project_plan_marks_loaded_and_planned_sources(self):
         summary = {
             "observations": 3,

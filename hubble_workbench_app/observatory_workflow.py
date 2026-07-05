@@ -5,7 +5,7 @@ from tkinter import messagebox
 
 from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
-from hubble_workbench_app.observatory_sources import active_sources, planned_sources, project_plan_lines
+from hubble_workbench_app.observatory_sources import active_sources, planned_sources, project_plan_lines, project_state
 
 
 class ObservatoryWorkflowMixin:
@@ -230,9 +230,11 @@ class ObservatoryWorkflowMixin:
             self.observatory_report_text.delete("1.0", "end")
             self.observatory_report_text.insert("end", report)
             self.observatory_draw_current_mosaic()
+            summary = self.compute_observatory_summary()
             self.save_diagnostic_json(SEARCH_LOG_DIR, f"{self.current_target_for_log()}_observatory_explorer", {
                 "target": self.current_target_for_log(),
-                "summary": self.compute_observatory_summary(),
+                "summary": summary,
+                "project_state": project_state(summary),
                 "report": report,
             })
         except Exception as exc:

@@ -87,57 +87,87 @@ def source_names(source):
     return {str(source["code"]).upper(), str(source["name"]).upper()}
 
 
-def layer_readiness_line(summary, source):
+def source_next_action(summary, source):
     observations = source_observation_count(summary, source)
     products = source_product_count(summary, source)
     rgb = source_rgb_counts(summary, source)
     missing = [channel for channel in ("blue", "green", "red") if not rgb[channel]]
-    pieces = [
-        f"observations={observations}",
-        f"products={products}",
-        f"RGB blue={rgb['blue']}, green={rgb['green']}, red={rgb['red']}",
-    ]
     if not observations:
-        next_step = "next: search this source when useful for the target"
-    elif not products:
-        next_step = "next: get products for this source"
-    elif missing:
-        next_step = "next: look for missing " + ", ".join(missing) + " coverage"
-    else:
-        next_step = "next: ready for RGB review"
-    pieces.append(next_step)
-    return f"- {source['name']} ({source['code']}): " + "; ".join(pieces)
+        return "search this source when useful for the target"
+    if not products:
+        return "get products for this source"
+    if missing:
+        return "look for missing " + ", ".join(missing) + " coverage"
+    return "ready for RGB review"
+
+
+def source_layer_state(summary, source):
+    rgb = source_rgb_counts(summary, source)
+    return {
+        "name": source["name"],
+        "code": source["code"],
+        "kind": source["kind"],
+        "status": source["status"],
+        "role": source["role"],
+        "observations": source_observation_count(summary, source),
+        "products": source_product_count(summary, source),
+        "rgb": rgb,
+        "rgb_complete": all(rgb[channel] for channel in ("blue", "green", "red")),
+        "next_action": source_next_action(summary, source),
+    }
+
+
+def project_state(summary=None):
+    active = [source_layer_state(summary, source) for source in active_sources()]
+    planned = [source_layer_state(summary, source) for source in planned_sources()]
+    active_with_observations = sum(1 for source in active if source["observations"])
+    active_ready_for_rgb = sum(1 for source in active if source["rgb_complete"])
+    return {
+        "active_sources": active,
+        "planned_sources": planned,
+        "active_with_observations": active_with_observations,
+        "active_ready_for_rgb": active_ready_for_rgb,
+    }
+
+
+def layer_readiness_line(summary, source):
+    state = source_layer_state(summary, source)
+    rgb = state["rgb"]
+    pieces = [
+        f"observations={state['observations']}",
+        f"products={state['products']}",
+        f"RGB blue={rgb['blue']}, green={rgb['green']}, red={rgb['red']}",
+        f"next: {state['next_action']}",
+    ]
+    return f"- {state['name']} ({state['code']}): " + "; ".join(pieces)
 
 
 def project_plan_lines(summary=None):
     lines = []
-    active = active_sources()
-    planned = planned_sources()
+    state = project_state(summary)
 
     lines.append("Active search sources:")
-    for source in active:
-        count = source_observation_count(summary, source)
-        if count:
-            status = f"current observations loaded: {count}"
+    for source in state["active_sources"]:
+        if source["observations"]:
+            status = f"current observations loaded: {source['observations']}"
         else:
             status = "ready for normal MAST searching"
         lines.append(f"- {source['name']} ({source['code']}): {source['role']} [{status}]")
 
     lines.append("Layer readiness:")
-    for source in active:
+    for source in active_sources():
         lines.append(layer_readiness_line(summary, source))
 
     lines.append("Planned context layers:")
-    for source in planned:
+    for source in state["planned_sources"]:
         lines.append(f"- {source['name']} ({source['code']}): {source['role']} [planned]")
 
     lines.append("Project guidance:")
-    active_counts = [source_observation_count(summary, source) for source in active]
     if not summary or not summary.get("observations"):
         lines.append("- Start with a Hubble or JWST search, then use products and RGB tools to build the first project layer.")
-    elif sum(1 for count in active_counts if count) > 1:
+    elif state["active_with_observations"] > 1:
         lines.append("- Multiple active telescope sources are loaded. Compare filters, exposure, and product quality before composing.")
-    elif any(active_counts):
+    elif state["active_with_observations"]:
         lines.append("- One active telescope source is loaded. Search the other active source when the target needs broader wavelength coverage.")
     else:
         lines.append("- Observations are loaded, but they do not match the active source registry yet. Review mission names before composing.")

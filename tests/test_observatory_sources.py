@@ -3,6 +3,8 @@ import unittest
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
     project_plan_lines,
+    project_state,
+    source_layer_state,
     source_observation_count,
     source_product_count,
     source_rgb_counts,
@@ -27,13 +29,36 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(source_product_count(summary, hubble), 4)
         self.assertEqual(source_rgb_counts(summary, hubble), {"blue": 1, "green": 1, "red": 0})
 
+    def test_source_layer_state_is_structured_for_saved_project_data(self):
+        summary = {
+            "by_mission": {"HST": 3},
+            "products_by_mission": {"HST": 4},
+            "channels_by_mission": {"HST": {"blue": 1, "green": 1, "red": 1}},
+        }
+        state = source_layer_state(summary, {"name": "Hubble", "code": "HST", "kind": "space telescope", "status": "active", "role": "Visible"})
+        self.assertEqual(state["observations"], 3)
+        self.assertEqual(state["products"], 4)
+        self.assertTrue(state["rgb_complete"])
+        self.assertEqual(state["next_action"], "ready for RGB review")
+
+    def test_project_state_groups_active_and_planned_sources(self):
+        summary = {
+            "by_mission": {"HST": 3},
+            "products_by_mission": {"HST": 4},
+            "channels_by_mission": {"HST": {"blue": 1, "green": 1, "red": 1}},
+        }
+        state = project_state(summary)
+        self.assertEqual(state["active_with_observations"], 1)
+        self.assertEqual(state["active_ready_for_rgb"], 1)
+        self.assertGreaterEqual(len(state["planned_sources"]), 3)
+
     def test_layer_readiness_names_next_step(self):
         summary = {
             "by_mission": {"HST": 3},
             "products_by_mission": {"HST": 4},
             "channels_by_mission": {"HST": {"blue": 1, "green": 1, "red": 0}},
         }
-        line = layer_readiness_line(summary, {"name": "Hubble", "code": "HST"})
+        line = layer_readiness_line(summary, {"name": "Hubble", "code": "HST", "kind": "space telescope", "status": "active", "role": "Visible"})
         self.assertIn("products=4", line)
         self.assertIn("RGB blue=1, green=1, red=0", line)
         self.assertIn("missing red coverage", line)

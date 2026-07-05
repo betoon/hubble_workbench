@@ -188,51 +188,101 @@ class BetterSourcesMixin:
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def completeness_status_line(self, ok, label, detail):
+        status = "OK" if ok else "Needs attention"
+        return f"- {status}: {label} - {detail}"
+
+    @staticmethod
+    def completeness_best_names(rows, limit=3):
+        names = [str(row.get("productFilename", "") or row.get("URL", "") or "product") for row in rows[:limit]]
+        return ", ".join(names) if names else "none"
+
     def build_completeness_report(self, rows, target):
         rows = list(rows or [])
         channels = {"blue": [], "green": [], "red": []}
         enhanced = []
         hla = []
+        direct_fits = []
+        spectra = []
+        by_group = {}
         for row in rows:
             name = str(row.get("productFilename", "")).lower()
             if any(token in name for token in ENHANCED_PRODUCT_TOKENS):
                 enhanced.append(row)
             if row.get("_source") == "HLA":
                 hla.append(row)
+            if self.product_is_direct_fits(row):
+                direct_fits.append(row)
+            if self.product_is_spectrum(row):
+                spectra.append(row)
             channel = self.product_rgb_channel(row)
             if channel:
                 channels[channel].append(row)
+                group = by_group.setdefault(self.rgb_group_key(row), {"blue": 0, "green": 0, "red": 0})
+                group[channel] += 1
+
         rgb_sets = self.suggest_rgb_sets_for_rows(rows, recipe=self.target_recipe(target)) if rows else []
         same_group = bool(rgb_sets and all(id(rgb_sets[0][channel]) in self.rgb_ready_product_ids for channel in ("blue", "green", "red")))
+        complete_groups = [group for group in by_group.values() if all(group[channel] for channel in ("blue", "green", "red"))]
+        missing_channels = [channel for channel in ("blue", "green", "red") if not channels[channel]]
+        observations = list(getattr(self, "search_results", []) or [])
+        coordinate_rows = sum(
+            1 for row in observations
+            if self.numeric_row_value(row, "s_ra", "ra", "RA") is not None
+            and self.numeric_row_value(row, "s_dec", "dec", "DEC") is not None
+        )
+        wider_loaded = len(observations) > 1
+        has_cleanup_check = hasattr(self, "presentation_cleanup_fills")
+
         lines = []
         lines.append(f"Target: {target or '(current product list)'}")
         lines.append(f"Products currently loaded: {len(rows)}")
+        lines.append(f"Observations currently loaded: {len(observations)}")
         lines.append("")
-        lines.append("RGB coverage:")
+        lines.append("Completeness checklist:")
+        lines.append(self.completeness_status_line(bool(rows), "Product list", f"{len(rows)} product(s) loaded"))
+        lines.append(self.completeness_status_line(bool(direct_fits), "Direct FITS products", f"{len(direct_fits)} direct FITS product(s), {len(spectra)} spectrum-like product(s)"))
         for channel in ("blue", "green", "red"):
-            lines.append(f"- {channel.title()}: {len(channels[channel])} candidate(s)")
-        lines.append(f"- Complete RGB sets: {len(rgb_sets)}")
-        lines.append(f"- Same observation/alignment group: {'yes' if same_group else 'not confirmed'}")
+            lines.append(self.completeness_status_line(bool(channels[channel]), f"{channel.title()} channel", f"{len(channels[channel])} candidate(s)"))
+        lines.append(self.completeness_status_line(bool(rgb_sets), "Complete RGB set", f"{len(rgb_sets)} candidate set(s)"))
+        lines.append(self.completeness_status_line(same_group or bool(complete_groups), "Alignment confidence", "same group confirmed" if same_group else f"{len(complete_groups)} possible complete group(s)"))
+        lines.append(self.completeness_status_line(bool(enhanced or hla), "Enhanced products", f"{len(enhanced)} mosaic/drizzled/i2d/combined, {len(hla)} HLA"))
+        lines.append(self.completeness_status_line(wider_loaded, "Wider observation context", f"{len(observations)} observation row(s), {coordinate_rows} with coordinates"))
+        lines.append(self.completeness_status_line(has_cleanup_check, "Image-level cleanup check", f"presentation cleanup fills: {getattr(self, 'presentation_cleanup_fills', 'not run yet')}"))
         lines.append("")
-        lines.append("More complete source checks:")
-        lines.append(f"- Mosaic/drizzled/i2d/combined candidates: {len(enhanced)}")
-        lines.append(f"- HLA/Hubble enhanced products currently loaded: {len(hla)}")
-        lines.append(f"- Larger/wider nearby observations loaded: {'yes' if len(getattr(self, 'search_results', []) or []) > 1 else 'not confirmed'}")
-        if hasattr(self, "presentation_cleanup_fills"):
-            lines.append(f"- Presentation cleanup filled internal dark gaps: {self.presentation_cleanup_fills}")
+        lines.append("Best available product hints:")
+        if rgb_sets:
+            best = rgb_sets[0]
+            for channel in ("blue", "green", "red"):
+                lines.append(f"- {channel.title()}: {self.product_label(best[channel])}")
         else:
-            lines.append("- Gap/border cleanup: compose an RGB image first for an image-level check")
+            for channel in ("blue", "green", "red"):
+                lines.append(f"- {channel.title()}: {self.completeness_best_names(channels[channel])}")
         lines.append("")
+        lines.append("Missing or uncertain:")
+        if missing_channels:
+            lines.append("- Missing RGB channels: " + ", ".join(channel.title() for channel in missing_channels))
+        if not same_group:
+            lines.append("- Same-observation/alignment group is not fully confirmed.")
+        if not enhanced and not hla:
+            lines.append("- No enhanced mosaic/drizzled/i2d/HLA products are currently loaded.")
+        if not wider_loaded:
+            lines.append("- Wider search context has not been loaded yet.")
+        if not missing_channels and same_group and (enhanced or hla):
+            lines.append("- No major gaps found for a first RGB composition attempt.")
+        lines.append("")
+        lines.append("Recommended next action:")
         if not rows:
-            lines.append("Recommendation: run Find Better / More Complete Image Sources first.")
-        elif rgb_sets and enhanced:
-            lines.append("Recommendation: use the best suggested RGB set and prefer the enhanced candidates near the top of the product list.")
-        elif rgb_sets:
-            lines.append("Recommendation: you have RGB coverage, but should run Find Better / More Complete Image Sources to look for mosaics/drizzled/i2d products.")
+            lines.append("Run Find Better Sources, or run Search MAST followed by Get All Products.")
+        elif missing_channels:
+            lines.append("Run Get All Products or Find Better Sources to look for the missing color channels.")
+        elif not same_group:
+            lines.append("Use Find Better Sources to look for an aligned RGB set, or compose a test image and inspect registration.")
+        elif not enhanced and not hla:
+            lines.append("Run Find Better Sources to look for higher-quality mosaic/drizzled/i2d/HLA products before final export.")
         else:
-            lines.append("Recommendation: run Find Better / More Complete Image Sources with a wider radius; NASA-style images often combine multiple visits or products.")
+            lines.append("Use Select Best RGB Products or Easy High Quality, then review the Color Composer output.")
         return "\n".join(lines)
-
     def finish_completeness_check(self, operation_id, result):
         if operation_id != self.browser_operation_id:
             return

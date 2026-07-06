@@ -444,7 +444,24 @@ class ObservatoryWorkflowMixin:
             pass
         self.selected_mosaic_row = row
         self.observatory_select_observation_row(row)
+        self.observatory_draw_current_mosaic()
         return row
+
+    def observatory_copy_marker_details(self):
+        row = getattr(self, "selected_mosaic_row", None)
+        if row is None:
+            message = "Click a mosaic marker first, then copy marker details."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return ""
+        detail = self.observatory_mosaic_marker_detail(row)
+        self.clipboard_clear()
+        self.clipboard_append(detail)
+        self.update()
+        message = "Copied selected mosaic marker details to the clipboard."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return detail
 
     def observatory_get_marker_products(self):
         row = getattr(self, "selected_mosaic_row", None)
@@ -564,6 +581,9 @@ class ObservatoryWorkflowMixin:
             except Exception:
                 pass
             canvas.create_oval(x - size, y - size, x + size, y + size, fill=fill, outline=outline, width=1)
+            if self.observatory_mosaic_row_matches(row, getattr(self, "selected_mosaic_row", {})):
+                canvas.create_oval(x - size - 4, y - size - 4, x + size + 4, y + size + 4, outline="#facc15", width=3)
+                canvas.create_text(x, y - size - 12, text="selected", fill="#facc15", font=("Segoe UI", 8, "bold"))
             self.mosaic_marker_points.append({"x": x, "y": y, "size": size, "row": row})
 
         legend_x = plot_x1 - 225
@@ -585,9 +605,13 @@ class ObservatoryWorkflowMixin:
         canvas.create_text(plot_x1, height - 30, anchor="e", text=f"Dec {dec_min:.5f} to {dec_max:.5f} deg", fill="#d1d5db")
         mission_text = self.observatory_top_counts(mission_counts, limit=5)
         bucket_text = self.observatory_top_counts(bucket_counts, limit=4)
+        selected_note = ""
+        selected_row = getattr(self, "selected_mosaic_row", None)
+        if selected_row is not None and any(self.observatory_mosaic_row_matches(marker["row"], selected_row) for marker in self.mosaic_marker_points):
+            selected_note = " Selected marker is highlighted."
         self.mosaic_status_var.set(
-            f"Plotted {len(points)} observation centers for {layer_label}. Missions: {mission_text}. Wavelength buckets: {bucket_text}. "
-            "True footprint polygons remain a later Phase 2 upgrade."
+            f"Plotted {len(points)} observation centers for {layer_label}. Missions: {mission_text}. Wavelength buckets: {bucket_text}."
+            f"{selected_note} True footprint polygons remain a later Phase 2 upgrade."
         )
 
     def observatory_prepare_best_rgb_layer(self):

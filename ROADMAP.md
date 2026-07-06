@@ -73,6 +73,7 @@ Planned capabilities:
 - Added clipboard copy for the currently selected sky mosaic rows.
 - Added clickable sky mosaic markers that show observation details and select the matching observation row.
 - Added a Get Marker Products action for the selected mosaic observation.
+- Added selected marker highlighting and marker-detail clipboard copy.
 - Planned sources are visible for project tracking but are not searched yet.
 
 ## Current Implementation Notes

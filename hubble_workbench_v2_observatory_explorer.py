@@ -518,6 +518,7 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(14, 0))
         ttk.Button(mosaic_tools, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_tools, text="Copy Marker Details", command=self.observatory_copy_marker_details).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Copy Mosaic Rows", command=self.observatory_copy_mosaic_rows).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
@@ -538,6 +539,9 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_get_marker_products(self):
         return super().observatory_get_marker_products()
+
+    def observatory_copy_marker_details(self):
+        return super().observatory_copy_marker_details()
 
     def observatory_copy_report(self):
         return super().observatory_copy_report()

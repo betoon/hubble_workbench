@@ -7,7 +7,7 @@ from tkinter import messagebox
 
 from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
-from hubble_workbench_app.observatory_sources import active_sources, planned_sources, project_checklist_lines, project_plan_lines, project_state
+from hubble_workbench_app.observatory_sources import active_sources, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
 class ObservatoryWorkflowMixin:
@@ -220,6 +220,9 @@ class ObservatoryWorkflowMixin:
         for source_line in project_plan_lines(summary):
             lines.append(source_line)
         lines.append("")
+        for source_line in composition_strategy_lines(summary):
+            lines.append(source_line)
+        lines.append("")
         lines.append(
             f"Phase 3 foundation: {len(active_sources())} active source(s), "
             f"{len(planned_sources())} planned source layer(s). Planned sources are visible for project tracking and are not searched yet."
@@ -251,6 +254,25 @@ class ObservatoryWorkflowMixin:
             list(getattr(self, "product_results", []) or []),
         )
 
+
+    def observatory_composition_strategy_text(self):
+        summary = self.observatory_current_summary()
+        target = self.target_var.get().strip() or "(no target)"
+        lines = [f"Composition Strategy for {target}", ""]
+        lines.extend(composition_strategy_lines(summary))
+        return "\n".join(lines)
+
+    def observatory_show_composition_strategy(self):
+        text = self.observatory_composition_strategy_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated multi-telescope composition strategy.")
+        return text
+
     def observatory_project_plan_text(self):
         summary = self.observatory_current_summary()
         target = self.target_var.get().strip() or "(no target)"
@@ -270,6 +292,7 @@ class ObservatoryWorkflowMixin:
             "summary": summary,
             "project_state": project_state(summary),
             "project_checklist": project_checklist_lines(summary),
+            "composition_strategy": composition_strategy_lines(summary),
             "project_plan": self.observatory_project_plan_text(),
         }
 

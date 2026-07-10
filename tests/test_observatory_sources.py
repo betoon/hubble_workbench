@@ -3,6 +3,7 @@ import unittest
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
     planned_activation_lines,
+    composition_strategy_lines,
     project_checklist_lines,
     project_plan_lines,
     project_state,
@@ -73,6 +74,19 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("survey cutout", report)
         self.assertIn("DSS (DSS)", report)
         self.assertIn("reference image", report)
+
+
+    def test_composition_strategy_prefers_ready_rgb_layers(self):
+        summary = {
+            "observations": 3,
+            "by_mission": {"HST": 3},
+            "products_by_mission": {"HST": 6},
+            "channels_by_mission": {"HST": {"blue": 1, "green": 1, "red": 1}},
+        }
+        report = "\n".join(composition_strategy_lines(summary))
+        self.assertIn("Composition Strategy:", report)
+        self.assertIn("Build the first polished RGB layer", report)
+        self.assertIn("Hubble", report)
 
     def test_project_checklist_names_immediate_actions(self):
         empty_lines = project_checklist_lines({"observations": 0})

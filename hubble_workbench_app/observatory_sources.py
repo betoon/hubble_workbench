@@ -185,6 +185,42 @@ def layer_readiness_line(summary, source):
     return f"- {state['name']} ({state['code']}): " + "; ".join(pieces)
 
 
+
+
+def composition_strategy_lines(summary=None):
+    state = project_state(summary)
+    lines = []
+    ready = [source for source in state["active_sources"] if source["rgb_complete"]]
+    observed = [source for source in state["active_sources"] if source["observations"]]
+    product_sources = [source for source in state["active_sources"] if source["products"]]
+
+    lines.append("Composition Strategy:")
+    if ready:
+        names = ", ".join(source["name"] for source in ready)
+        lines.append(f"- Build the first polished RGB layer from: {names}.")
+        lines.append("- Prefer drizzled, mosaic, combined, HLA, or JWST i2d products for sharper alignment and cleaner detail.")
+    elif product_sources:
+        names = ", ".join(source["name"] for source in product_sources)
+        lines.append(f"- Products are loaded for {names}, but at least one RGB channel is still missing.")
+        lines.append("- Use Find Better Sources or Get All Products before composing the final RGB image.")
+    elif observed:
+        names = ", ".join(source["name"] for source in observed)
+        lines.append(f"- Observations are loaded for {names}; get products next so real image layers can be evaluated.")
+    else:
+        lines.append("- Start by searching Hubble or JWST and loading products for the target.")
+
+    if len(observed) > 1:
+        lines.append("- Compare Hubble visible/near-UV structure with JWST infrared structure before choosing the final color mapping.")
+    elif observed:
+        missing = [source["name"] for source in state["active_sources"] if not source["observations"]]
+        if missing:
+            lines.append("- Search " + ", ".join(missing) + " when the target needs broader wavelength coverage.")
+
+    lines.append("- Use the sky mosaic to check whether the chosen layers overlap before downloading or composing.")
+    lines.append("- Treat planned Chandra, Pan-STARRS, and DSS layers as future context overlays until their retrieval and registration tools are active.")
+    return lines
+
+
 def project_plan_lines(summary=None):
     lines = []
     state = project_state(summary)

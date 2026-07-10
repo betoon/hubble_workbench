@@ -531,6 +531,7 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ).pack(side="left", padx=(10, 0))
         ttk.Button(mosaic_tools, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
         ttk.Button(mosaic_tools, text="Overlap Candidates", command=self.observatory_show_overlap_candidates).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_tools, text="Select Best", command=self.observatory_select_best_overlap_candidate, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Copy Overlap", command=self.observatory_copy_overlap_candidates).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Export Overlap", command=self.observatory_export_overlap_candidates_csv).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
@@ -561,6 +562,9 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_show_overlap_candidates(self):
         return super().observatory_show_overlap_candidates()
+
+    def observatory_select_best_overlap_candidate(self):
+        return super().observatory_select_best_overlap_candidate()
 
     def observatory_copy_overlap_candidates(self):
         return super().observatory_copy_overlap_candidates()

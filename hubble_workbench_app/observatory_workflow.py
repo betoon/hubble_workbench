@@ -664,6 +664,32 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(f"Found {count} overlap candidate observation(s).")
         return text
 
+    def observatory_select_best_overlap_candidate(self):
+        candidates = self.observatory_mosaic_overlap_candidate_rows(limit=1)
+        if not candidates:
+            message = "No overlap candidate is available to select. Try searching both Hubble and JWST or widening the radius."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return None
+        row = candidates[0]
+        self.selected_mosaic_row = row
+        self.observatory_select_observation_row(row)
+        try:
+            self.mosaic_overlap_only_var.set(True)
+        except Exception:
+            pass
+        detail = self.observatory_mosaic_marker_detail(row)
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", "Best Overlap Candidate\n\n" + detail)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            obs_id = row.get("obs_id", "") or row.get("obsid", "") or "selected observation"
+            self.mosaic_status_var.set(f"Selected best overlap candidate: {obs_id}. Use Get Marker Products next.")
+        self.observatory_draw_current_mosaic()
+        return row
+
     def observatory_mosaic_marker_detail(self, row):
         ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
         dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")

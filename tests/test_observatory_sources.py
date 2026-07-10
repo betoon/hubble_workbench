@@ -271,6 +271,73 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(rows[0]["dec"], "-2.50000000")
         self.assertEqual(rows[0]["obs_id"], "o1")
 
+    def test_select_best_overlap_candidate_sets_selected_row(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Var:
+            def __init__(self, value=False):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+            def set(self, value):
+                self.value = value
+
+        class Status:
+            def __init__(self):
+                self.value = ""
+
+            def set(self, value):
+                self.value = value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = [
+                {"obs_collection": "HST", "obs_id": "h1", "instrument_name": "WFC3", "filters": "F555W", "t_exptime": "900", "s_ra": "10.0", "s_dec": "20.0"},
+                {"obs_collection": "HST", "obs_id": "h2", "instrument_name": "WFC3", "filters": "F814W", "t_exptime": "1500", "s_ra": "10.2", "s_dec": "20.2"},
+                {"obs_collection": "JWST", "obs_id": "j1", "instrument_name": "NIRCam", "filters": "F200W", "t_exptime": "1200", "s_ra": "10.1", "s_dec": "20.1"},
+                {"obs_collection": "JWST", "obs_id": "j2", "instrument_name": "NIRCam", "filters": "F444W", "t_exptime": "1100", "s_ra": "10.3", "s_dec": "20.3"},
+            ]
+            mosaic_layer_var = Var("All active sources")
+            mosaic_overlap_only_var = Var(False)
+
+            def observatory_mosaic_best_only(self):
+                return False
+
+            def observatory_select_observation_row(self, row):
+                self.selected_from_list = row
+                return True
+
+            def observatory_draw_current_mosaic(self):
+                self.drew_mosaic = True
+
+        app = Dummy()
+        app.mosaic_status_var = Status()
+        row = app.observatory_select_best_overlap_candidate()
+        self.assertIsNotNone(row)
+        self.assertEqual(app.selected_mosaic_row, row)
+        self.assertTrue(app.mosaic_overlap_only_var.get())
+        self.assertTrue(app.drew_mosaic)
+        self.assertIn("Get Marker Products", app.mosaic_status_var.value)
+
+    def test_select_best_overlap_candidate_handles_empty_list(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Status:
+            def __init__(self):
+                self.value = ""
+
+            def set(self, value):
+                self.value = value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = []
+
+        app = Dummy()
+        app.mosaic_status_var = Status()
+        self.assertIsNone(app.observatory_select_best_overlap_candidate())
+        self.assertIn("No overlap candidate", app.mosaic_status_var.value)
+
     def test_overlap_candidate_export_rows_include_shared_area_fields(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

@@ -2,6 +2,8 @@ import unittest
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
+    composition_readiness_lines,
+    composition_readiness_state,
     planned_activation_lines,
     composition_strategy_lines,
     project_checklist_lines,
@@ -75,6 +77,22 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("DSS (DSS)", report)
         self.assertIn("reference image", report)
 
+
+    def test_composition_readiness_scores_ready_layer(self):
+        summary = {
+            "observations": 4,
+            "products": 8,
+            "by_mission": {"HST": 4},
+            "products_by_mission": {"HST": 8},
+            "channels_by_mission": {"HST": {"blue": 2, "green": 2, "red": 1}},
+            "enhanced_products": 2,
+        }
+        readiness = composition_readiness_state(summary)
+        report = "\n".join(composition_readiness_lines(summary))
+        self.assertGreaterEqual(readiness["score"], 85)
+        self.assertEqual(readiness["best_source"]["name"], "Hubble")
+        self.assertIn("Image Build Readiness:", report)
+        self.assertIn("Best starting layer: Hubble", report)
 
     def test_composition_strategy_prefers_ready_rgb_layers(self):
         summary = {

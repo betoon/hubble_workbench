@@ -221,6 +221,114 @@ def composition_strategy_lines(summary=None):
     return lines
 
 
+def composition_readiness_state(summary=None):
+    state = project_state(summary)
+    summary = summary or {}
+    source_rows = []
+    for source in state["active_sources"]:
+        rgb = source["rgb"]
+        score = 0
+        notes = []
+        if source["observations"]:
+            score += 20
+        else:
+            notes.append("needs observations")
+        if source["products"]:
+            score += 20
+        else:
+            notes.append("needs products")
+        channel_score = 0
+        for channel in ("blue", "green", "red"):
+            if rgb[channel]:
+                channel_score += 10
+            else:
+                notes.append(f"needs {channel} coverage")
+        score += channel_score
+        if source["rgb_complete"]:
+            score += 15
+            notes.append("complete RGB coverage")
+        source_rows.append({
+            "name": source["name"],
+            "code": source["code"],
+            "score": score,
+            "observations": source["observations"],
+            "products": source["products"],
+            "rgb": rgb,
+            "rgb_complete": source["rgb_complete"],
+            "notes": notes,
+            "next_action": source["next_action"],
+        })
+
+    source_rows.sort(key=lambda item: (-item["score"], item["name"]))
+    best = source_rows[0] if source_rows else None
+    score = best["score"] if best else 0
+    if state["active_with_observations"] > 1:
+        score += 10
+    if summary.get("enhanced_products") or summary.get("hla_products") or summary.get("rgb_sets"):
+        score += 10
+    score = min(100, score)
+
+    if score >= 90:
+        status = "excellent - ready to try a polished composition"
+    elif score >= 70:
+        status = "strong - one or two refinements could improve the final image"
+    elif score >= 45:
+        status = "promising - useful data is present but the layer set is incomplete"
+    elif score:
+        status = "early - gather products and color coverage before composing"
+    else:
+        status = "not started - search and load products first"
+
+    next_actions = []
+    if not summary.get("observations"):
+        next_actions.append("Search Hubble or JWST for the target.")
+    elif not summary.get("products"):
+        next_actions.append("Load products so image layers can be evaluated.")
+    elif best and not best["rgb_complete"]:
+        missing = ", ".join(channel for channel in ("blue", "green", "red") if not best["rgb"][channel])
+        next_actions.append(f"Improve {best['name']} color coverage: missing {missing}.")
+    elif best:
+        next_actions.append(f"Use {best['name']} as the first image layer and compare other sources against it.")
+    if state["active_with_observations"] < len(state["active_sources"]):
+        missing_sources = [source["name"] for source in state["active_sources"] if not source["observations"]]
+        if missing_sources:
+            next_actions.append("Search " + ", ".join(missing_sources) + " when broader wavelength coverage would help.")
+
+    return {
+        "score": score,
+        "status": status,
+        "best_source": best,
+        "sources": source_rows,
+        "next_actions": next_actions,
+    }
+
+
+def composition_readiness_lines(summary=None):
+    readiness = composition_readiness_state(summary)
+    lines = ["Image Build Readiness:"]
+    lines.append(f"- Overall readiness: {readiness['score']}/100 ({readiness['status']}).")
+    best = readiness.get("best_source")
+    if best:
+        rgb = best["rgb"]
+        lines.append(
+            f"- Best starting layer: {best['name']} ({best['code']}) with "
+            f"observations={best['observations']}, products={best['products']}, "
+            f"RGB blue={rgb['blue']}, green={rgb['green']}, red={rgb['red']}."
+        )
+    else:
+        lines.append("- Best starting layer: none yet.")
+    for source in readiness["sources"]:
+        rgb = source["rgb"]
+        lines.append(
+            f"- {source['name']}: {source['score']}/85 layer score; "
+            f"RGB blue={rgb['blue']}, green={rgb['green']}, red={rgb['red']}; "
+            f"next: {source['next_action']}."
+        )
+    lines.append("Next actions:")
+    for action in readiness["next_actions"] or ["Review the current layers and try a test composition."]:
+        lines.append(f"- {action}")
+    return lines
+
 def project_plan_lines(summary=None):
     lines = []
     state = project_state(summary)

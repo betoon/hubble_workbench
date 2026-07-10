@@ -472,6 +472,7 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ttk.Button(controls, text="Completeness Check", command=self.completeness_check_async).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Prepare Best RGB Layer", command=self.observatory_prepare_best_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Composition Strategy", command=self.observatory_show_composition_strategy, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(controls, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
 
         body = ttk.PanedWindow(self.observatory_tab, orient="horizontal")
         body.pack(fill="both", expand=True)
@@ -576,6 +577,9 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_show_composition_strategy(self):
         return super().observatory_show_composition_strategy()
+
+    def observatory_show_composition_readiness(self):
+        return super().observatory_show_composition_readiness()
 
     def build_convert_tab(self):
         top = ttk.Frame(self.convert_tab)

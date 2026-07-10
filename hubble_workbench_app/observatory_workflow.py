@@ -569,6 +569,61 @@ class ObservatoryWorkflowMixin:
             return []
         return self.observatory_best_observations(candidates, limit=limit)
 
+    def observatory_overlap_candidate_export_rows(self):
+        rows = []
+        for row in self.observatory_mosaic_overlap_candidate_rows(limit=50):
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            rows.append({
+                "obs_collection": row.get("obs_collection", ""),
+                "obs_id": row.get("obs_id", "") or row.get("obsid", ""),
+                "instrument_name": row.get("instrument_name", ""),
+                "filters": row.get("filters", "") or row.get("Spectral_Elt", ""),
+                "wavelength_bucket": self.observation_filter_bucket(row),
+                "t_exptime": row.get("t_exptime", ""),
+                "ra": f"{ra:.8f}" if ra is not None else "",
+                "dec": f"{dec:.8f}" if dec is not None else "",
+            })
+        return rows
+
+    def observatory_copy_overlap_candidates(self):
+        rows = self.observatory_overlap_candidate_export_rows()
+        if not rows:
+            message = "No overlap candidate rows are available to copy."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return ""
+        headers = list(rows[0].keys())
+        lines = ["\t".join(headers)]
+        for row in rows:
+            lines.append("\t".join(str(row.get(header, "")) for header in headers))
+        text = "\n".join(lines)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = f"Copied {len(rows)} overlap candidate row(s) to the clipboard."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return text
+
+    def observatory_export_overlap_candidates_csv(self):
+        rows = self.observatory_overlap_candidate_export_rows()
+        if not rows:
+            message = "No overlap candidate rows are available to export."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return None
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_mosaic_overlap_candidates.csv"
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        message = f"Exported {len(rows)} overlap candidate row(s) to {path.name}."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
+
     def observatory_mosaic_overlap_candidates_text(self):
         bounds = self.observatory_hst_jwst_overlap_bounds()
         target = self.target_var.get().strip() if hasattr(self, "target_var") else ""

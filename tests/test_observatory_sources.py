@@ -271,6 +271,33 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(rows[0]["dec"], "-2.50000000")
         self.assertEqual(rows[0]["obs_id"], "o1")
 
+    def test_overlap_candidate_export_rows_include_shared_area_fields(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Var:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = [
+                {"obs_collection": "HST", "obs_id": "h1", "instrument_name": "WFC3", "filters": "F555W", "t_exptime": "900", "s_ra": "10.0", "s_dec": "20.0"},
+                {"obs_collection": "HST", "obs_id": "h2", "instrument_name": "WFC3", "filters": "F814W", "t_exptime": "1500", "s_ra": "10.2", "s_dec": "20.2"},
+                {"obs_collection": "JWST", "obs_id": "j1", "instrument_name": "NIRCam", "filters": "F200W", "t_exptime": "1200", "s_ra": "10.1", "s_dec": "20.1"},
+                {"obs_collection": "JWST", "obs_id": "j2", "instrument_name": "NIRCam", "filters": "F444W", "t_exptime": "1100", "s_ra": "10.3", "s_dec": "20.3"},
+            ]
+            mosaic_layer_var = Var("All active sources")
+
+            def observatory_mosaic_best_only(self):
+                return False
+
+        rows = Dummy().observatory_overlap_candidate_export_rows()
+        self.assertEqual({row["obs_id"] for row in rows}, {"h2", "j1"})
+        self.assertEqual(rows[0]["ra"].count("."), 1)
+        self.assertIn("wavelength_bucket", rows[0])
+
     def test_mosaic_overlap_candidates_report_lists_shared_rows(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

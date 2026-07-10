@@ -293,6 +293,56 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(message)
         return path
 
+
+    def observatory_latest_project_plan_path(self):
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        target = self.current_target_for_log()
+        paths = sorted(
+            SEARCH_LOG_DIR.glob(f"{target}_multi_telescope_project_plan*.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        return paths[0] if paths else None
+
+    def observatory_format_loaded_project_plan(self, payload, path=None):
+        lines = []
+        title_target = payload.get("target", "unknown target") if isinstance(payload, dict) else "unknown target"
+        lines.append(f"Loaded Multi-Telescope Project Plan: {title_target}")
+        if path is not None:
+            lines.append(f"Source file: {path.name}")
+        lines.append("")
+        plan_text = payload.get("project_plan", "") if isinstance(payload, dict) else ""
+        if plan_text:
+            lines.append(plan_text)
+        else:
+            lines.append("No project plan text was found in this saved file.")
+        return "\n".join(lines)
+
+    def observatory_load_project_plan(self):
+        path = self.observatory_latest_project_plan_path()
+        if path is None:
+            message = "No saved multi-telescope project plan was found for this target."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            message = f"Could not load project plan: {exc}"
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return None
+        text = self.observatory_format_loaded_project_plan(payload, path)
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        message = f"Loaded multi-telescope project plan from {path.name}."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return payload
+
     def observatory_current_report_text(self):
         widget = getattr(self, "observatory_report_text", None)
         if widget is None:

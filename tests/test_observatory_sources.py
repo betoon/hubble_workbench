@@ -93,6 +93,22 @@ class ObservatorySourceTests(unittest.TestCase):
 
 
 
+
+    def test_loaded_project_plan_format_includes_saved_text(self):
+        from pathlib import Path
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Dummy(ObservatoryWorkflowMixin):
+            pass
+
+        text = Dummy().observatory_format_loaded_project_plan(
+            {"target": "M51", "project_plan": "Saved plan body"},
+            Path("M51_multi_telescope_project_plan.json"),
+        )
+        self.assertIn("Loaded Multi-Telescope Project Plan: M51", text)
+        self.assertIn("M51_multi_telescope_project_plan.json", text)
+        self.assertIn("Saved plan body", text)
+
     def test_project_plan_text_contains_project_sections(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

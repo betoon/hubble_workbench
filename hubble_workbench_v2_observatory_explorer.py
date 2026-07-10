@@ -522,6 +522,13 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
             variable=self.mosaic_best_only_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(14, 0))
+        self.mosaic_overlap_only_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            mosaic_tools,
+            text="Overlap only",
+            variable=self.mosaic_overlap_only_var,
+            command=self.observatory_draw_current_mosaic,
+        ).pack(side="left", padx=(10, 0))
         ttk.Button(mosaic_tools, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
         ttk.Button(mosaic_tools, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Copy Marker Details", command=self.observatory_copy_marker_details).pack(side="left", padx=(8, 0))

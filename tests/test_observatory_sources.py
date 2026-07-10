@@ -271,6 +271,32 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(rows[0]["dec"], "-2.50000000")
         self.assertEqual(rows[0]["obs_id"], "o1")
 
+    def test_mosaic_overlap_only_keeps_shared_area_rows(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Var:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = [
+                {"obs_collection": "HST", "obs_id": "h1", "s_ra": "10.0", "s_dec": "20.0"},
+                {"obs_collection": "HST", "obs_id": "h2", "s_ra": "10.2", "s_dec": "20.2"},
+                {"obs_collection": "JWST", "obs_id": "j1", "s_ra": "10.1", "s_dec": "20.1"},
+                {"obs_collection": "JWST", "obs_id": "j2", "s_ra": "10.3", "s_dec": "20.3"},
+            ]
+            mosaic_layer_var = Var("All active sources")
+            mosaic_overlap_only_var = Var(True)
+
+            def observatory_mosaic_best_only(self):
+                return False
+
+        rows = Dummy().observatory_current_mosaic_rows()
+        self.assertEqual([row["obs_id"] for row in rows], ["h2", "j1"])
+
     def test_mosaic_rows_respect_layer_filter(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

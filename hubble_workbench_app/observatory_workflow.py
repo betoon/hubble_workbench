@@ -458,10 +458,44 @@ class ObservatoryWorkflowMixin:
         except Exception:
             return False
 
+    def observatory_mosaic_overlap_only(self):
+        try:
+            return bool(self.mosaic_overlap_only_var.get())
+        except Exception:
+            return False
+
+    def observatory_rows_in_bounds(self, rows, bounds):
+        if not bounds:
+            return []
+        selected = []
+        for row in rows:
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is None or dec is None:
+                continue
+            if bounds["ra_min"] <= ra <= bounds["ra_max"] and bounds["dec_min"] <= dec <= bounds["dec_max"]:
+                selected.append(row)
+        return selected
+
+    def observatory_hst_jwst_overlap_bounds(self):
+        rows = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
+        points = []
+        for row in rows:
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is not None and dec is not None:
+                points.append((ra, dec, row))
+        bounds = self.observatory_mosaic_bounds_for_points(points)
+        if "HST" in bounds and "JWST" in bounds:
+            return self.observatory_bounds_overlap(bounds["HST"], bounds["JWST"])
+        return None
+
     def observatory_current_mosaic_rows(self):
         rows = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
         if self.observatory_mosaic_best_only():
             rows = self.observatory_best_observations(rows, limit=12)
+        if self.observatory_mosaic_overlap_only():
+            rows = self.observatory_rows_in_bounds(rows, self.observatory_hst_jwst_overlap_bounds())
         return rows
 
     def observatory_mosaic_export_rows(self):
@@ -515,6 +549,8 @@ class ObservatoryWorkflowMixin:
         layer = self.observatory_selected_mosaic_label().lower().replace(" / ", "_").replace(" ", "_")
         if self.observatory_mosaic_best_only():
             layer += "_best_candidates"
+        if self.observatory_mosaic_overlap_only():
+            layer += "_overlap_candidates"
         path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_mosaic_{layer}.csv"
         with path.open("w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
@@ -681,6 +717,7 @@ class ObservatoryWorkflowMixin:
             "hst_jwst_overlap": overlap,
             "layer": self.observatory_selected_mosaic_label(),
             "best_only": self.observatory_mosaic_best_only(),
+            "overlap_only": self.observatory_mosaic_overlap_only(),
         }
 
     def observatory_mosaic_coverage_text(self):
@@ -688,6 +725,8 @@ class ObservatoryWorkflowMixin:
         layer = summary["layer"]
         if summary["best_only"]:
             layer = f"{layer} - best candidates"
+        if summary.get("overlap_only"):
+            layer = f"{layer} - overlap candidates"
         lines = [f"Mosaic Coverage Summary for {layer}", ""]
         lines.append(f"Coordinate-bearing observations: {summary['points']}")
         if not summary["bounds"]:
@@ -728,6 +767,7 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set("Generated mosaic coverage summary.")
         self.observatory_draw_current_mosaic()
         return text
+
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum
@@ -749,6 +789,8 @@ class ObservatoryWorkflowMixin:
         best_only = self.observatory_mosaic_best_only()
         if best_only:
             layer_label = f"{layer_label} - best candidates"
+        if self.observatory_mosaic_overlap_only():
+            layer_label = f"{layer_label} - overlap candidates"
         points = []
         mission_counts = {}
         bucket_counts = {}

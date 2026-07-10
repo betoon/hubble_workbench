@@ -226,6 +226,31 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("1.500000, -2.250000", detail)
         self.assertIn("Blue/short wavelength", detail)
 
+    def test_mosaic_coverage_summary_finds_hubble_jwst_overlap(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Var:
+            def get(self):
+                return "All active sources"
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = [
+                {"obs_collection": "HST", "obs_id": "h1", "s_ra": "10.0", "s_dec": "20.0"},
+                {"obs_collection": "HST", "obs_id": "h2", "s_ra": "10.2", "s_dec": "20.2"},
+                {"obs_collection": "JWST", "obs_id": "j1", "s_ra": "10.1", "s_dec": "20.1"},
+                {"obs_collection": "JWST", "obs_id": "j2", "s_ra": "10.3", "s_dec": "20.3"},
+            ]
+            mosaic_layer_var = Var()
+
+            def observatory_mosaic_best_only(self):
+                return False
+
+        summary = Dummy().observatory_mosaic_coverage_summary()
+        report = Dummy().observatory_mosaic_coverage_text()
+        self.assertEqual(summary["points"], 4)
+        self.assertIsNotNone(summary["hst_jwst_overlap"])
+        self.assertIn("Overlap found", report)
+
     def test_mosaic_export_rows_include_coordinates(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

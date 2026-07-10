@@ -522,7 +522,8 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
             variable=self.mosaic_best_only_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(14, 0))
-        ttk.Button(mosaic_tools, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_tools, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_tools, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Copy Marker Details", command=self.observatory_copy_marker_details).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Copy Mosaic Rows", command=self.observatory_copy_mosaic_rows).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
@@ -544,6 +545,9 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_get_marker_products(self):
         return super().observatory_get_marker_products()
+
+    def observatory_show_mosaic_coverage(self):
+        return super().observatory_show_mosaic_coverage()
 
     def observatory_copy_marker_details(self):
         return super().observatory_copy_marker_details()

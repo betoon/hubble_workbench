@@ -628,6 +628,107 @@ class ObservatoryWorkflowMixin:
         return True
 
     @staticmethod
+    def observatory_mosaic_bounds_for_points(points):
+        bounds = {}
+        for ra, dec, row in points:
+            mission = str(row.get("obs_collection", "Unknown") or "Unknown").upper()
+            current = bounds.setdefault(mission, {
+                "mission": mission,
+                "count": 0,
+                "ra_min": ra,
+                "ra_max": ra,
+                "dec_min": dec,
+                "dec_max": dec,
+            })
+            current["count"] += 1
+            current["ra_min"] = min(current["ra_min"], ra)
+            current["ra_max"] = max(current["ra_max"], ra)
+            current["dec_min"] = min(current["dec_min"], dec)
+            current["dec_max"] = max(current["dec_max"], dec)
+        return bounds
+
+    @staticmethod
+    def observatory_bounds_overlap(left, right):
+        ra_min = max(left["ra_min"], right["ra_min"])
+        ra_max = min(left["ra_max"], right["ra_max"])
+        dec_min = max(left["dec_min"], right["dec_min"])
+        dec_max = min(left["dec_max"], right["dec_max"])
+        if ra_max < ra_min or dec_max < dec_min:
+            return None
+        return {
+            "ra_min": ra_min,
+            "ra_max": ra_max,
+            "dec_min": dec_min,
+            "dec_max": dec_max,
+            "ra_span": ra_max - ra_min,
+            "dec_span": dec_max - dec_min,
+        }
+
+    def observatory_mosaic_coverage_summary(self):
+        points = []
+        for row in self.observatory_current_mosaic_rows():
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is not None and dec is not None:
+                points.append((ra, dec, row))
+        bounds = self.observatory_mosaic_bounds_for_points(points)
+        overlap = None
+        if "HST" in bounds and "JWST" in bounds:
+            overlap = self.observatory_bounds_overlap(bounds["HST"], bounds["JWST"])
+        return {
+            "points": len(points),
+            "bounds": bounds,
+            "hst_jwst_overlap": overlap,
+            "layer": self.observatory_selected_mosaic_label(),
+            "best_only": self.observatory_mosaic_best_only(),
+        }
+
+    def observatory_mosaic_coverage_text(self):
+        summary = self.observatory_mosaic_coverage_summary()
+        layer = summary["layer"]
+        if summary["best_only"]:
+            layer = f"{layer} - best candidates"
+        lines = [f"Mosaic Coverage Summary for {layer}", ""]
+        lines.append(f"Coordinate-bearing observations: {summary['points']}")
+        if not summary["bounds"]:
+            lines.append("- No coordinate-bearing observations are available yet.")
+            lines.append("- Run a search or widen the radius, then build the mosaic again.")
+            return "\n".join(lines)
+        lines.append("Mission coverage boxes:")
+        for mission, bounds in sorted(summary["bounds"].items()):
+            lines.append(
+                f"- {mission}: {bounds['count']} point(s), "
+                f"RA {bounds['ra_min']:.6f} to {bounds['ra_max']:.6f}, "
+                f"Dec {bounds['dec_min']:.6f} to {bounds['dec_max']:.6f}."
+            )
+        overlap = summary["hst_jwst_overlap"]
+        lines.append("")
+        lines.append("Hubble/JWST overlap:")
+        if overlap:
+            lines.append(
+                f"- Overlap found: RA {overlap['ra_min']:.6f} to {overlap['ra_max']:.6f}, "
+                f"Dec {overlap['dec_min']:.6f} to {overlap['dec_max']:.6f}."
+            )
+            lines.append("- This is a promising area for a combined Hubble plus JWST composition.")
+        elif "HST" in summary["bounds"] and "JWST" in summary["bounds"]:
+            lines.append("- Hubble and JWST coordinate boxes do not overlap in the current mosaic selection.")
+            lines.append("- Try Search Wider Radius or switch off Best candidates only to inspect more coverage.")
+        else:
+            lines.append("- Load both Hubble and JWST coordinate-bearing observations to estimate overlap.")
+        return "\n".join(lines)
+
+    def observatory_show_mosaic_coverage(self):
+        text = self.observatory_mosaic_coverage_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated mosaic coverage summary.")
+        self.observatory_draw_current_mosaic()
+        return text
+    @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum
         if abs(span) < 1e-6:
@@ -715,6 +816,26 @@ class ObservatoryWorkflowMixin:
         if best_only:
             guide_text = "Showing the strongest observation candidates by coordinates, exposure, wavelength, and mission."
         canvas.create_text(plot_x0, 38, anchor="w", text=guide_text, fill="#d1d5db")
+
+        mission_box_colors = {"HST": "#93c5fd", "JWST": "#67e8f9"}
+        for mission, bounds in self.observatory_mosaic_bounds_for_points(points).items():
+            if bounds["count"] < 2:
+                continue
+            x0, y_bottom = map_point(bounds["ra_min"], bounds["dec_min"])
+            x1, y_top = map_point(bounds["ra_max"], bounds["dec_max"])
+            color = mission_box_colors.get(mission, "#9ca3af")
+            canvas.create_rectangle(min(x0, x1), min(y_top, y_bottom), max(x0, x1), max(y_top, y_bottom), outline=color, width=2, dash=(6, 4))
+            canvas.create_text(min(x0, x1) + 6, min(y_top, y_bottom) + 10, anchor="w", text=f"{mission} coverage", fill=color, font=("Segoe UI", 8, "bold"))
+
+        overlap = None
+        bounds = self.observatory_mosaic_bounds_for_points(points)
+        if "HST" in bounds and "JWST" in bounds:
+            overlap = self.observatory_bounds_overlap(bounds["HST"], bounds["JWST"])
+        if overlap:
+            x0, y_bottom = map_point(overlap["ra_min"], overlap["dec_min"])
+            x1, y_top = map_point(overlap["ra_max"], overlap["dec_max"])
+            canvas.create_rectangle(min(x0, x1), min(y_top, y_bottom), max(x0, x1), max(y_top, y_bottom), outline="#facc15", width=3)
+            canvas.create_text(max(x0, x1) - 6, max(y_top, y_bottom) - 10, anchor="e", text="HST/JWST overlap", fill="#facc15", font=("Segoe UI", 8, "bold"))
 
         for ra, dec, row in points[:1000]:
             x, y = map_point(ra, dec)

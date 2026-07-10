@@ -561,6 +561,54 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(message)
         return path
 
+    def observatory_mosaic_overlap_candidate_rows(self, limit=16):
+        rows = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
+        bounds = self.observatory_hst_jwst_overlap_bounds()
+        candidates = self.observatory_rows_in_bounds(rows, bounds)
+        if not candidates:
+            return []
+        return self.observatory_best_observations(candidates, limit=limit)
+
+    def observatory_mosaic_overlap_candidates_text(self):
+        bounds = self.observatory_hst_jwst_overlap_bounds()
+        target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        title_target = target or "current target"
+        lines = [f"Overlap Candidates for {title_target}", ""]
+        if not bounds:
+            lines.append("No shared Hubble/JWST overlap area was found in the current mosaic rows.")
+            lines.append("Try searching both Hubble and JWST, widening the radius, or turning off Best candidates only.")
+            return "\n".join(lines)
+        lines.append(
+            f"Shared area: RA {bounds['ra_min']:.6f} to {bounds['ra_max']:.6f}, "
+            f"Dec {bounds['dec_min']:.6f} to {bounds['dec_max']:.6f}."
+        )
+        candidates = self.observatory_mosaic_overlap_candidate_rows()
+        if not candidates:
+            lines.append("No observation centers fall inside the shared area yet.")
+            return "\n".join(lines)
+        lines.append(f"Candidate observations inside overlap: {len(candidates)}")
+        lines.append("")
+        for index, row in enumerate(candidates, start=1):
+            lines.append(f"{index}. {self.observatory_observation_label(row)}")
+        lines.append("")
+        lines.append("Suggested next steps:")
+        lines.append("- Turn on Overlap only to inspect these markers on the mosaic.")
+        lines.append("- Click the strongest Hubble/JWST markers and use Get Marker Products.")
+        lines.append("- Prefer rows with useful filters, longer exposure, and matching sky coverage before composing.")
+        return "\n".join(lines)
+
+    def observatory_show_overlap_candidates(self):
+        text = self.observatory_mosaic_overlap_candidates_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            count = len(self.observatory_mosaic_overlap_candidate_rows())
+            self.mosaic_status_var.set(f"Found {count} overlap candidate observation(s).")
+        return text
+
     def observatory_mosaic_marker_detail(self, row):
         ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
         dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")

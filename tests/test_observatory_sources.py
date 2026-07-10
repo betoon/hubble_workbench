@@ -93,6 +93,34 @@ class ObservatorySourceTests(unittest.TestCase):
 
 
 
+    def test_project_plan_text_contains_project_sections(self):
+        from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+        class Var:
+            def __init__(self, value):
+                self.value = value
+
+            def get(self):
+                return self.value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = []
+            product_results = []
+            target_var = Var("M51")
+            telescope_var = Var("Hubble / HST")
+            radius_var = Var("0.05 deg")
+
+            def current_target_for_log(self):
+                return "M51"
+
+            def compute_observatory_summary(self, obs_rows=None, product_rows=None):
+                return {"observations": 0, "by_mission": {}, "products_by_mission": {}, "channels_by_mission": {}}
+
+        text = Dummy().observatory_project_plan_text()
+        self.assertIn("Multi-Telescope Project Plan for M51", text)
+        self.assertIn("Active search sources:", text)
+        self.assertIn("Planned context layers:", text)
+
     def test_copy_marker_details_requires_selection(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

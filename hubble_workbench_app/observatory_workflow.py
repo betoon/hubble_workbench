@@ -1,4 +1,5 @@
 import csv
+import json
 import logging
 import math
 import threading
@@ -6,7 +7,7 @@ from tkinter import messagebox
 
 from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
-from hubble_workbench_app.observatory_sources import active_sources, planned_sources, project_plan_lines, project_state
+from hubble_workbench_app.observatory_sources import active_sources, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
 class ObservatoryWorkflowMixin:
@@ -242,6 +243,55 @@ class ObservatoryWorkflowMixin:
             logging.exception("Observatory Explorer analysis failed")
             messagebox.showerror("Observatory Explorer", self.format_error_message(exc))
 
+
+
+    def observatory_current_summary(self):
+        return self.compute_observatory_summary(
+            list(getattr(self, "search_results", []) or []),
+            list(getattr(self, "product_results", []) or []),
+        )
+
+    def observatory_project_plan_text(self):
+        summary = self.observatory_current_summary()
+        target = self.target_var.get().strip() or "(no target)"
+        lines = [
+            f"Multi-Telescope Project Plan for {target}",
+            f"Current telescope setting: {self.telescope_var.get()}",
+            f"Current radius: {self.radius_var.get()}",
+            "",
+        ]
+        lines.extend(project_plan_lines(summary))
+        return "\n".join(lines)
+
+    def observatory_project_plan_payload(self):
+        summary = self.observatory_current_summary()
+        return {
+            "target": self.current_target_for_log(),
+            "summary": summary,
+            "project_state": project_state(summary),
+            "project_checklist": project_checklist_lines(summary),
+            "project_plan": self.observatory_project_plan_text(),
+        }
+
+    def observatory_copy_project_plan(self):
+        text = self.observatory_project_plan_text()
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = "Copied multi-telescope project plan to the clipboard."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return text
+
+    def observatory_save_project_plan(self):
+        payload = self.observatory_project_plan_payload()
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_multi_telescope_project_plan.json"
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        message = f"Saved multi-telescope project plan to {path.name}."
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
 
     def observatory_current_report_text(self):
         widget = getattr(self, "observatory_report_text", None)

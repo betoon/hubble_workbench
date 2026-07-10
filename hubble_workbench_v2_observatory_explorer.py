@@ -484,6 +484,8 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ttk.Label(report_tools, text="Explorer Report", style="Section.TLabel").pack(side="left")
         ttk.Button(report_tools, text="Copy Report", command=self.observatory_copy_report).pack(side="right")
         ttk.Button(report_tools, text="Save Report", command=self.observatory_save_report).pack(side="right", padx=(0, 8))
+        ttk.Button(report_tools, text="Copy Project Plan", command=self.observatory_copy_project_plan).pack(side="right", padx=(0, 8))
+        ttk.Button(report_tools, text="Save Project Plan", command=self.observatory_save_project_plan).pack(side="right", padx=(0, 8))
         self.observatory_report_text = tk.Text(
             left,
             height=24,
@@ -548,6 +550,12 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_save_report(self):
         return super().observatory_save_report()
+
+    def observatory_copy_project_plan(self):
+        return super().observatory_copy_project_plan()
+
+    def observatory_save_project_plan(self):
+        return super().observatory_save_project_plan()
 
     def observatory_export_mosaic_csv(self):
         return super().observatory_export_mosaic_csv()

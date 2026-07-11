@@ -1,4 +1,4 @@
-﻿# Observatory Explorer Test Guide
+# Observatory Explorer Test Guide
 
 This is a quick click-by-click guide for testing the newer Observatory Explorer, sensor coverage, and mixed-sensor RGB planning tools.
 
@@ -202,3 +202,15 @@ When something looks wrong, note these details:
 - Alignment score from **Check Mixed Alignment**, if shown
 
 Saved reports and recipes usually go into the app's logs/search output area. Use **Save Report**, **Save Project Plan**, **Save Plan**, and **Save Recipe** when you want files to compare between test runs.
+## Debug Console
+
+Use this while testing long searches, product downloads, sensor plans, and mixed RGB workflows.
+
+1. Click the **Debug Console** tab.
+2. Leave it open while you run **Search MAST**, **Get All Products**, **Find Better Sources**, **Prepare Sensor RGB**, or **Prepare Mixed RGB**.
+3. Watch for started, progress, finished, warning, and error messages.
+4. Click **Refresh From Debug File** to load the latest lines from `debug_hubble.txt`.
+5. Click **Open Debug File** when you want the full debug log.
+6. Click **Save Console** if you want to save only what is visible in the console tab.
+
+This tab is meant as a temporary cockpit view while the app is still growing. It does not replace the normal status messages, but it should make slow background work much easier to follow.

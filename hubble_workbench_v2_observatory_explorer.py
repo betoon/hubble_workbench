@@ -64,6 +64,7 @@ from hubble_workbench_app.app_logging import (
     warning_log,
 )
 from hubble_workbench_app.developer_tools import DeveloperToolsMixin
+from hubble_workbench_app.debug_console import DebugConsoleMixin
 from hubble_workbench_app.better_sources import BetterSourcesMixin
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.search_workflow import SearchWorkflowMixin
@@ -99,7 +100,7 @@ atexit.register(log_shutdown)# -------------------------------------------------
 
 
 
-class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
+class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -177,18 +178,21 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         self.observatory_tab = ttk.Frame(self.notebook, padding=12)
         self.convert_tab = ttk.Frame(self.notebook, padding=12)
         self.compose_tab = ttk.Frame(self.notebook, padding=12)
+        self.debug_tab = ttk.Frame(self.notebook, padding=12)
 
         self.notebook.add(self.setup_tab, text="Setup")
         self.notebook.add(self.browser_tab, text="MAST Browser")
         self.notebook.add(self.observatory_tab, text="Observatory Explorer")
         self.notebook.add(self.convert_tab, text="FITS Preview / Convert")
         self.notebook.add(self.compose_tab, text="Color Composer")
+        self.notebook.add(self.debug_tab, text="Debug Console")
 
         self.build_setup_tab()
         self.build_browser_tab()
         self.build_observatory_tab()
         self.build_convert_tab()
         self.build_compose_tab()
+        self.build_debug_console_tab()
 
     def build_setup_tab(self):
         ttk.Label(self.setup_tab, text="Space Telescope Workbench", style="Title.TLabel").pack(anchor="w")

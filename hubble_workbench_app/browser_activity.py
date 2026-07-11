@@ -2,6 +2,9 @@ from datetime import datetime
 
 
 class BrowserActivityMixin:
+    def log_background_activity(self, message):
+        if hasattr(self, "debug_console_write"):
+            self.debug_console_write(message)
     def set_browser_buttons_state(self, state):
         for button in (
             self.search_button,
@@ -27,6 +30,7 @@ class BrowserActivityMixin:
                 pass
             self.browser_busy_job = None
         self.browser_busy_message = message
+        self.log_background_activity(f"Started: {message}")
         self.browser_busy_started = datetime.now()
         self.browser_progress.start(12)
         self.reset_download_progress()
@@ -93,6 +97,7 @@ class BrowserActivityMixin:
         self.extend_browser_timeout(operation_id)
         self.download_progress_var.set(max(0, min(100, value)))
         self.download_detail.set(detail)
+        self.log_background_activity(f"Progress: {detail} ({max(0, min(100, value)):.0f}%)")
 
     def stop_browser_activity(self, message):
         if self.browser_busy_job:
@@ -113,3 +118,4 @@ class BrowserActivityMixin:
         self.set_browser_buttons_state("normal")
         self.stop_browser_button.configure(state="disabled")
         self.browser_status.set(message)
+        self.log_background_activity(f"Finished: {message}")

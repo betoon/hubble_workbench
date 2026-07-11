@@ -588,6 +588,26 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertIn("best_green", workflow.observatory_sensor_export_text())
 
 
+    def test_sensor_readiness_ranks_complete_rgb_sensor_first(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F438W", "Spectral_Elt": "F438W", "productFilename": "uvis_blue.fits", "Format": "image/fits"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F555W", "Spectral_Elt": "F555W", "productFilename": "uvis_green.fits", "Format": "image/fits"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F814W", "Spectral_Elt": "F814W", "productFilename": "uvis_red.fits", "Format": "image/fits"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "Detector": "NIRCam", "filters": "F090W", "Spectral_Elt": "F090W", "productFilename": "nircam_blue.fits", "Format": "image/fits"},
+        ]
+        workflow.search_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F438W", "s_ra": "1", "s_dec": "2", "t_exptime": "100"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F090W", "s_ra": "1", "s_dec": "2", "t_exptime": "100"},
+        ]
+        workflow.target_var = type("Var", (), {"get": lambda self: "M51"})()
+        rows = workflow.observatory_sensor_readiness_rows()
+        self.assertEqual(rows[0]["sensor"], "WFC3 UVIS")
+        self.assertEqual(rows[0]["readiness_status"], "ready")
+        self.assertEqual(workflow.observatory_best_sensor_name(), "WFC3 UVIS")
+        self.assertIn("Sensor Readiness Ranking", workflow.observatory_sensor_readiness_text())
+
+
 
 if __name__ == "__main__":
     unittest.main()

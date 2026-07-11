@@ -466,6 +466,111 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(message)
         return path
 
+
+
+    def observatory_sensor_readiness_rows(self):
+        rows = []
+        for row in self.observatory_sensor_export_rows():
+            score = 0
+            score += min(20, int(row["observations"]) * 4)
+            score += min(20, int(row["products"]) * 2)
+            score += min(12, int(row["coordinate_rows"]) * 3)
+            score += min(30, (int(row["blue_candidates"]) > 0) * 10 + (int(row["green_candidates"]) > 0) * 10 + (int(row["red_candidates"]) > 0) * 10)
+            if row["rgb_complete"]:
+                score += 42
+            try:
+                best_score = int(float(row["best_rgb_score"] or 0))
+            except Exception:
+                best_score = 0
+            score += min(18, max(0, best_score // 8))
+            score = min(100, score)
+            missing = [
+                channel for channel, key in (("blue", "blue_candidates"), ("green", "green_candidates"), ("red", "red_candidates"))
+                if not int(row[key])
+            ]
+            if score >= 85:
+                status = "ready"
+            elif score >= 60:
+                status = "promising"
+            elif score >= 30:
+                status = "partial"
+            else:
+                status = "needs data"
+            item = dict(row)
+            item["readiness_score"] = score
+            item["readiness_status"] = status
+            item["missing_channels"] = ", ".join(missing)
+            if row["rgb_complete"]:
+                item["recommended_action"] = "prepare this sensor RGB set"
+            elif row["products"]:
+                item["recommended_action"] = "find missing " + ", ".join(missing) + " coverage"
+            elif row["observations"]:
+                item["recommended_action"] = "get products for this sensor"
+            else:
+                item["recommended_action"] = "search or widen the target coverage"
+            rows.append(item)
+        rows.sort(key=lambda item: (-item["readiness_score"], str(item["sensor"])))
+        return rows
+
+    def observatory_best_sensor_name(self):
+        rows = self.observatory_sensor_readiness_rows()
+        if not rows:
+            return "All sensors"
+        return rows[0]["sensor"]
+
+    def observatory_sensor_readiness_text(self):
+        target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        title_target = target or "current target"
+        rows = self.observatory_sensor_readiness_rows()
+        lines = [f"Sensor Readiness Ranking for {title_target}", ""]
+        if not rows:
+            lines.append("No sensor rows are available yet. Run a search and load products first.")
+            return "\n".join(lines)
+        for index, row in enumerate(rows, start=1):
+            lines.append(
+                f"{index}. {row['sensor']} ({row['mission']}): {row['readiness_score']}/100 - {row['readiness_status']}"
+            )
+            lines.append(
+                f"- Observations={row['observations']}, products={row['products']}, "
+                f"RGB B/G/R={row['blue_candidates']}/{row['green_candidates']}/{row['red_candidates']}."
+            )
+            if row["rgb_complete"]:
+                lines.append(f"- Best RGB score={row['best_rgb_score']}; action: {row['recommended_action']}.")
+            else:
+                missing = row["missing_channels"] or "unknown"
+                lines.append(f"- Missing channels: {missing}; action: {row['recommended_action']}.")
+            lines.append("")
+        lines.append("Use Best Sensor to set the sensor filter to the top-ranked instrument family.")
+        return "\n".join(lines).strip()
+
+    def observatory_show_sensor_readiness(self):
+        text = self.observatory_sensor_readiness_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set("Generated sensor readiness ranking.")
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated sensor readiness ranking.")
+        return text
+
+    def observatory_use_best_sensor(self):
+        sensor_name = self.observatory_best_sensor_name()
+        try:
+            self.sensor_filter_var.set(sensor_name)
+        except Exception:
+            pass
+        message = f"Using best-ranked sensor: {sensor_name}."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        self.observatory_draw_current_mosaic()
+        self.observatory_show_sensor_rgb_plan()
+        return sensor_name
+
     @staticmethod
     def observatory_top_counts(counts, limit=8):
         items = sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))[:limit]

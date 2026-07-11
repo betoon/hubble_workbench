@@ -211,6 +211,7 @@ Use this while testing long searches, product downloads, sensor plans, and mixed
 3. Watch for started, progress, finished, warning, and error messages.
 4. Click **Refresh From Debug File** to load the latest lines from `debug_hubble.txt`.
 5. Click **Open Debug File** when you want the full debug log.
-6. Click **Save Console** if you want to save only what is visible in the console tab.
+6. Click **Copy Console** to copy everything visible, or **Copy Last Issue** to copy the most recent warning/error area.
+7. Click **Save Console** if you want to save only what is visible in the console tab.
 
 This tab is meant as a temporary cockpit view while the app is still growing. It does not replace the normal status messages, but it should make slow background work much easier to follow.

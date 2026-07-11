@@ -27,6 +27,8 @@ class DebugConsoleMixin:
         header.pack(fill="x", pady=(0, 8))
         ttk.Label(header, text="Debug Console", style="Title.TLabel").pack(side="left")
         ttk.Button(header, text="Clear", command=self.clear_debug_console).pack(side="right")
+        ttk.Button(header, text="Copy Console", command=self.copy_debug_console).pack(side="right", padx=(0, 8))
+        ttk.Button(header, text="Copy Last Issue", command=self.copy_last_debug_issue).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Save Console", command=self.save_debug_console).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Open Debug File", command=self.open_debug_log_file).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Refresh From Debug File", command=self.refresh_debug_console_from_file).pack(side="right", padx=(0, 8))
@@ -123,6 +125,46 @@ class DebugConsoleMixin:
             widget.configure(state="disabled")
         except Exception:
             pass
+
+
+    def debug_console_text_value(self):
+        widget = getattr(self, "debug_console_text", None)
+        if widget is None:
+            return ""
+        try:
+            return widget.get("1.0", "end").strip()
+        except Exception:
+            return ""
+
+    def copy_text_to_clipboard(self, text, label):
+        if not text:
+            self.debug_console_write(f"No {label} text is available to copy.")
+            return
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.update()
+            self.debug_console_write(f"Copied {label} to the clipboard.")
+        except Exception as exc:
+            messagebox.showerror("Copy Debug Console", str(exc))
+
+    def copy_debug_console(self):
+        self.copy_text_to_clipboard(self.debug_console_text_value(), "debug console")
+
+    def copy_last_debug_issue(self):
+        lines = self.debug_console_text_value().splitlines()
+        issue_tokens = ("ERROR", "WARNING", "failed", "Failed", "error", "Error", "Traceback")
+        issue_index = None
+        for index in range(len(lines) - 1, -1, -1):
+            if any(token in lines[index] for token in issue_tokens):
+                issue_index = index
+                break
+        if issue_index is None:
+            self.copy_text_to_clipboard("\n".join(lines[-40:]), "latest console lines")
+            return
+        start = max(0, issue_index - 8)
+        end = min(len(lines), issue_index + 24)
+        self.copy_text_to_clipboard("\n".join(lines[start:end]), "last issue")
 
     def clear_debug_console(self):
         widget = getattr(self, "debug_console_text", None)

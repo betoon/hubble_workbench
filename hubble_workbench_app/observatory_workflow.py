@@ -373,6 +373,99 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(message)
         return True
 
+
+
+    def observatory_sensor_export_rows(self):
+        rows = []
+        recipe = self.target_recipe(self.target_var.get()) if hasattr(self, "target_var") else None
+        for item in self.observatory_sensor_rows():
+            sensor_name = item["name"]
+            channels = item["channels"]
+            rgb_set = self.observatory_sensor_best_rgb_set(sensor_name)
+            export_row = {
+                "sensor": sensor_name,
+                "mission": item["mission"],
+                "observations": item["observations"],
+                "products": item["products"],
+                "coordinate_rows": item["coordinates"],
+                "exposure_seconds": f"{item['exposure']:.1f}",
+                "blue_candidates": channels["blue"],
+                "green_candidates": channels["green"],
+                "red_candidates": channels["red"],
+                "rgb_complete": bool(rgb_set),
+                "best_rgb_score": self.rgb_set_score(rgb_set, recipe) if rgb_set else "",
+                "best_blue": "",
+                "best_green": "",
+                "best_red": "",
+                "next_action": "prepare sensor RGB" if rgb_set else "load products or find missing RGB channels",
+            }
+            if rgb_set:
+                export_row["best_blue"] = rgb_set["blue"].get("productFilename", "") or rgb_set["blue"].get("Spectral_Elt", "")
+                export_row["best_green"] = rgb_set["green"].get("productFilename", "") or rgb_set["green"].get("Spectral_Elt", "")
+                export_row["best_red"] = rgb_set["red"].get("productFilename", "") or rgb_set["red"].get("Spectral_Elt", "")
+            rows.append(export_row)
+        return rows
+
+    def observatory_sensor_export_text(self):
+        rows = self.observatory_sensor_export_rows()
+        if not rows:
+            return ""
+        headers = list(rows[0].keys())
+        lines = ["\t".join(headers)]
+        for row in rows:
+            lines.append("\t".join(str(row.get(header, "")) for header in headers))
+        return "\n".join(lines)
+
+    def observatory_copy_sensor_summary(self):
+        text = self.observatory_sensor_export_text()
+        if not text:
+            message = "No sensor coverage rows are available to copy."
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            return ""
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = "Copied sensor coverage rows to the clipboard."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return text
+
+    def observatory_export_sensor_summary_csv(self):
+        rows = self.observatory_sensor_export_rows()
+        if not rows:
+            message = "No sensor coverage rows are available to export."
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            return None
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_sensor_coverage.csv"
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        message = f"Exported {len(rows)} sensor coverage row(s) to {path.name}."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
+
+    def observatory_save_sensor_rgb_plan(self):
+        text = self.observatory_sensor_rgb_plan_text()
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        sensor_name = self.observatory_active_sensor_name().lower().replace(" / ", "_").replace(" ", "_")
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_{sensor_name}_sensor_rgb_plan.txt"
+        path.write_text(text + "\n", encoding="utf-8")
+        message = f"Saved sensor RGB plan to {path.name}."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
+
     @staticmethod
     def observatory_top_counts(counts, limit=8):
         items = sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))[:limit]

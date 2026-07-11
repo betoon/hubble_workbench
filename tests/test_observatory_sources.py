@@ -569,6 +569,25 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertIn("Green", plan)
         self.assertIn("Red", plan)
 
+    def test_sensor_export_rows_include_rgb_recommendation(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F438W", "Spectral_Elt": "F438W", "productFilename": "target_blue_drc.fits", "Format": "image/fits", "size": "1000000"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F555W", "Spectral_Elt": "F555W", "productFilename": "target_green_drc.fits", "Format": "image/fits", "size": "1000000"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F814W", "Spectral_Elt": "F814W", "productFilename": "target_red_drc.fits", "Format": "image/fits", "size": "1000000"},
+        ]
+        workflow.search_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F438W", "s_ra": "1", "s_dec": "2", "t_exptime": "100"},
+        ]
+        workflow.target_var = type("Var", (), {"get": lambda self: "M51"})()
+        rows = workflow.observatory_sensor_export_rows()
+        wfc3 = next(row for row in rows if row["sensor"] == "WFC3 UVIS")
+        self.assertTrue(wfc3["rgb_complete"])
+        self.assertEqual(wfc3["best_rgb_score"], 3)
+        self.assertEqual(wfc3["best_blue"], "target_blue_drc.fits")
+        self.assertIn("best_green", workflow.observatory_sensor_export_text())
+
+
 
 if __name__ == "__main__":
     unittest.main()

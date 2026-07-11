@@ -29,6 +29,7 @@ class DebugConsoleMixin:
         ttk.Button(header, text="Clear", command=self.clear_debug_console).pack(side="right")
         ttk.Button(header, text="Copy Console", command=self.copy_debug_console).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Copy Last Issue", command=self.copy_last_debug_issue).pack(side="right", padx=(0, 8))
+        ttk.Button(header, text="Copy Test Snapshot", command=self.copy_debug_test_snapshot).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Save Console", command=self.save_debug_console).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Open Debug File", command=self.open_debug_log_file).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Refresh From Debug File", command=self.refresh_debug_console_from_file).pack(side="right", padx=(0, 8))
@@ -147,6 +148,87 @@ class DebugConsoleMixin:
             self.debug_console_write(f"Copied {label} to the clipboard.")
         except Exception as exc:
             messagebox.showerror("Copy Debug Console", str(exc))
+
+
+    def debug_var_value(self, attr_name, default=""):
+        var = getattr(self, attr_name, None)
+        if var is None or not hasattr(var, "get"):
+            return default
+        try:
+            return var.get()
+        except Exception:
+            return default
+
+    def debug_count(self, attr_name):
+        try:
+            return len(getattr(self, attr_name, []) or [])
+        except Exception:
+            return 0
+
+    def debug_selected_list_count(self, attr_name):
+        widget = getattr(self, attr_name, None)
+        if widget is None:
+            return 0
+        try:
+            return len(widget.curselection())
+        except Exception:
+            return 0
+
+    def debug_selected_mosaic_summary(self):
+        row = getattr(self, "selected_mosaic_row", None)
+        if not row:
+            return "none"
+        obs_id = row.get("obs_id", "") or row.get("obsid", "") or row.get("obsID", "") or "unknown obs"
+        mission = row.get("obs_collection", "") or row.get("mission", "") or "unknown mission"
+        instrument = row.get("instrument_name", "") or row.get("Detector", "") or "unknown instrument"
+        filters = row.get("filters", "") or row.get("Spectral_Elt", "") or row.get("filter", "") or "unknown filter"
+        return f"{mission} | {instrument} | {filters} | {obs_id}"
+
+    def debug_test_snapshot_text(self):
+        lines = [
+            "Hubble Workbench Test Snapshot",
+            "=" * 32,
+            f"Created: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            f"Target: {self.debug_var_value('target_var', '(not set)')}",
+            f"Telescope: {self.debug_var_value('telescope_var', '(not set)')}",
+            f"Radius: {self.debug_var_value('radius_var', '(not set)')}",
+            "",
+            "Loaded Data",
+            "-----------",
+            f"Observations: {self.debug_count('search_results')}",
+            f"Products: {self.debug_count('product_results')}",
+            f"Visible products: {self.debug_count('visible_product_results')}",
+            f"Suggested RGB sets: {self.debug_count('rgb_suggested_sets')}",
+            f"Selected products: {self.debug_selected_list_count('product_list')}",
+            "",
+            "Explorer State",
+            "--------------",
+            f"Sensor filter: {self.debug_var_value('sensor_filter_var', '(not set)')}",
+            f"Mosaic layer: {self.debug_var_value('mosaic_layer_var', '(not set)')}",
+            f"Best candidates only: {self.debug_var_value('mosaic_best_only_var', False)}",
+            f"Overlap only: {self.debug_var_value('mosaic_overlap_only_var', False)}",
+            f"Selected mosaic row: {self.debug_selected_mosaic_summary()}",
+            "",
+            "Current Status",
+            "--------------",
+            f"Browser: {self.debug_var_value('browser_status', '')}",
+            f"Download: {self.debug_var_value('download_detail', '')}",
+            f"Sensor: {self.debug_var_value('sensor_status_var', '')}",
+            f"Mosaic: {self.debug_var_value('mosaic_status_var', '')}",
+            f"Preview: {self.debug_var_value('convert_status', '')}",
+            f"Composer: {self.debug_var_value('compose_status', '')}",
+            f"Why: {self.debug_var_value('why_var', '')}",
+            "",
+            "Files",
+            "-----",
+            f"Debug log: {DEBUG_LOG_PATH}",
+        ]
+        return "\n".join(lines)
+
+    def copy_debug_test_snapshot(self):
+        snapshot = self.debug_test_snapshot_text()
+        self.copy_text_to_clipboard(snapshot, "test snapshot")
+        self.debug_console_write("Test Snapshot:\n" + snapshot)
 
     def copy_debug_console(self):
         self.copy_text_to_clipboard(self.debug_console_text_value(), "debug console")

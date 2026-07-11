@@ -676,6 +676,107 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set("Generated mixed-sensor alignment check.")
         return text
 
+
+
+    def observatory_rgb_channel_payload(self, channel, row):
+        coordinate = self.observatory_row_coordinate(row)
+        return {
+            "channel": channel,
+            "sensor": self.observatory_sensor_family(row),
+            "mission": row.get("obs_collection", "") or row.get("mission", ""),
+            "instrument_name": row.get("instrument_name", "") or row.get("Detector", ""),
+            "filters": row.get("filters", "") or row.get("Spectral_Elt", "") or row.get("filter", ""),
+            "productFilename": row.get("productFilename", ""),
+            "obs_id": row.get("obs_id", "") or row.get("obsid", "") or row.get("obsID", ""),
+            "target": row.get("Target", "") or row.get("target_name", ""),
+            "ra": f"{coordinate[0]:.8f}" if coordinate else "",
+            "dec": f"{coordinate[1]:.8f}" if coordinate else "",
+            "quality_score": self.product_quality_score(row),
+            "label": self.rgb_candidate_label(row),
+        }
+
+    def observatory_mixed_rgb_recipe_payload(self):
+        rgb_set = self.observatory_best_cross_sensor_rgb_set()
+        target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        if not rgb_set:
+            return {
+                "target": target or self.current_target_for_log(),
+                "kind": "mixed_sensor_rgb_recipe",
+                "ready": False,
+                "message": "No complete cross-sensor RGB set is available yet.",
+                "alignment": self.observatory_cross_sensor_alignment_assessment(None),
+                "channels": {},
+            }
+        alignment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        channels = {
+            channel: self.observatory_rgb_channel_payload(channel, rgb_set[channel])
+            for channel in ("blue", "green", "red")
+        }
+        sensors = sorted({channels[channel]["sensor"] for channel in channels})
+        missions = sorted({str(channels[channel]["mission"]).upper() for channel in channels if channels[channel]["mission"]})
+        return {
+            "target": target or self.current_target_for_log(),
+            "kind": "mixed_sensor_rgb_recipe",
+            "ready": True,
+            "mixed_sensors": sensors,
+            "missions": missions,
+            "set_score": self.observatory_cross_sensor_set_score(rgb_set),
+            "alignment": alignment,
+            "channels": channels,
+            "next_steps": [
+                "Review the mixed-sensor alignment check before final composition.",
+                "Download the selected RGB channels.",
+                "Compose and inspect crop/registration quality before saving the final image.",
+            ],
+        }
+
+    def observatory_mixed_rgb_recipe_text(self):
+        payload = self.observatory_mixed_rgb_recipe_payload()
+        lines = [f"Mixed-Sensor RGB Recipe for {payload['target']}", ""]
+        if not payload.get("ready"):
+            lines.append(payload.get("message", "No mixed-sensor recipe is ready."))
+            return "\n".join(lines)
+        lines.append("Sensors: " + ", ".join(payload["mixed_sensors"]))
+        lines.append("Missions: " + ", ".join(payload["missions"]))
+        lines.append(f"Set score: {payload['set_score']}")
+        alignment = payload["alignment"]
+        lines.append(f"Alignment: {alignment['status']} ({alignment['score']}/100) - {alignment['message']}")
+        lines.append("")
+        for channel in ("blue", "green", "red"):
+            item = payload["channels"][channel]
+            coord = f"RA {item['ra']}, Dec {item['dec']}" if item["ra"] and item["dec"] else "coordinates not listed"
+            lines.append(f"- {channel.title()}: {item['sensor']} | {item['filters']} | {item['productFilename']} | {coord}")
+        lines.append("")
+        lines.append("Next steps:")
+        for step in payload["next_steps"]:
+            lines.append(f"- {step}")
+        return "\n".join(lines)
+
+    def observatory_show_mixed_rgb_recipe(self):
+        text = self.observatory_mixed_rgb_recipe_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set("Generated mixed-sensor RGB recipe.")
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated mixed-sensor RGB recipe.")
+        return text
+
+    def observatory_save_mixed_rgb_recipe(self):
+        payload = self.observatory_mixed_rgb_recipe_payload()
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_mixed_sensor_rgb_recipe.json"
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        message = f"Saved mixed-sensor RGB recipe to {path.name}."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return path
+
     def observatory_cross_sensor_candidates(self):
         candidates = {"blue": [], "green": [], "red": []}
         for row in list(getattr(self, "product_results", []) or []):

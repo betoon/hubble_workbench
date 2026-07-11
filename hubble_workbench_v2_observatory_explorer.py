@@ -497,6 +497,8 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ttk.Button(sensor_tools, text="Sensor RGB Plan", command=self.observatory_show_sensor_rgb_plan).pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Mixed RGB Plan", command=self.observatory_show_cross_sensor_rgb_plan).pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Check Mixed Alignment", command=self.observatory_show_cross_sensor_alignment).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_tools, text="Mixed Recipe", command=self.observatory_show_mixed_rgb_recipe).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_tools, text="Save Recipe", command=self.observatory_save_mixed_rgb_recipe).pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Save Plan", command=self.observatory_save_sensor_rgb_plan).pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Prepare Sensor RGB", command=self.observatory_prepare_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Prepare Mixed RGB", command=self.observatory_prepare_cross_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
@@ -676,6 +678,12 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_show_cross_sensor_alignment(self):
         return super().observatory_show_cross_sensor_alignment()
+
+    def observatory_show_mixed_rgb_recipe(self):
+        return super().observatory_show_mixed_rgb_recipe()
+
+    def observatory_save_mixed_rgb_recipe(self):
+        return super().observatory_save_mixed_rgb_recipe()
 
     def observatory_prepare_cross_sensor_rgb_layer(self):
         return super().observatory_prepare_cross_sensor_rgb_layer()

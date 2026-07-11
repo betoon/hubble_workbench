@@ -642,6 +642,23 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertEqual(workflow.observatory_cross_sensor_alignment_assessment(risky_set)["status"], "risky")
 
 
+    def test_mixed_rgb_recipe_payload_records_channels_and_alignment(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F438W", "Spectral_Elt": "F438W", "productFilename": "hubble_blue.fits", "Format": "image/fits", "s_ra": "10.000", "s_dec": "20.000"},
+            {"obs_collection": "HST", "instrument_name": "ACS/WFC", "Detector": "ACS/WFC", "filters": "F555W", "Spectral_Elt": "F555W", "productFilename": "acs_green.fits", "Format": "image/fits", "s_ra": "10.004", "s_dec": "20.003"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "Detector": "NIRCam", "filters": "F444W", "Spectral_Elt": "F444W", "productFilename": "jwst_red.fits", "Format": "image/fits", "s_ra": "10.006", "s_dec": "20.004"},
+        ]
+        workflow.target_var = type("Var", (), {"get": lambda self: "M16"})()
+        payload = workflow.observatory_mixed_rgb_recipe_payload()
+        self.assertTrue(payload["ready"])
+        self.assertEqual(payload["kind"], "mixed_sensor_rgb_recipe")
+        self.assertIn("WFC3 UVIS", payload["mixed_sensors"])
+        self.assertEqual(payload["alignment"]["status"], "strong")
+        self.assertEqual(payload["channels"]["red"]["sensor"], "NIRCam")
+        self.assertIn("Mixed-Sensor RGB Recipe", workflow.observatory_mixed_rgb_recipe_text())
+
+
 
 if __name__ == "__main__":
     unittest.main()

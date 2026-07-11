@@ -571,6 +571,124 @@ class ObservatoryWorkflowMixin:
         self.observatory_show_sensor_rgb_plan()
         return sensor_name
 
+
+
+    def observatory_cross_sensor_candidates(self):
+        candidates = {"blue": [], "green": [], "red": []}
+        for row in list(getattr(self, "product_results", []) or []):
+            if not self.product_is_direct_fits(row) or self.product_is_spectrum(row):
+                continue
+            channel = self.product_rgb_channel(row)
+            if channel in candidates:
+                candidates[channel].append(row)
+        for channel in candidates:
+            candidates[channel].sort(key=lambda row: (-self.product_quality_score(row), self.product_sort_key(row)))
+        return candidates
+
+    def observatory_cross_sensor_set_score(self, rgb_set):
+        score = self.rgb_set_score(rgb_set, self.target_recipe(self.target_var.get()))
+        sensors = {self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        missions = {str(rgb_set[channel].get("obs_collection", "") or rgb_set[channel].get("mission", "")).upper() for channel in ("blue", "green", "red")}
+        if len(sensors) > 1:
+            score += 18
+        if "HST" in missions and "JWST" in missions:
+            score += 22
+        filenames = " ".join(str(rgb_set[channel].get("productFilename", "")).lower() for channel in ("blue", "green", "red"))
+        if any(token in filenames for token in ("_drc", "_drz", "_i2d", "mosaic", "combined", "coadd")):
+            score += 16
+        return score
+
+    def observatory_best_cross_sensor_rgb_set(self):
+        candidates = self.observatory_cross_sensor_candidates()
+        if not all(candidates[channel] for channel in ("blue", "green", "red")):
+            return None
+        choices = []
+        for blue in candidates["blue"][:5]:
+            for green in candidates["green"][:5]:
+                for red in candidates["red"][:5]:
+                    rgb_set = {"blue": blue, "green": green, "red": red}
+                    choices.append((self.observatory_cross_sensor_set_score(rgb_set), rgb_set))
+        choices.sort(key=lambda item: item[0], reverse=True)
+        return choices[0][1] if choices else None
+
+    def observatory_cross_sensor_rgb_plan_text(self):
+        candidates = self.observatory_cross_sensor_candidates()
+        rgb_set = self.observatory_best_cross_sensor_rgb_set()
+        target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        lines = [f"Cross-Sensor RGB Plan for {target or 'current target'}", ""]
+        for channel in ("blue", "green", "red"):
+            channel_rows = candidates[channel]
+            lines.append(f"- {channel.title()} candidates across sensors: {len(channel_rows)}")
+            if channel_rows:
+                row = channel_rows[0]
+                lines.append(f"  Best: {self.observatory_sensor_family(row)} | {self.rgb_candidate_label(row)}")
+        lines.append("")
+        if not rgb_set:
+            missing = [channel.title() for channel in ("blue", "green", "red") if not candidates[channel]]
+            lines.append("No complete cross-sensor RGB set is available yet.")
+            lines.append("Missing channels: " + ", ".join(missing))
+            lines.append("Try Get All Products, Find Better Sources, or search both Hubble and JWST.")
+            return "\n".join(lines)
+        sensors = {channel: self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        sensor_names = sorted(set(sensors.values()))
+        lines.append("Recommended cross-sensor RGB set:")
+        for channel in ("blue", "green", "red"):
+            lines.append(f"- {channel.title()}: {sensors[channel]} | {self.rgb_candidate_label(rgb_set[channel])}")
+        lines.append(f"- Mixed sensors: {', '.join(sensor_names)}")
+        lines.append(f"- Set score: {self.observatory_cross_sensor_set_score(rgb_set)}")
+        lines.append("- Alignment note: mixed-sensor images can be more complete, but final quality depends on overlapping sky coverage and product registration.")
+        lines.append("Use Prepare Mixed RGB to send this set to the RGB Picker.")
+        return "\n".join(lines)
+
+    def observatory_show_cross_sensor_rgb_plan(self):
+        text = self.observatory_cross_sensor_rgb_plan_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set("Generated cross-sensor RGB plan.")
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated cross-sensor RGB plan.")
+        return text
+
+    def observatory_prepare_cross_sensor_rgb_layer(self):
+        rgb_set = self.observatory_best_cross_sensor_rgb_set()
+        if not rgb_set:
+            message = "No complete cross-sensor RGB set is available yet. Use Mixed RGB Plan to see missing channels."
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            self.observatory_show_cross_sensor_rgb_plan()
+            return False
+        self.refresh_product_list()
+        for channel in ("blue", "green", "red"):
+            self.select_rgb_candidate_row(channel, rgb_set[channel])
+        wanted = {id(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        try:
+            self.product_list.selection_clear(0, "end")
+            for index, row in enumerate(self.visible_product_results):
+                if id(row) in wanted:
+                    self.product_list.selection_set(index)
+                    self.product_list.see(index)
+        except Exception:
+            pass
+        try:
+            self.notebook.select(self.browser_tab)
+        except Exception:
+            pass
+        sensors = sorted({self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")})
+        message = "Prepared mixed-sensor RGB picks from " + ", ".join(sensors) + ". Review overlap before final compose."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return True
+
     @staticmethod
     def observatory_top_counts(counts, limit=8):
         items = sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))[:limit]

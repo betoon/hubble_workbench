@@ -608,6 +608,24 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertIn("Sensor Readiness Ranking", workflow.observatory_sensor_readiness_text())
 
 
+    def test_cross_sensor_rgb_plan_combines_channels_from_multiple_sensors(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F438W", "Spectral_Elt": "F438W", "productFilename": "hubble_blue.fits", "Format": "image/fits"},
+            {"obs_collection": "HST", "instrument_name": "ACS/WFC", "Detector": "ACS/WFC", "filters": "F555W", "Spectral_Elt": "F555W", "productFilename": "acs_green.fits", "Format": "image/fits"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "Detector": "NIRCam", "filters": "F444W", "Spectral_Elt": "F444W", "productFilename": "jwst_red.fits", "Format": "image/fits"},
+        ]
+        workflow.target_var = type("Var", (), {"get": lambda self: "M16"})()
+        rgb_set = workflow.observatory_best_cross_sensor_rgb_set()
+        self.assertIsNotNone(rgb_set)
+        sensors = {workflow.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        self.assertGreater(len(sensors), 1)
+        plan = workflow.observatory_cross_sensor_rgb_plan_text()
+        self.assertIn("Recommended cross-sensor RGB set", plan)
+        self.assertIn("Mixed sensors", plan)
+        self.assertIn("Alignment note", plan)
+
+
 
 if __name__ == "__main__":
     unittest.main()

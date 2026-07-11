@@ -474,6 +474,42 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ttk.Button(controls, text="Composition Strategy", command=self.observatory_show_composition_strategy, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
 
+        sensor_panel = ttk.LabelFrame(self.observatory_tab, text="Sensor / Instrument Coverage", padding=8)
+        sensor_panel.pack(fill="x", pady=(0, 8))
+        sensor_tools = ttk.Frame(sensor_panel)
+        sensor_tools.pack(fill="x")
+        ttk.Label(sensor_tools, text="Sensor filter").pack(side="left")
+        self.sensor_filter_var = tk.StringVar(value="All sensors")
+        sensor_names = ["All sensors", "WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NIRCam", "MIRI", "Other Hubble", "Other JWST", "Unknown sensor"]
+        self.sensor_filter_combo = ttk.Combobox(
+            sensor_tools,
+            textvariable=self.sensor_filter_var,
+            values=sensor_names,
+            state="readonly",
+            width=18,
+        )
+        self.sensor_filter_combo.pack(side="left", padx=(8, 0))
+        self.sensor_filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
+        ttk.Button(sensor_tools, text="Refresh Sensors", command=self.observatory_update_sensor_dashboard).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_tools, text="Sensor Report", command=self.observatory_show_sensor_report, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_tools, text="Show Selected Sensor", command=self.observatory_use_selected_sensor).pack(side="left", padx=(8, 0))
+        self.sensor_status_var = tk.StringVar(value="Run a search to populate sensor coverage.")
+        ttk.Label(sensor_tools, textvariable=self.sensor_status_var, wraplength=520).pack(side="left", padx=(12, 0), fill="x", expand=True)
+        self.sensor_summary_list = tk.Listbox(
+            sensor_panel,
+            height=4,
+            exportselection=False,
+            bg="#ffffff",
+            fg="#1f1f1f",
+            selectbackground="#0067c0",
+            selectforeground="#ffffff",
+            relief="flat",
+            activestyle="none",
+        )
+        self.sensor_summary_list.pack(fill="x", pady=(6, 0))
+        self.sensor_summary_list.bind("<Double-Button-1>", lambda _event: self.observatory_use_selected_sensor())
+        self.observatory_update_sensor_dashboard()
+
         body = ttk.PanedWindow(self.observatory_tab, orient="horizontal")
         body.pack(fill="both", expand=True)
         left = ttk.Frame(body)
@@ -601,6 +637,16 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_prepare_best_rgb_layer(self):
         return super().observatory_prepare_best_rgb_layer()
+
+
+    def observatory_show_sensor_report(self):
+        return super().observatory_show_sensor_report()
+
+    def observatory_update_sensor_dashboard(self):
+        return super().observatory_update_sensor_dashboard()
+
+    def observatory_use_selected_sensor(self):
+        return super().observatory_use_selected_sensor()
 
     def observatory_show_composition_strategy(self):
         return super().observatory_show_composition_strategy()

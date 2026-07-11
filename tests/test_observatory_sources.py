@@ -471,3 +471,47 @@ class ObservatorySourceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+
+
+class SensorWorkflowHarness(ObservatoryWorkflowMixin):
+    def product_rgb_channel(self, row):
+        text = str(row.get("filters", "") or row.get("Spectral_Elt", "")).upper()
+        if "F438W" in text or "F090W" in text:
+            return "blue"
+        if "F555W" in text or "F200W" in text:
+            return "green"
+        if "F814W" in text or "F444W" in text:
+            return "red"
+        return None
+
+
+class ObservatorySensorCoverageTests(unittest.TestCase):
+    def test_sensor_family_detects_hubble_and_jwst_instruments(self):
+        workflow = SensorWorkflowHarness()
+        self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "HST", "instrument_name": "WFC3/UVIS"}), "WFC3 UVIS")
+        self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "HST", "instrument_name": "ACS/WFC"}), "ACS WFC")
+        self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "JWST", "instrument_name": "NIRCam"}), "NIRCam")
+        self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "JWST", "instrument_name": "MIRI"}), "MIRI")
+
+    def test_sensor_summary_counts_observations_products_and_rgb_channels(self):
+        workflow = SensorWorkflowHarness()
+        observations = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F438W", "t_exptime": "100", "s_ra": "10", "s_dec": "20"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F555W", "t_exptime": "200", "s_ra": "11", "s_dec": "21"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F444W", "t_exptime": "300"},
+        ]
+        products = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F438W"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F555W"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F444W"},
+        ]
+        summary = workflow.observatory_sensor_summary(observations, products)
+        self.assertEqual(summary["WFC3 UVIS"]["observations"], 2)
+        self.assertEqual(summary["WFC3 UVIS"]["coordinates"], 2)
+        self.assertEqual(summary["WFC3 UVIS"]["products"], 2)
+        self.assertEqual(summary["WFC3 UVIS"]["channels"], {"blue": 1, "green": 1, "red": 0})
+        self.assertEqual(summary["NIRCam"]["observations"], 1)
+        self.assertEqual(summary["NIRCam"]["channels"]["red"], 1)

@@ -10,6 +10,46 @@ from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, H
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
+SENSOR_FAMILIES = [
+    {
+        "name": "WFC3 UVIS",
+        "tokens": ("WFC3/UVIS", "WFC3 UVIS", "UVIS"),
+        "mission": "HST",
+        "role": "Hubble ultraviolet and visible imaging for crisp blue/green structure.",
+    },
+    {
+        "name": "WFC3 IR",
+        "tokens": ("WFC3/IR", "WFC3 IR"),
+        "mission": "HST",
+        "role": "Hubble near-infrared imaging for dust-penetrating red layers.",
+    },
+    {
+        "name": "ACS WFC",
+        "tokens": ("ACS/WFC", "ACS WFC", "ACS"),
+        "mission": "HST",
+        "role": "Hubble wide-field visible imaging and many classic color releases.",
+    },
+    {
+        "name": "WFPC2",
+        "tokens": ("WFPC2",),
+        "mission": "HST",
+        "role": "Legacy Hubble imaging useful for older targets and historical coverage.",
+    },
+    {
+        "name": "NIRCam",
+        "tokens": ("NIRCAM",),
+        "mission": "JWST",
+        "role": "JWST near-infrared imaging for high-detail dust and star-forming regions.",
+    },
+    {
+        "name": "MIRI",
+        "tokens": ("MIRI",),
+        "mission": "JWST",
+        "role": "JWST mid-infrared imaging for warm dust and embedded structure.",
+    },
+]
+
+
 class ObservatoryWorkflowMixin:
     @staticmethod
     def numeric_row_value(row, *names):
@@ -36,6 +76,175 @@ class ObservatoryWorkflowMixin:
         if any(token in upper for token in HST_RED_FILTERS) or any(token in upper for token in ("F356W", "F405N", "F444W", "F560W", "F770W")):
             return "Red/IR wavelength"
         return "Unknown/other"
+
+    def observatory_sensor_family(self, row):
+        text = " ".join(str(row.get(key, "")) for key in (
+            "instrument_name", "Detector", "obs_id", "productFilename", "filters", "Spectral_Elt"
+        ))
+        upper = text.upper()
+        for sensor in SENSOR_FAMILIES:
+            if any(token in upper for token in sensor["tokens"]):
+                return sensor["name"]
+        mission = str(row.get("obs_collection", "") or row.get("mission", "")).upper()
+        if row.get("_source") == "HLA":
+            mission = "HST"
+        if mission == "HST":
+            return "Other Hubble"
+        if mission == "JWST":
+            return "Other JWST"
+        return "Unknown sensor"
+
+    @staticmethod
+    def observatory_sensor_catalog():
+        return SENSOR_FAMILIES + [
+            {"name": "Other Hubble", "tokens": (), "mission": "HST", "role": "Hubble rows where MAST did not expose a recognized imaging sensor name."},
+            {"name": "Other JWST", "tokens": (), "mission": "JWST", "role": "JWST rows where MAST did not expose NIRCam or MIRI directly."},
+            {"name": "Unknown sensor", "tokens": (), "mission": "Unknown", "role": "Rows with incomplete instrument metadata."},
+        ]
+
+    def observatory_sensor_filter_name(self):
+        try:
+            return self.sensor_filter_var.get()
+        except Exception:
+            return "All sensors"
+
+    def observatory_row_matches_sensor_filter(self, row):
+        sensor_filter = self.observatory_sensor_filter_name()
+        return sensor_filter in ("", "All sensors") or self.observatory_sensor_family(row) == sensor_filter
+
+    def observatory_sensor_summary(self, obs_rows=None, product_rows=None):
+        obs_rows = list(obs_rows if obs_rows is not None else getattr(self, "search_results", []) or [])
+        product_rows = list(product_rows if product_rows is not None else getattr(self, "product_results", []) or [])
+        summary = {}
+        for sensor in self.observatory_sensor_catalog():
+            summary[sensor["name"]] = {
+                "name": sensor["name"], "mission": sensor["mission"], "role": sensor["role"],
+                "observations": 0, "products": 0, "coordinates": 0, "exposure": 0.0,
+                "channels": {"blue": 0, "green": 0, "red": 0},
+            }
+        for row in obs_rows:
+            sensor = self.observatory_sensor_family(row)
+            item = summary.setdefault(sensor, {
+                "name": sensor, "mission": str(row.get("obs_collection", "") or "Unknown"),
+                "role": "Instrument family discovered from loaded observation metadata.",
+                "observations": 0, "products": 0, "coordinates": 0, "exposure": 0.0,
+                "channels": {"blue": 0, "green": 0, "red": 0},
+            })
+            item["observations"] += 1
+            if self.numeric_row_value(row, "s_ra", "ra", "RA") is not None and self.numeric_row_value(row, "s_dec", "dec", "DEC") is not None:
+                item["coordinates"] += 1
+            try:
+                item["exposure"] += float(row.get("t_exptime", 0) or 0)
+            except Exception:
+                pass
+        for row in product_rows:
+            sensor = self.observatory_sensor_family(row)
+            item = summary.setdefault(sensor, {
+                "name": sensor, "mission": str(row.get("obs_collection", "") or row.get("mission", "") or "Unknown"),
+                "role": "Instrument family discovered from loaded product metadata.",
+                "observations": 0, "products": 0, "coordinates": 0, "exposure": 0.0,
+                "channels": {"blue": 0, "green": 0, "red": 0},
+            })
+            item["products"] += 1
+            channel = self.product_rgb_channel(row)
+            if channel in item["channels"]:
+                item["channels"][channel] += 1
+        return summary
+
+    def observatory_sensor_rows(self):
+        rows = []
+        always_show = {"WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NIRCam", "MIRI"}
+        for item in self.observatory_sensor_summary().values():
+            if item["observations"] or item["products"] or item["name"] in always_show:
+                rows.append(item)
+        rows.sort(key=lambda item: (-(item["observations"] + item["products"]), item["mission"], item["name"]))
+        return rows
+
+    def observatory_sensor_line(self, item):
+        channels = item["channels"]
+        return (
+            f"{item['name']} ({item['mission']}): obs={item['observations']}, "
+            f"products={item['products']}, coords={item['coordinates']}, "
+            f"RGB B/G/R={channels['blue']}/{channels['green']}/{channels['red']}"
+        )
+
+    def observatory_update_sensor_dashboard(self):
+        rows = self.observatory_sensor_rows()
+        widget = getattr(self, "sensor_summary_list", None)
+        if widget is not None:
+            widget.delete(0, "end")
+            for item in rows:
+                widget.insert("end", self.observatory_sensor_line(item))
+        try:
+            loaded = [item for item in rows if item["observations"] or item["products"]]
+            if loaded:
+                strongest = loaded[0]
+                self.sensor_status_var.set(
+                    f"Strongest sensor now: {strongest['name']} with {strongest['observations']} observations and {strongest['products']} products."
+                )
+            else:
+                self.sensor_status_var.set("Run a search to populate WFC3, ACS, WFPC2, NIRCam, MIRI, and other sensor coverage.")
+        except Exception:
+            pass
+        return rows
+
+    def observatory_sensor_report_text(self):
+        target = self.target_var.get().strip() or "(no target)"
+        lines = [f"Sensor and Instrument Coverage for {target}", ""]
+        for item in self.observatory_sensor_rows():
+            channels = item["channels"]
+            lines.append(self.observatory_sensor_line(item))
+            lines.append(f"- Role: {item['role']}")
+            if item["observations"]:
+                lines.append(f"- Exposure listed: {item['exposure']:.1f} seconds")
+            if item["products"] and not all(channels[channel] for channel in ("blue", "green", "red")):
+                missing = ", ".join(channel for channel in ("blue", "green", "red") if not channels[channel])
+                lines.append(f"- Missing RGB product coverage: {missing}")
+            elif item["products"]:
+                lines.append("- Complete RGB product coverage is available for this sensor family.")
+            lines.append("")
+        lines.append("Use the Sensor filter above the mosaic to inspect one instrument family at a time.")
+        return "\n".join(lines).strip()
+
+    def observatory_show_sensor_report(self):
+        text = self.observatory_sensor_report_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated sensor and instrument coverage report.")
+        self.observatory_update_sensor_dashboard()
+        self.observatory_draw_current_mosaic()
+        return text
+
+    def observatory_use_selected_sensor(self):
+        widget = getattr(self, "sensor_summary_list", None)
+        if widget is None:
+            return None
+        try:
+            selection = widget.curselection()
+        except Exception:
+            selection = ()
+        rows = self.observatory_sensor_rows()
+        if not selection or selection[0] >= len(rows):
+            message = "Select a sensor row first."
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            return None
+        sensor = rows[selection[0]]["name"]
+        try:
+            self.sensor_filter_var.set(sensor)
+        except Exception:
+            pass
+        message = f"Showing mosaic rows for {sensor}."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        self.observatory_draw_current_mosaic()
+        return sensor
 
     @staticmethod
     def observatory_top_counts(counts, limit=8):
@@ -181,6 +390,11 @@ class ObservatoryWorkflowMixin:
         lines.append("- Missions: " + self.observatory_top_counts(summary["by_mission"]))
         lines.append("- Instruments: " + self.observatory_top_counts(summary["by_instrument"], limit=10))
         lines.append("- Wavelength buckets: " + self.observatory_top_counts(summary["by_filter"]))
+        lines.append("- Sensor families: " + self.observatory_top_counts({
+            item["name"]: item["observations"]
+            for item in self.observatory_sensor_summary(obs_rows, product_rows).values()
+            if item["observations"]
+        }, limit=10))
         lines.append("")
         lines.append("Best observation candidates:")
         best_observations = self.observatory_best_observations(obs_rows)
@@ -237,6 +451,7 @@ class ObservatoryWorkflowMixin:
             report = self.observatory_summary_text()
             self.observatory_report_text.delete("1.0", "end")
             self.observatory_report_text.insert("end", report)
+            self.observatory_update_sensor_dashboard()
             self.observatory_draw_current_mosaic()
             summary = self.compute_observatory_summary()
             self.save_diagnostic_json(SEARCH_LOG_DIR, f"{self.current_target_for_log()}_observatory_explorer", {
@@ -492,6 +707,7 @@ class ObservatoryWorkflowMixin:
 
     def observatory_current_mosaic_rows(self):
         rows = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
+        rows = [row for row in rows if self.observatory_row_matches_sensor_filter(row)]
         if self.observatory_mosaic_best_only():
             rows = self.observatory_best_observations(rows, limit=12)
         if self.observatory_mosaic_overlap_only():
@@ -920,6 +1136,9 @@ class ObservatoryWorkflowMixin:
             layer_label = f"{layer_label} - best candidates"
         if self.observatory_mosaic_overlap_only():
             layer_label = f"{layer_label} - overlap candidates"
+        sensor_filter = self.observatory_sensor_filter_name()
+        if sensor_filter not in ("", "All sensors"):
+            layer_label = f"{layer_label} - {sensor_filter}"
         points = []
         mission_counts = {}
         bucket_counts = {}
@@ -945,6 +1164,7 @@ class ObservatoryWorkflowMixin:
                 justify="center",
             )
             self.mosaic_status_var.set(f"No coordinate-bearing observations available for {layer_label}.")
+            self.observatory_update_sensor_dashboard()
             return
 
         ras = [p[0] for p in points]
@@ -1050,6 +1270,7 @@ class ObservatoryWorkflowMixin:
             f"Plotted {len(points)} observation centers for {layer_label}. Missions: {mission_text}. Wavelength buckets: {bucket_text}."
             f"{selected_note} True footprint polygons remain a later Phase 2 upgrade."
         )
+        self.observatory_update_sensor_dashboard()
 
     def observatory_prepare_best_rgb_layer(self):
         product_rows = list(getattr(self, "product_results", []) or [])

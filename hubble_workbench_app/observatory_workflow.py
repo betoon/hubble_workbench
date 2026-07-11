@@ -246,6 +246,133 @@ class ObservatoryWorkflowMixin:
         self.observatory_draw_current_mosaic()
         return sensor
 
+
+
+    def observatory_active_sensor_name(self):
+        sensor = self.observatory_sensor_filter_name()
+        if sensor not in ("", "All sensors"):
+            return sensor
+        widget = getattr(self, "sensor_summary_list", None)
+        if widget is not None:
+            try:
+                selection = widget.curselection()
+            except Exception:
+                selection = ()
+            rows = self.observatory_sensor_rows()
+            if selection and selection[0] < len(rows):
+                return rows[selection[0]]["name"]
+        for item in self.observatory_sensor_rows():
+            if item["products"] or item["observations"]:
+                return item["name"]
+        return "All sensors"
+
+    def observatory_sensor_product_rows(self, sensor_name=None):
+        sensor_name = sensor_name or self.observatory_active_sensor_name()
+        rows = list(getattr(self, "product_results", []) or [])
+        if sensor_name in ("", "All sensors"):
+            return rows
+        return [row for row in rows if self.observatory_sensor_family(row) == sensor_name]
+
+    def observatory_sensor_rgb_candidates(self, sensor_name=None):
+        candidates = {"blue": [], "green": [], "red": []}
+        for row in self.observatory_sensor_product_rows(sensor_name):
+            if not self.product_is_direct_fits(row) or self.product_is_spectrum(row):
+                continue
+            channel = self.product_rgb_channel(row)
+            if channel in candidates:
+                candidates[channel].append(row)
+        for channel in candidates:
+            candidates[channel].sort(key=lambda row: (-self.product_quality_score(row), self.product_sort_key(row)))
+        return candidates
+
+    def observatory_sensor_best_rgb_set(self, sensor_name=None):
+        sensor_name = sensor_name or self.observatory_active_sensor_name()
+        product_rows = self.observatory_sensor_product_rows(sensor_name)
+        rgb_sets = self.suggest_rgb_sets_for_rows(product_rows, recipe=self.target_recipe(self.target_var.get())) if product_rows else []
+        if rgb_sets:
+            return rgb_sets[0]
+        candidates = self.observatory_sensor_rgb_candidates(sensor_name)
+        if all(candidates[channel] for channel in ("blue", "green", "red")):
+            return {channel: candidates[channel][0] for channel in ("blue", "green", "red")}
+        return None
+
+    def observatory_sensor_rgb_plan_text(self, sensor_name=None):
+        sensor_name = sensor_name or self.observatory_active_sensor_name()
+        candidates = self.observatory_sensor_rgb_candidates(sensor_name)
+        rgb_set = self.observatory_sensor_best_rgb_set(sensor_name)
+        lines = [f"Sensor RGB Plan: {sensor_name}", ""]
+        rows = self.observatory_sensor_product_rows(sensor_name)
+        lines.append(f"Loaded products for this sensor: {len(rows)}")
+        for channel in ("blue", "green", "red"):
+            channel_rows = candidates[channel]
+            lines.append(f"- {channel.title()} candidates: {len(channel_rows)}")
+            if channel_rows:
+                lines.append(f"  Best: {self.rgb_candidate_label(channel_rows[0])}")
+        lines.append("")
+        if rgb_set:
+            lines.append("Recommended RGB set:")
+            for channel in ("blue", "green", "red"):
+                lines.append(f"- {channel.title()}: {self.rgb_candidate_label(rgb_set[channel])}")
+            lines.append(f"- Set score: {self.rgb_set_score(rgb_set, self.target_recipe(self.target_var.get()))}")
+            lines.append("Use Prepare Sensor RGB to send this set to the RGB Picker.")
+        else:
+            missing = [channel for channel in ("blue", "green", "red") if not candidates[channel]]
+            if rows:
+                lines.append("No complete RGB set is available for this sensor yet.")
+                lines.append("Missing channels: " + ", ".join(channel.title() for channel in missing))
+                lines.append("Try Get All Products, Find Better Sources, or choose a different sensor filter.")
+            else:
+                lines.append("No products are loaded for this sensor yet. Get products first, then refresh the sensor dashboard.")
+        return "\n".join(lines)
+
+    def observatory_show_sensor_rgb_plan(self):
+        text = self.observatory_sensor_rgb_plan_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated sensor RGB plan.")
+        self.observatory_update_sensor_dashboard()
+        return text
+
+    def observatory_prepare_sensor_rgb_layer(self):
+        sensor_name = self.observatory_active_sensor_name()
+        rgb_set = self.observatory_sensor_best_rgb_set(sensor_name)
+        if not rgb_set:
+            message = f"No complete RGB set is available for {sensor_name}. Use Sensor RGB Plan to see missing channels."
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            self.observatory_show_sensor_rgb_plan()
+            return False
+        self.refresh_product_list()
+        for channel in ("blue", "green", "red"):
+            self.select_rgb_candidate_row(channel, rgb_set[channel])
+        wanted = {id(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        try:
+            self.product_list.selection_clear(0, "end")
+            for index, row in enumerate(self.visible_product_results):
+                if id(row) in wanted:
+                    self.product_list.selection_set(index)
+                    self.product_list.see(index)
+        except Exception:
+            pass
+        try:
+            self.notebook.select(self.browser_tab)
+        except Exception:
+            pass
+        message = f"Prepared best {sensor_name} RGB picks. Review the RGB Picker, then download selected RGB channels."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        return True
+
     @staticmethod
     def observatory_top_counts(counts, limit=8):
         items = sorted(counts.items(), key=lambda item: (-item[1], str(item[0])))[:limit]

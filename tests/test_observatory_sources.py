@@ -469,10 +469,6 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Activation needed:", report)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 
 
@@ -486,6 +482,37 @@ class SensorWorkflowHarness(ObservatoryWorkflowMixin):
         if "F814W" in text or "F444W" in text:
             return "red"
         return None
+
+    def product_is_direct_fits(self, row):
+        return str(row.get("productFilename", "")).lower().endswith((".fits", ".fits.gz")) or "fits" in str(row.get("Format", "")).lower()
+
+    def product_is_spectrum(self, row):
+        return False
+
+    def product_sort_key(self, row):
+        return str(row.get("productFilename", ""))
+
+    def product_quality_score(self, row):
+        return 1
+
+    def rgb_candidate_label(self, row):
+        return f"{row.get('Spectral_Elt', '') or row.get('filters', '')} | {row.get('productFilename', '')}"
+
+    def target_recipe(self, target):
+        return None
+
+    def rgb_set_score(self, rgb_set, recipe=None):
+        return 3
+
+    def suggest_rgb_sets_for_rows(self, rows, recipe=None):
+        candidates = {"blue": [], "green": [], "red": []}
+        for row in rows:
+            channel = self.product_rgb_channel(row)
+            if channel:
+                candidates[channel].append(row)
+        if all(candidates[channel] for channel in ("blue", "green", "red")):
+            return [{channel: candidates[channel][0] for channel in ("blue", "green", "red")}]
+        return []
 
 
 class ObservatorySensorCoverageTests(unittest.TestCase):
@@ -515,3 +542,33 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertEqual(summary["WFC3 UVIS"]["channels"], {"blue": 1, "green": 1, "red": 0})
         self.assertEqual(summary["NIRCam"]["observations"], 1)
         self.assertEqual(summary["NIRCam"]["channels"]["red"], 1)
+
+
+    def test_sensor_rgb_plan_recommends_complete_set(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = [
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F438W", "Spectral_Elt": "F438W", "productFilename": "target_blue_drc.fits", "Format": "image/fits", "size": "1000000"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F555W", "Spectral_Elt": "F555W", "productFilename": "target_green_drc.fits", "Format": "image/fits", "size": "1000000"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "Detector": "WFC3/UVIS", "filters": "F814W", "Spectral_Elt": "F814W", "productFilename": "target_red_drc.fits", "Format": "image/fits", "size": "1000000"},
+        ]
+        workflow.target_var = type("Var", (), {"get": lambda self: "M51"})()
+        workflow.sensor_filter_var = type("Var", (), {"get": lambda self: "WFC3 UVIS"})()
+        rgb_set = workflow.observatory_sensor_best_rgb_set("WFC3 UVIS")
+        self.assertIsNotNone(rgb_set)
+        self.assertEqual(rgb_set["blue"]["Spectral_Elt"], "F438W")
+        self.assertIn("Recommended RGB set", workflow.observatory_sensor_rgb_plan_text("WFC3 UVIS"))
+
+    def test_sensor_rgb_plan_reports_missing_channels(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = [
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "Detector": "NIRCam", "filters": "F090W", "Spectral_Elt": "F090W", "productFilename": "jwst_blue_i2d.fits", "Format": "image/fits"},
+        ]
+        workflow.target_var = type("Var", (), {"get": lambda self: "M16"})()
+        plan = workflow.observatory_sensor_rgb_plan_text("NIRCam")
+        self.assertIn("No complete RGB set", plan)
+        self.assertIn("Green", plan)
+        self.assertIn("Red", plan)
+
+
+if __name__ == "__main__":
+    unittest.main()

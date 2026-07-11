@@ -492,6 +492,8 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         self.sensor_filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
         ttk.Button(sensor_tools, text="Refresh Sensors", command=self.observatory_update_sensor_dashboard).pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Sensor Report", command=self.observatory_show_sensor_report, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_tools, text="Sensor RGB Plan", command=self.observatory_show_sensor_rgb_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_tools, text="Prepare Sensor RGB", command=self.observatory_prepare_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(sensor_tools, text="Show Selected Sensor", command=self.observatory_use_selected_sensor).pack(side="left", padx=(8, 0))
         self.sensor_status_var = tk.StringVar(value="Run a search to populate sensor coverage.")
         ttk.Label(sensor_tools, textvariable=self.sensor_status_var, wraplength=520).pack(side="left", padx=(12, 0), fill="x", expand=True)
@@ -647,6 +649,13 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
 
     def observatory_use_selected_sensor(self):
         return super().observatory_use_selected_sensor()
+
+    def observatory_show_sensor_rgb_plan(self):
+        return super().observatory_show_sensor_rgb_plan()
+
+    def observatory_prepare_sensor_rgb_layer(self):
+        return super().observatory_prepare_sensor_rgb_layer()
+
 
     def observatory_show_composition_strategy(self):
         return super().observatory_show_composition_strategy()

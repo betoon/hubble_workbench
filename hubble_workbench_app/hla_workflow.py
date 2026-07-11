@@ -6,6 +6,7 @@ import urllib.request
 from tkinter import messagebox
 
 from hubble_workbench_app.catalogs import TELESCOPE_CHOICES
+from hubble_workbench_app.fits_io import OBSERVATIONS
 from hubble_workbench_app.settings import SETTINGS, save_settings
 
 
@@ -44,6 +45,9 @@ class HlaWorkflowMixin:
         from astropy.coordinates import SkyCoord
         from astropy.io.votable import parse_single_table
 
+        if self.is_solar_system_target(target):
+            return self.fetch_hla_product_rows_for_solar_system_target(target)
+
         last_error = None
         coord = None
         for search_target in self.search_target_variants(target):
@@ -79,6 +83,36 @@ class HlaWorkflowMixin:
             )
             rows.append(item)
         rows.sort(key=self.hla_sort_key)
+        return rows
+
+    def fetch_hla_product_rows_for_solar_system_target(self, target):
+        rows = []
+        seen = set()
+        for obs_row in self.mast_target_name_rows(target, "HST"):
+            obsid = obs_row.get("obsid")
+            if not obsid:
+                continue
+            try:
+                products = OBSERVATIONS.get_product_list(obsid)
+            except Exception:
+                continue
+            for row in products:
+                item = self.normalize_product_row({name: self.table_value(row, name) for name in row.colnames}, obs_row)
+                filename = str(item.get("productFilename", "")).lower()
+                if not filename.endswith((".fits", ".fits.gz")):
+                    continue
+                key = (
+                    item.get("obsid"),
+                    item.get("productFilename"),
+                    item.get("dataURI"),
+                    item.get("obs_id"),
+                )
+                if key in seen:
+                    continue
+                item["_source"] = "MAST target-name fallback"
+                rows.append(item)
+                seen.add(key)
+        rows.sort(key=self.product_sort_key)
         return rows
 
     @staticmethod

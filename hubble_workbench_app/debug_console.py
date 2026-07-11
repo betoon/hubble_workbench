@@ -29,6 +29,7 @@ class DebugConsoleMixin:
         ttk.Button(header, text="Clear", command=self.clear_debug_console).pack(side="right")
         ttk.Button(header, text="Copy Console", command=self.copy_debug_console).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Copy Last Issue", command=self.copy_last_debug_issue).pack(side="right", padx=(0, 8))
+        ttk.Button(header, text="Copy Bug Report", command=self.copy_debug_bug_report).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Copy Test Snapshot", command=self.copy_debug_test_snapshot).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Save Console", command=self.save_debug_console).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Open Debug File", command=self.open_debug_log_file).pack(side="right", padx=(0, 8))
@@ -233,7 +234,7 @@ class DebugConsoleMixin:
     def copy_debug_console(self):
         self.copy_text_to_clipboard(self.debug_console_text_value(), "debug console")
 
-    def copy_last_debug_issue(self):
+    def latest_debug_issue_text(self):
         lines = self.debug_console_text_value().splitlines()
         issue_tokens = ("ERROR", "WARNING", "failed", "Failed", "error", "Error", "Traceback")
         issue_index = None
@@ -242,11 +243,30 @@ class DebugConsoleMixin:
                 issue_index = index
                 break
         if issue_index is None:
-            self.copy_text_to_clipboard("\n".join(lines[-40:]), "latest console lines")
-            return
+            return "\n".join(lines[-40:])
         start = max(0, issue_index - 8)
         end = min(len(lines), issue_index + 24)
-        self.copy_text_to_clipboard("\n".join(lines[start:end]), "last issue")
+        return "\n".join(lines[start:end])
+
+    def copy_last_debug_issue(self):
+        self.copy_text_to_clipboard(self.latest_debug_issue_text(), "last issue")
+
+    def copy_debug_bug_report(self):
+        console_lines = self.debug_console_text_value().splitlines()
+        sections = [
+            self.debug_test_snapshot_text(),
+            "",
+            "Latest Issue Or Recent Console Lines",
+            "====================================",
+            self.latest_debug_issue_text() or "No console lines captured yet.",
+            "",
+            "Recent Console Tail",
+            "===================",
+            "\n".join(console_lines[-80:]) or "No console lines captured yet.",
+        ]
+        report = "\n".join(sections)
+        self.copy_text_to_clipboard(report, "bug report")
+        self.debug_console_write("Copied bug report with test snapshot and recent console context.")
 
     def clear_debug_console(self):
         widget = getattr(self, "debug_console_text", None)

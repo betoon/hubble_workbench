@@ -51,6 +51,7 @@ class DebugConsoleMixin:
         self.debug_console_write("Debug console ready. Live progress and app log messages will appear here.")
         self.debug_console_write(f"Full debug file: {DEBUG_LOG_PATH}")
         self.install_debug_console_logging()
+        self.install_debug_status_traces()
 
     def install_debug_console_logging(self):
         root_logger = logging.getLogger()
@@ -59,6 +60,51 @@ class DebugConsoleMixin:
                 handler.app = self
                 return
         root_logger.addHandler(TkConsoleLogHandler(self))
+
+
+    def install_debug_status_traces(self):
+        self._debug_status_last_values = {}
+        self._debug_status_trace_names = []
+        status_vars = (
+            ("Browser", "browser_status"),
+            ("Download", "download_detail"),
+            ("Sensor", "sensor_status_var"),
+            ("Mosaic", "mosaic_status_var"),
+            ("Preview", "convert_status"),
+            ("Composer", "compose_status"),
+            ("Why", "why_var"),
+        )
+        for label, attr_name in status_vars:
+            var = getattr(self, attr_name, None)
+            if var is None or not hasattr(var, "trace_add"):
+                continue
+            try:
+                self._debug_status_last_values[attr_name] = var.get()
+                trace_name = var.trace_add(
+                    "write",
+                    lambda *_args, label=label, attr_name=attr_name: self.debug_status_var_changed(label, attr_name),
+                )
+                self._debug_status_trace_names.append((var, trace_name))
+            except Exception:
+                pass
+
+    def debug_status_var_changed(self, label, attr_name):
+        var = getattr(self, attr_name, None)
+        if var is None:
+            return
+        try:
+            value = str(var.get()).strip()
+        except Exception:
+            return
+        if not value:
+            return
+        last_value = getattr(self, "_debug_status_last_values", {}).get(attr_name)
+        if value == last_value:
+            return
+        self._debug_status_last_values[attr_name] = value
+        if attr_name == "browser_status" and "Active for" in value:
+            return
+        self.debug_console_write(f"{label}: {value}")
 
     def debug_console_write(self, message):
         widget = getattr(self, "debug_console_text", None)

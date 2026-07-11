@@ -573,6 +573,109 @@ class ObservatoryWorkflowMixin:
 
 
 
+
+
+    def observatory_row_coordinate(self, row):
+        ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+        dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+        if ra is None or dec is None:
+            return None
+        return ra, dec
+
+    def observatory_rgb_coordinate_rows(self, rgb_set):
+        rows = []
+        for channel in ("blue", "green", "red"):
+            row = rgb_set[channel]
+            coordinate = self.observatory_row_coordinate(row)
+            if coordinate is not None:
+                rows.append((channel, row, coordinate[0], coordinate[1]))
+        return rows
+
+    def observatory_cross_sensor_alignment_assessment(self, rgb_set=None):
+        rgb_set = rgb_set or self.observatory_best_cross_sensor_rgb_set()
+        if not rgb_set:
+            return {
+                "status": "not ready",
+                "score": 0,
+                "coordinate_channels": 0,
+                "message": "No complete mixed-sensor RGB set is available yet.",
+                "ra_span": None,
+                "dec_span": None,
+            }
+        coordinate_rows = self.observatory_rgb_coordinate_rows(rgb_set)
+        sensors = sorted({self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")})
+        if len(coordinate_rows) < 2:
+            return {
+                "status": "unknown",
+                "score": 35 if len(sensors) == 1 else 25,
+                "coordinate_channels": len(coordinate_rows),
+                "message": "Not enough channel coordinates are available to estimate mixed-sensor overlap.",
+                "ra_span": None,
+                "dec_span": None,
+            }
+        ras = [ra for _channel, _row, ra, _dec in coordinate_rows]
+        decs = [dec for _channel, _row, _ra, dec in coordinate_rows]
+        ra_span = max(ras) - min(ras)
+        dec_span = max(decs) - min(decs)
+        max_span = max(abs(ra_span), abs(dec_span))
+        if max_span <= 0.01:
+            status = "strong"
+            score = 92
+            message = "Channel coordinates are tightly clustered; mixed-sensor alignment looks promising."
+        elif max_span <= 0.05:
+            status = "usable"
+            score = 72
+            message = "Channel coordinates are near each other; inspect the mosaic before final compose."
+        elif max_span <= 0.15:
+            status = "risky"
+            score = 48
+            message = "Channel coordinates are separated; expect cropping or registration work."
+        else:
+            status = "poor"
+            score = 22
+            message = "Channel coordinates are far apart; this mixed set may not overlap well."
+        return {
+            "status": status,
+            "score": score,
+            "coordinate_channels": len(coordinate_rows),
+            "message": message,
+            "ra_span": ra_span,
+            "dec_span": dec_span,
+        }
+
+    def observatory_cross_sensor_alignment_text(self):
+        rgb_set = self.observatory_best_cross_sensor_rgb_set()
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        lines = ["Mixed-Sensor Alignment Check", ""]
+        lines.append(f"Status: {assessment['status']} ({assessment['score']}/100)")
+        lines.append(f"Coordinate-bearing RGB channels: {assessment['coordinate_channels']}/3")
+        if assessment["ra_span"] is not None and assessment["dec_span"] is not None:
+            lines.append(f"RA span: {assessment['ra_span']:.6f} deg")
+            lines.append(f"Dec span: {assessment['dec_span']:.6f} deg")
+        lines.append(assessment["message"])
+        if rgb_set:
+            lines.append("")
+            lines.append("Chosen channels:")
+            for channel in ("blue", "green", "red"):
+                row = rgb_set[channel]
+                coordinate = self.observatory_row_coordinate(row)
+                coord_text = f"RA {coordinate[0]:.6f}, Dec {coordinate[1]:.6f}" if coordinate else "coordinates not listed"
+                lines.append(f"- {channel.title()}: {self.observatory_sensor_family(row)} | {self.rgb_candidate_label(row)} | {coord_text}")
+        return "\n".join(lines)
+
+    def observatory_show_cross_sensor_alignment(self):
+        text = self.observatory_cross_sensor_alignment_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set("Generated mixed-sensor alignment check.")
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Generated mixed-sensor alignment check.")
+        return text
+
     def observatory_cross_sensor_candidates(self):
         candidates = {"blue": [], "green": [], "red": []}
         for row in list(getattr(self, "product_results", []) or []):
@@ -636,8 +739,9 @@ class ObservatoryWorkflowMixin:
             lines.append(f"- {channel.title()}: {sensors[channel]} | {self.rgb_candidate_label(rgb_set[channel])}")
         lines.append(f"- Mixed sensors: {', '.join(sensor_names)}")
         lines.append(f"- Set score: {self.observatory_cross_sensor_set_score(rgb_set)}")
-        lines.append("- Alignment note: mixed-sensor images can be more complete, but final quality depends on overlapping sky coverage and product registration.")
-        lines.append("Use Prepare Mixed RGB to send this set to the RGB Picker.")
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        lines.append(f"- Alignment check: {assessment['status']} ({assessment['score']}/100). {assessment['message']}")
+        lines.append("Use Check Mixed Alignment for channel coordinates, then Prepare Mixed RGB to send this set to the RGB Picker.")
         return "\n".join(lines)
 
     def observatory_show_cross_sensor_rgb_plan(self):
@@ -680,7 +784,8 @@ class ObservatoryWorkflowMixin:
         except Exception:
             pass
         sensors = sorted({self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")})
-        message = "Prepared mixed-sensor RGB picks from " + ", ".join(sensors) + ". Review overlap before final compose."
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        message = "Prepared mixed-sensor RGB picks from " + ", ".join(sensors) + f". Alignment: {assessment['status']} ({assessment['score']}/100)."
         if hasattr(self, "browser_status"):
             self.browser_status.set(message)
         if hasattr(self, "sensor_status_var"):

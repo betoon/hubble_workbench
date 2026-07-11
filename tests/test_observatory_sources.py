@@ -623,7 +623,23 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         plan = workflow.observatory_cross_sensor_rgb_plan_text()
         self.assertIn("Recommended cross-sensor RGB set", plan)
         self.assertIn("Mixed sensors", plan)
-        self.assertIn("Alignment note", plan)
+        self.assertIn("Alignment check", plan)
+
+
+    def test_cross_sensor_alignment_scores_coordinate_spread(self):
+        workflow = SensorWorkflowHarness()
+        tight_set = {
+            "blue": {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F438W", "s_ra": "10.000", "s_dec": "20.000"},
+            "green": {"obs_collection": "HST", "instrument_name": "ACS/WFC", "filters": "F555W", "s_ra": "10.004", "s_dec": "20.003"},
+            "red": {"obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F444W", "s_ra": "10.006", "s_dec": "20.004"},
+        }
+        risky_set = {
+            "blue": {"obs_collection": "HST", "instrument_name": "WFC3/UVIS", "filters": "F438W", "s_ra": "10.000", "s_dec": "20.000"},
+            "green": {"obs_collection": "HST", "instrument_name": "ACS/WFC", "filters": "F555W", "s_ra": "10.090", "s_dec": "20.020"},
+            "red": {"obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F444W", "s_ra": "10.120", "s_dec": "20.040"},
+        }
+        self.assertEqual(workflow.observatory_cross_sensor_alignment_assessment(tight_set)["status"], "strong")
+        self.assertEqual(workflow.observatory_cross_sensor_alignment_assessment(risky_set)["status"], "risky")
 
 
 

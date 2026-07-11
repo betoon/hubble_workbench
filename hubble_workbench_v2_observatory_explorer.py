@@ -209,6 +209,11 @@ class HubbleWorkbench(DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMix
         ttk.Button(buttons, text="Refresh Status", command=self.refresh_dependency_status).pack(side="left")
         ttk.Button(buttons, text="Open Downloads Folder", command=lambda: self.open_folder(DOWNLOAD_DIR)).pack(side="left", padx=(8, 0))
         ttk.Button(buttons, text="Open Outputs Folder", command=lambda: self.open_folder(OUTPUT_DIR)).pack(side="left", padx=(8, 0))
+        ttk.Button(
+            buttons,
+            text="Open Observatory Test Guide",
+            command=lambda: self.open_file(APP_DIR / "OBSERVATORY_EXPLORER_TEST_GUIDE.md"),
+        ).pack(side="left", padx=(8, 0))
 
     def build_browser_tab(self):
         gallery = ttk.Frame(self.browser_tab)

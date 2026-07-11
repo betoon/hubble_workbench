@@ -34,6 +34,10 @@ For a slower, beginner-friendly walkthrough of every button and setting, see:
 
 `BEGINNER_USER_MANUAL.md`
 
+For testing the newer Observatory Explorer, sensor coverage, sky mosaic, and mixed-sensor RGB tools, see:
+
+`OBSERVATORY_EXPLORER_TEST_GUIDE.md`
+
 1. Open **MAST Browser**.
 2. Choose **Hubble / HST**, **James Webb / JWST**, or **Both HST + JWST**.
 3. Search for a target such as `M51`, `NGC 6302`, `M16`, `NGC 3324`, or `Stephan's Quintet`.

@@ -123,11 +123,11 @@ class ObservatoryWorkflowMixin:
             search_rows = list(getattr(self, "search_results", []) or [])
             if search_rows:
                 self.easy_all_sensors_pending_stage = "products"
-                message = "Easy All Sensors is getting all available products first. It will automatically prepare the best mixed-sensor image when the scan finishes."
+                message = "Easy All Sensors is getting all available products first. It will automatically prepare, download, and compose the best mixed-sensor image when the scan finishes."
                 next_action = self.products_all_async
             else:
                 self.easy_all_sensors_pending_stage = "search"
-                message = "Easy All Sensors is searching MAST first. It will automatically gather products from all sensors when the observation list finishes."
+                message = "Easy All Sensors is searching MAST first. It will automatically gather products, prepare the best sensor mix, then download and compose it."
                 next_action = self.search_async
             if hasattr(self, "browser_status"):
                 self.browser_status.set(message)
@@ -156,18 +156,26 @@ class ObservatoryWorkflowMixin:
                 self.observatory_report_text.insert("end", recipe)
                 self.observatory_report_text.insert(
                     "end",
-                    "\n\nPrepared selection:\n- The best available mixed-sensor RGB channels are selected in the MAST Browser RGB Picker.\n- Next, use Download Easy All Sensors RGB to download, load, and auto-compose this set.",
+                    "\n\nPrepared selection:\n- The best available mixed-sensor RGB channels are selected in the MAST Browser RGB Picker.\n- Easy All Sensors is starting the download, load, and auto-compose step now.",
                 )
                 self.observatory_report_text.insert("end", "\n- " + guidance["summary"])
                 self.observatory_report_text.see("1.0")
             except Exception:
                 pass
-            self.set_easy_all_sensors_status("selected", "Best mixed-sensor RGB picks are ready. " + guidance["summary"] + " Use Download Easy All Sensors RGB when you are ready.")
+            self.set_easy_all_sensors_status("selected", "Best mixed-sensor RGB picks are ready. " + guidance["summary"] + " Starting the download and compose step now.")
             try:
                 self.save_easy_all_sensors_summary(update_ui=False)
             except Exception:
                 pass
-            self.easy_all_sensors_pending_stage = None
+            if not prepared:
+                self.easy_all_sensors_pending_stage = None
+                self.set_easy_all_sensors_status("stopped", "Easy All Sensors selected channels, but could not prepare the RGB layer for download.")
+                return False
+            self.easy_all_sensors_pending_stage = "selected"
+            try:
+                self.after(250, self.download_easy_all_sensors_rgb_async)
+            except Exception:
+                self.download_easy_all_sensors_rgb_async()
             return prepared
 
         self.observatory_show_cross_sensor_rgb_plan()
@@ -288,7 +296,7 @@ class ObservatoryWorkflowMixin:
             return True
 
         self.easy_all_sensors_pending_stage = "prepare"
-        message = "Easy All Sensors found products and is preparing the best mixed-sensor RGB selection."
+        message = "Easy All Sensors found products and is preparing the best mixed-sensor RGB selection, then it will download and compose it."
         if hasattr(self, "browser_status"):
             self.browser_status.set(message)
         if hasattr(self, "sensor_status_var"):

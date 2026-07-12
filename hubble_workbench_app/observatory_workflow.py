@@ -2365,7 +2365,9 @@ class ObservatoryWorkflowMixin:
                     footprint_count += 1
 
         rgb_highlight_count = 0
+        rgb_requested_highlight_count = 0
         active_rgb_set = getattr(self, "selected_mosaic_rgb_set", None)
+        requested_rgb_channels = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
         visible_rgb_channels = set()
         for ra, dec, row in points[:1000]:
             x, y = map_point(ra, dec)
@@ -2384,7 +2386,15 @@ class ObservatoryWorkflowMixin:
                 rgb_highlight_count += 1
                 ring = size + 8
                 canvas.create_oval(x - ring, y - ring, x + ring, y + ring, outline=style["color"], width=3)
-                canvas.create_text(x, y - ring - 10, text=style["label"], fill=style["text"], font=("Segoe UI", 10, "bold"))
+                label_text = style["label"]
+                if rgb_channel in requested_rgb_channels:
+                    label_text = f"{label_text}+"
+                    rgb_requested_highlight_count += 1
+                    badge_x = x + ring + 7
+                    badge_y = y - ring - 7
+                    canvas.create_rectangle(badge_x - 6, badge_y - 6, badge_x + 6, badge_y + 6, fill="#facc15", outline="#111827")
+                    canvas.create_text(badge_x, badge_y, text="P", fill="#111827", font=("Segoe UI", 7, "bold"))
+                canvas.create_text(x, y - ring - 10, text=label_text, fill=style["text"], font=("Segoe UI", 10, "bold"))
             if self.observatory_mosaic_row_matches(row, getattr(self, "selected_mosaic_row", {})):
                 canvas.create_oval(x - size - 4, y - size - 4, x + size + 4, y + size + 4, outline="#facc15", width=3)
                 canvas.create_text(x, y - size - 12, text="selected", fill="#facc15", font=("Segoe UI", 8, "bold"))
@@ -2415,7 +2425,7 @@ class ObservatoryWorkflowMixin:
         rgb_note = ""
         if rgb_highlight_count:
             labels = "/".join(channel[0].upper() for channel in ("blue", "green", "red") if channel in visible_rgb_channels)
-            rgb_note = f" Mosaic RGB Plan highlights: {labels}."
+            rgb_note = f" Mosaic RGB Plan highlights: {labels}; products requested: {rgb_requested_highlight_count}/3."
         self.mosaic_status_var.set(
             f"Plotted {len(points)} observation centers for {layer_label}. Color mode: {color_mode}. "
             f"Missions: {mission_text}. Wavelength buckets: {bucket_text}. Footprints drawn: {footprint_count}."

@@ -461,21 +461,27 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         easy_rgb_actions = ttk.LabelFrame(rgb_tab, text="Easy All Sensors")
         easy_rgb_actions.pack(fill="x", pady=(8, 0))
-        ttk.Button(easy_rgb_actions, text="Download Easy RGB", command=self.download_easy_all_sensors_rgb_async, style="Accent.TButton").pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Save Summary", command=self.save_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Copy Summary", command=self.copy_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Open Latest", command=self.open_latest_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Open Folder", command=self.open_easy_all_sensors_summary_folder).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Run Index", command=self.open_easy_all_sensors_run_index).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Copy Latest Run", command=self.copy_latest_easy_all_sensors_run).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Open Preview", command=self.open_latest_easy_all_sensors_preview).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Copy Preview Path", command=self.copy_latest_easy_all_sensors_preview_path).pack(side="left", padx=(8, 0), pady=6)
-        ttk.Button(easy_rgb_actions, text="Open Run Folder", command=self.open_latest_easy_all_sensors_run_folder).pack(side="left", padx=(8, 0), pady=6)
+        easy_rgb_run_row = ttk.Frame(easy_rgb_actions)
+        easy_rgb_run_row.pack(fill="x", padx=8, pady=(6, 0))
+        easy_rgb_summary_row = ttk.Frame(easy_rgb_actions)
+        easy_rgb_summary_row.pack(fill="x", padx=8, pady=(4, 0))
+        easy_rgb_output_row = ttk.Frame(easy_rgb_actions)
+        easy_rgb_output_row.pack(fill="x", padx=8, pady=(4, 0))
+        ttk.Button(easy_rgb_run_row, text="Download Easy RGB", command=self.download_easy_all_sensors_rgb_async, style="Accent.TButton").pack(side="left")
+        ttk.Button(easy_rgb_summary_row, text="Save Summary", command=self.save_easy_all_sensors_summary).pack(side="left")
+        ttk.Button(easy_rgb_summary_row, text="Copy Summary", command=self.copy_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_summary_row, text="Open Latest", command=self.open_latest_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_summary_row, text="Open Folder", command=self.open_easy_all_sensors_summary_folder).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_summary_row, text="Run Index", command=self.open_easy_all_sensors_run_index).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_summary_row, text="Copy Latest Run", command=self.copy_latest_easy_all_sensors_run).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_output_row, text="Open Preview", command=self.open_latest_easy_all_sensors_preview).pack(side="left")
+        ttk.Button(easy_rgb_output_row, text="Copy Preview Path", command=self.copy_latest_easy_all_sensors_preview_path).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_output_row, text="Open Run Folder", command=self.open_latest_easy_all_sensors_run_folder).pack(side="left", padx=(8, 0))
         ttk.Label(
             easy_rgb_actions,
             text="Download loads and auto-composes the Easy All Sensors picks. Summaries save the selected channels and alignment guidance.",
-            wraplength=620,
-        ).pack(side="left", padx=(12, 8), fill="x", expand=True)
+            wraplength=920,
+        ).pack(anchor="w", padx=8, pady=(4, 6))
 
         self.browser_status = tk.StringVar(value="")
         self.browser_progress = ttk.Progressbar(browser_content, mode="indeterminate")

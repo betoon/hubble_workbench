@@ -311,6 +311,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.stop_browser_button = ttk.Button(top, text="Stop", command=self.cancel_browser_activity, state="disabled")
         self.stop_browser_button.pack(side="left", padx=(8, 0))
 
+        self.easy_all_sensors_status_var = tk.StringVar(value="Easy All Sensors: ready.")
+        ttk.Label(browser_content, textvariable=self.easy_all_sensors_status_var, wraplength=1040).pack(anchor="w", pady=(4, 0))
+
         source_tools = ttk.Frame(browser_content)
         source_tools.pack(fill="x", pady=(6, 0))
         self.better_sources_button = ttk.Button(

@@ -172,6 +172,12 @@ class ComposeWorkflowMixin:
     def finish_compose_extras(self, size_text, engine_text):
         self.generate_preset_previews()
         preview_path = self.auto_save_preview_png()
+        if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "compose":
+            detail = f"Composite ready at {size_text}{engine_text}."
+            if preview_path:
+                detail += f" Auto-saved {preview_path.name}."
+            self.set_easy_all_sensors_status("complete", detail)
+            self.easy_all_sensors_pending_stage = None
         if preview_path:
             self.compose_status.set(f"RGB composite ready at {size_text}{engine_text}. Auto-saved {preview_path.name}.")
         else:

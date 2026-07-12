@@ -244,6 +244,7 @@ class DebugConsoleMixin:
             "",
             "Current Status",
             "--------------",
+            f"Easy All Sensors: {self.debug_var_value('easy_all_sensors_status_var', '')}",
             f"Browser: {self.debug_var_value('browser_status', '')}",
             f"Download: {self.debug_var_value('download_detail', '')}",
             f"Sensor: {self.debug_var_value('sensor_status_var', '')}",

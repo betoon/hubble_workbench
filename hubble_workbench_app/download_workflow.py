@@ -133,6 +133,9 @@ class DownloadWorkflowMixin:
             return
         manifest, download_path, error, rgb_set = result
         if error:
+            if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
+                self.set_easy_all_sensors_status("stopped", "Download failed before the RGB set could be loaded.")
+                self.easy_all_sensors_pending_stage = None
             self.stop_browser_activity(f"Download failed: {self.format_error_message(error)}")
             return
         self.download_progress_var.set(100)
@@ -154,6 +157,9 @@ class DownloadWorkflowMixin:
         channel_paths = self.match_downloaded_rgb_paths(downloaded, rgb_set)
         missing = [channel for channel in ("blue", "green", "red") if channel not in channel_paths]
         if missing:
+            if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
+                self.set_easy_all_sensors_status("stopped", "Downloaded the RGB files, but could not match one or more channels.")
+                self.easy_all_sensors_pending_stage = None
             self.stop_browser_activity(
                 f"Downloaded RGB products to {download_path}, but could not identify: {', '.join(missing)}. "
                 "Use Load Latest RGB Set or choose the files manually."
@@ -165,6 +171,13 @@ class DownloadWorkflowMixin:
         self.compose_status.set(f"Loading downloaded RGB channels from {download_path.name}...")
         self.notebook.select(self.compose_tab)
         self.compose_progress.start(12)
+        if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
+            auto_compose_var = getattr(self, "auto_compose_var", None)
+            compose_enabled = bool(auto_compose_var.get()) if auto_compose_var is not None else False
+            next_stage = "compose" if compose_enabled else "loaded"
+            self.easy_all_sensors_pending_stage = next_stage
+            detail = "RGB channels are loaded; composing automatically." if next_stage == "compose" else "RGB channels are loaded in the Compose tab."
+            self.set_easy_all_sensors_status(next_stage, detail)
         self.preview_channel_thumbnails_async(channel_paths, download_path)
         self.stop_browser_activity(f"Downloaded and loaded RGB set from {download_path}")
 

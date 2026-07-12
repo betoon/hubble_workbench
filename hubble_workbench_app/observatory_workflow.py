@@ -51,6 +51,31 @@ SENSOR_FAMILIES = [
 
 
 class ObservatoryWorkflowMixin:
+    def set_easy_all_sensors_status(self, stage, message, mirror=True):
+        stage_label = str(stage or "ready").replace("_", " ").title()
+        text = f"Easy All Sensors: {stage_label} - {message}" if message else f"Easy All Sensors: {stage_label}."
+        self.easy_all_sensors_stage = stage or "ready"
+        var = getattr(self, "easy_all_sensors_status_var", None)
+        if var is not None:
+            try:
+                var.set(text)
+            except Exception:
+                pass
+        if mirror:
+            for attr_name in ("browser_status", "sensor_status_var", "mosaic_status_var"):
+                var = getattr(self, attr_name, None)
+                if var is not None:
+                    try:
+                        var.set(text)
+                    except Exception:
+                        pass
+        if hasattr(self, "debug_console_write"):
+            try:
+                self.debug_console_write(text)
+            except Exception:
+                pass
+        return text
+
     def easy_all_sensors_async(self):
         if not self.require_astroquery():
             return False
@@ -83,6 +108,7 @@ class ObservatoryWorkflowMixin:
                 self.sensor_status_var.set(message)
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
+            self.set_easy_all_sensors_status(self.easy_all_sensors_pending_stage, message)
             try:
                 self.observatory_report_text.delete("1.0", "end")
                 self.observatory_report_text.insert("end", "Easy All Sensors\n\n- " + message)
@@ -107,6 +133,7 @@ class ObservatoryWorkflowMixin:
                 self.observatory_report_text.see("1.0")
             except Exception:
                 pass
+            self.set_easy_all_sensors_status("selected", "Best mixed-sensor RGB picks are ready. Use Download Easy All Sensors RGB when you are ready to fetch and compose them.")
             self.easy_all_sensors_pending_stage = None
             return prepared
 
@@ -124,6 +151,7 @@ class ObservatoryWorkflowMixin:
             self.observatory_report_text.see("end")
         except Exception:
             pass
+        self.set_easy_all_sensors_status("fallback", message)
         self.easy_all_sensors_pending_stage = None
         return False
 
@@ -137,6 +165,7 @@ class ObservatoryWorkflowMixin:
                 self.sensor_status_var.set(message)
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
+            self.set_easy_all_sensors_status("stopped", message)
             try:
                 self.observatory_show_cross_sensor_rgb_plan()
                 self.observatory_report_text.insert("end", "\n\nDownload Easy All Sensors RGB:\n- " + message)
@@ -152,6 +181,8 @@ class ObservatoryWorkflowMixin:
             self.auto_compose_var.set(True)
         if hasattr(self, "browser_status"):
             self.browser_status.set("Downloading the Easy All Sensors RGB channels. The Compose tab will load them when the download finishes.")
+        self.easy_all_sensors_pending_stage = "download"
+        self.set_easy_all_sensors_status("download", "Downloading the selected RGB channels. The Compose tab will load them when download finishes.")
         try:
             self.observatory_report_text.insert(
                 "end",
@@ -176,6 +207,7 @@ class ObservatoryWorkflowMixin:
                 self.sensor_status_var.set(message)
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
+            self.set_easy_all_sensors_status("stopped", message)
             try:
                 self.observatory_report_text.insert("end", "\n\nEasy All Sensors stopped:\n- " + message)
                 self.observatory_report_text.see("end")
@@ -191,6 +223,7 @@ class ObservatoryWorkflowMixin:
             self.sensor_status_var.set(message)
         if hasattr(self, "mosaic_status_var"):
             self.mosaic_status_var.set(message)
+        self.set_easy_all_sensors_status("products", message)
         try:
             self.observatory_report_text.insert("end", "\n- " + message)
             self.observatory_report_text.see("end")
@@ -212,6 +245,7 @@ class ObservatoryWorkflowMixin:
                 self.sensor_status_var.set(message)
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
+            self.set_easy_all_sensors_status("stopped", message)
             try:
                 self.observatory_report_text.insert("end", "\n\nEasy All Sensors stopped:\n- " + message)
                 self.observatory_report_text.see("end")
@@ -227,6 +261,7 @@ class ObservatoryWorkflowMixin:
             self.sensor_status_var.set(message)
         if hasattr(self, "mosaic_status_var"):
             self.mosaic_status_var.set(message)
+        self.set_easy_all_sensors_status("prepare", message)
         try:
             self.observatory_report_text.insert("end", "\n- " + message)
             self.observatory_report_text.see("end")

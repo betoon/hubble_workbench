@@ -112,6 +112,8 @@ class ObservatoryWorkflowMixin:
             messagebox.showinfo("Easy All Sensors", "Choose a target first.")
             return False
 
+        self.easy_all_sensors_latest_preview_path = ""
+
         if hasattr(self, "high_quality_var"):
             self.high_quality_var.set(True)
         if hasattr(self, "prefer_drizzled_var"):

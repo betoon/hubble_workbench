@@ -4,6 +4,7 @@ import logging
 import math
 import threading
 from datetime import datetime
+from pathlib import Path
 from tkinter import messagebox
 
 from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
@@ -1334,6 +1335,42 @@ class ObservatoryWorkflowMixin:
         if status:
             lines.extend(["", "Status:", status])
         return "\n".join(lines)
+
+    def open_latest_easy_all_sensors_preview(self):
+        row = self.latest_easy_all_sensors_run_row()
+        if not row:
+            message = "No Easy All Sensors run has been saved yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Preview", message)
+            return None
+        preview_image = str(row.get("preview_image", "") or "").strip()
+        if not preview_image:
+            message = "The latest Easy All Sensors run does not have a saved preview image yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Preview", message)
+            return None
+        path = Path(preview_image)
+        if not path.exists():
+            message = f"The latest Easy All Sensors preview image was not found: {preview_image}"
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("missing", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Preview", message)
+            return None
+        self.open_file(path)
+        message = f"Opened Easy All Sensors preview image: {path.name}."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("opened", message, mirror=False)
+        return path
 
     def copy_latest_easy_all_sensors_run(self):
         row = self.latest_easy_all_sensors_run_row()

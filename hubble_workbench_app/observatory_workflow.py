@@ -1605,12 +1605,19 @@ class ObservatoryWorkflowMixin:
         if not rgb_set:
             return []
         assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        visited = set(getattr(self, "visited_mosaic_rgb_channels", set()) or set())
+        requested = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
+        selected_row = getattr(self, "selected_mosaic_row", None)
         rows = []
         for channel in ("blue", "green", "red"):
             row = rgb_set[channel]
             coordinate = self.observatory_row_coordinate(row)
+            selected_now = selected_row is not None and self.observatory_mosaic_row_matches(selected_row, row)
             rows.append({
                 "channel": channel,
+                "selected_in_progress": "yes" if channel in visited else "no",
+                "products_requested": "yes" if channel in requested else "no",
+                "selected_now": "yes" if selected_now else "no",
                 "obs_collection": row.get("obs_collection", "") or row.get("mission", ""),
                 "obs_id": row.get("obs_id", "") or row.get("obsid", ""),
                 "sensor": self.observatory_sensor_family(row),

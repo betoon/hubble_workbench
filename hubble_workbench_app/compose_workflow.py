@@ -177,6 +177,10 @@ class ComposeWorkflowMixin:
             if preview_path:
                 detail += f" Auto-saved {preview_path.name}."
             self.set_easy_all_sensors_status("complete", detail)
+            try:
+                self.save_easy_all_sensors_summary(update_ui=False)
+            except Exception:
+                pass
             self.easy_all_sensors_pending_stage = None
         if preview_path:
             self.compose_status.set(f"RGB composite ready at {size_text}{engine_text}. Auto-saved {preview_path.name}.")

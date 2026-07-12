@@ -1589,6 +1589,79 @@ class ObservatoryWorkflowMixin:
                 self.mosaic_status_var.set("Generated mosaic RGB plan; one or more RGB channels are missing from the current map selection.")
         return text
 
+    def observatory_current_mosaic_rgb_set(self):
+        rgb_set = getattr(self, "selected_mosaic_rgb_set", None)
+        if rgb_set:
+            return rgb_set
+        rgb_set = self.observatory_best_mosaic_rgb_set()
+        self.selected_mosaic_rgb_set = rgb_set
+        return rgb_set
+
+    def observatory_mosaic_rgb_export_rows(self):
+        rgb_set = self.observatory_current_mosaic_rgb_set()
+        if not rgb_set:
+            return []
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        rows = []
+        for channel in ("blue", "green", "red"):
+            row = rgb_set[channel]
+            coordinate = self.observatory_row_coordinate(row)
+            rows.append({
+                "channel": channel,
+                "obs_collection": row.get("obs_collection", "") or row.get("mission", ""),
+                "obs_id": row.get("obs_id", "") or row.get("obsid", ""),
+                "sensor": self.observatory_sensor_family(row),
+                "instrument_name": row.get("instrument_name", "") or row.get("Detector", ""),
+                "filters": row.get("filters", "") or row.get("Spectral_Elt", ""),
+                "wavelength_bucket": self.observation_filter_bucket(row),
+                "t_exptime": row.get("t_exptime", ""),
+                "ra": f"{coordinate[0]:.8f}" if coordinate else "",
+                "dec": f"{coordinate[1]:.8f}" if coordinate else "",
+                "footprint_vertices": len(self.observatory_s_region_vertices(row)),
+                "observation_score": self.observatory_mosaic_observation_score(row),
+                "mosaic_rgb_score": self.observatory_mosaic_rgb_set_score(rgb_set),
+                "alignment_status": assessment["status"],
+                "alignment_score": assessment["score"],
+                "alignment_message": assessment["message"],
+            })
+        return rows
+
+    def observatory_copy_mosaic_rgb_plan(self):
+        rows = self.observatory_mosaic_rgb_export_rows()
+        if not rows:
+            message = "No complete Mosaic RGB Plan is available to copy."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return ""
+        headers = list(rows[0].keys())
+        lines = ["\t".join(headers)]
+        for row in rows:
+            lines.append("\t".join(str(row.get(header, "")) for header in headers))
+        text = "\n".join(lines)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Copied Mosaic RGB Plan B/G/R picks to the clipboard.")
+        return text
+
+    def observatory_export_mosaic_rgb_plan_csv(self):
+        rows = self.observatory_mosaic_rgb_export_rows()
+        if not rows:
+            message = "No complete Mosaic RGB Plan is available to export."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return None
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        path = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_mosaic_rgb_plan.csv"
+        with path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"Exported Mosaic RGB Plan B/G/R picks to {path.name}.")
+        return path
+
     def observatory_mosaic_rgb_highlight_channel(self, row, rgb_set=None):
         rgb_set = rgb_set or getattr(self, "selected_mosaic_rgb_set", None)
         if not rgb_set:

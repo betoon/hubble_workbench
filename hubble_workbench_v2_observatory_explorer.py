@@ -606,6 +606,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ).pack(side="left", padx=(10, 0))
         ttk.Button(mosaic_tools, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
         ttk.Button(mosaic_tools, text="Mosaic RGB Plan", command=self.observatory_show_mosaic_rgb_plan, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_tools, text="Copy RGB Plan", command=self.observatory_copy_mosaic_rgb_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_tools, text="Export RGB Plan", command=self.observatory_export_mosaic_rgb_plan_csv).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Overlap Candidates", command=self.observatory_show_overlap_candidates).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Select Best", command=self.observatory_select_best_overlap_candidate, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_tools, text="Copy Overlap", command=self.observatory_copy_overlap_candidates).pack(side="left", padx=(8, 0))
@@ -638,6 +640,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def observatory_show_mosaic_rgb_plan(self):
         return super().observatory_show_mosaic_rgb_plan()
+
+    def observatory_copy_mosaic_rgb_plan(self):
+        return super().observatory_copy_mosaic_rgb_plan()
+
+    def observatory_export_mosaic_rgb_plan_csv(self):
+        return super().observatory_export_mosaic_rgb_plan_csv()
 
     def observatory_show_overlap_candidates(self):
         return super().observatory_show_overlap_candidates()

@@ -1278,6 +1278,53 @@ class ObservatoryWorkflowMixin:
             self.set_easy_all_sensors_status("opened", message, mirror=False)
         return path
 
+    def latest_easy_all_sensors_run_row(self):
+        path = self.easy_all_sensors_run_index_path()
+        if not path.exists():
+            return None
+        with path.open("r", newline="", encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle))
+        return rows[-1] if rows else None
+
+    def easy_all_sensors_run_row_text(self, row):
+        alignment_score = row.get("alignment_score", "")
+        alignment_suffix = f" ({alignment_score}/100)" if alignment_score else ""
+        lines = [
+            "Easy All Sensors Latest Run",
+            "",
+            f"Timestamp: {row.get('timestamp', '')}",
+            f"Target: {row.get('target', '')}",
+            f"Ready: {row.get('ready', '')}",
+            f"Alignment: {row.get('alignment_level', '')} / {row.get('alignment_status', '')}{alignment_suffix}",
+            f"Summary text: {row.get('summary_text', '')}",
+            f"Summary JSON: {row.get('summary_json', '')}",
+        ]
+        status = row.get("status", "")
+        if status:
+            lines.extend(["", "Status:", status])
+        return "\n".join(lines)
+
+    def copy_latest_easy_all_sensors_run(self):
+        row = self.latest_easy_all_sensors_run_row()
+        if not row:
+            message = "No Easy All Sensors run has been saved yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Latest Run", message)
+            return None
+        text = self.easy_all_sensors_run_row_text(row)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = "Copied the latest Easy All Sensors run to the clipboard."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("copied", message, mirror=False)
+        return text
+
     def observatory_show_mixed_rgb_recipe(self):
         text = self.observatory_mixed_rgb_recipe_text()
         try:

@@ -467,6 +467,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(easy_rgb_actions, text="Open Latest", command=self.open_latest_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
         ttk.Button(easy_rgb_actions, text="Open Folder", command=self.open_easy_all_sensors_summary_folder).pack(side="left", padx=(8, 0), pady=6)
         ttk.Button(easy_rgb_actions, text="Run Index", command=self.open_easy_all_sensors_run_index).pack(side="left", padx=(8, 0), pady=6)
+        ttk.Button(easy_rgb_actions, text="Copy Latest Run", command=self.copy_latest_easy_all_sensors_run).pack(side="left", padx=(8, 0), pady=6)
         ttk.Label(
             easy_rgb_actions,
             text="Download loads and auto-composes the Easy All Sensors picks. Summaries save the selected channels and alignment guidance.",
@@ -1096,6 +1097,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def open_easy_all_sensors_run_index(self):
         return super().open_easy_all_sensors_run_index()
+
+    def copy_latest_easy_all_sensors_run(self):
+        return super().copy_latest_easy_all_sensors_run()
 
     def copy_rgb_candidates(self):
         return super().copy_rgb_candidates()

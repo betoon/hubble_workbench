@@ -456,18 +456,21 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(rgb_actions, text="Use Best Set", command=self.use_best_rgb_set, style="Accent.TButton").pack(side="left")
         ttk.Button(rgb_actions, text="Use Suggested Set", command=self.use_suggested_rgb_set).pack(side="left")
         ttk.Button(rgb_actions, text="Pick Best Available Channels", command=self.pick_best_available_rgb_channels).pack(side="left", padx=(8, 0))
-        ttk.Button(rgb_actions, text="Download Selected RGB Channels", command=self.download_rgb_candidates_async).pack(side="left")
-        ttk.Button(rgb_actions, text="Download Easy All Sensors RGB", command=self.download_easy_all_sensors_rgb_async).pack(side="left", padx=(8, 0))
-        ttk.Button(rgb_actions, text="Save Easy Summary", command=self.save_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
-        ttk.Button(rgb_actions, text="Copy Easy Summary", command=self.copy_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
-        ttk.Button(rgb_actions, text="Open Latest Easy Summary", command=self.open_latest_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
-        ttk.Button(rgb_actions, text="Open Summary Folder", command=self.open_easy_all_sensors_summary_folder).pack(side="left", padx=(8, 0))
+        ttk.Button(rgb_actions, text="Download Selected RGB Channels", command=self.download_rgb_candidates_async).pack(side="left", padx=(8, 0))
         ttk.Button(rgb_actions, text="Copy RGB Picks", command=self.copy_rgb_candidates).pack(side="left", padx=(8, 0))
+
+        easy_rgb_actions = ttk.LabelFrame(rgb_tab, text="Easy All Sensors")
+        easy_rgb_actions.pack(fill="x", pady=(8, 0))
+        ttk.Button(easy_rgb_actions, text="Download Easy RGB", command=self.download_easy_all_sensors_rgb_async, style="Accent.TButton").pack(side="left", padx=(8, 0), pady=6)
+        ttk.Button(easy_rgb_actions, text="Save Summary", command=self.save_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
+        ttk.Button(easy_rgb_actions, text="Copy Summary", command=self.copy_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
+        ttk.Button(easy_rgb_actions, text="Open Latest", command=self.open_latest_easy_all_sensors_summary).pack(side="left", padx=(8, 0), pady=6)
+        ttk.Button(easy_rgb_actions, text="Open Folder", command=self.open_easy_all_sensors_summary_folder).pack(side="left", padx=(8, 0), pady=6)
         ttk.Label(
-            rgb_tab,
-            text="Tip: Easy All Sensors can pick mixed-sensor RGB channels for you. Use Download Easy All Sensors RGB to download, load, and auto-compose those picks.",
-            wraplength=760,
-        ).pack(anchor="w", pady=(8, 0))
+            easy_rgb_actions,
+            text="Download loads and auto-composes the Easy All Sensors picks. Summaries save the selected channels and alignment guidance.",
+            wraplength=620,
+        ).pack(side="left", padx=(12, 8), fill="x", expand=True)
 
         self.browser_status = tk.StringVar(value="")
         self.browser_progress = ttk.Progressbar(browser_content, mode="indeterminate")

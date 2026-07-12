@@ -23,7 +23,8 @@ class TkConsoleLogHandler(logging.Handler):
 
 class DebugConsoleMixin:
     def build_debug_console_tab(self):
-        header = ttk.Frame(self.debug_tab)
+        debug_content = self.build_scrollable_tab_content(self.debug_tab) if hasattr(self, "build_scrollable_tab_content") else self.debug_tab
+        header = ttk.Frame(debug_content)
         header.pack(fill="x", pady=(0, 8))
         ttk.Label(header, text="Debug Console", style="Title.TLabel").pack(side="left")
         self.debug_console_show_on_issue_var = tk.BooleanVar(value=True)
@@ -38,7 +39,7 @@ class DebugConsoleMixin:
         ttk.Button(header, text="Refresh From Debug File", command=self.refresh_debug_console_from_file).pack(side="right", padx=(0, 8))
 
         self.debug_console_text = tk.Text(
-            self.debug_tab,
+            debug_content,
             wrap="word",
             bg="#050505",
             fg="#ffd84d",
@@ -49,7 +50,7 @@ class DebugConsoleMixin:
             font=("Consolas", 10),
             state="disabled",
         )
-        scrollbar = ttk.Scrollbar(self.debug_tab, orient="vertical", command=self.debug_console_text.yview)
+        scrollbar = ttk.Scrollbar(debug_content, orient="vertical", command=self.debug_console_text.yview)
         self.debug_console_text.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
         self.debug_console_text.pack(side="left", fill="both", expand=True)

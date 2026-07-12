@@ -195,9 +195,10 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.build_debug_console_tab()
 
     def build_setup_tab(self):
-        ttk.Label(self.setup_tab, text="Space Telescope Workbench", style="Title.TLabel").pack(anchor="w")
+        setup_content = self.build_scrollable_tab_content(self.setup_tab)
+        ttk.Label(setup_content, text="Space Telescope Workbench", style="Title.TLabel").pack(anchor="w")
         self.dep_text = tk.Text(
-            self.setup_tab,
+            setup_content,
             height=18,
             wrap="word",
             bg="#ffffff",
@@ -208,7 +209,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             insertbackground="#1f1f1f",
         )
         self.dep_text.pack(fill="both", expand=True, pady=(10, 8))
-        buttons = ttk.Frame(self.setup_tab)
+        buttons = ttk.Frame(setup_content)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Refresh Status", command=self.refresh_dependency_status).pack(side="left")
         ttk.Button(buttons, text="Open Downloads Folder", command=lambda: self.open_folder(DOWNLOAD_DIR)).pack(side="left", padx=(8, 0))

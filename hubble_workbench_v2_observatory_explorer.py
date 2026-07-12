@@ -219,8 +219,45 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             command=lambda: self.open_file(APP_DIR / "OBSERVATORY_EXPLORER_TEST_GUIDE.md"),
         ).pack(side="left", padx=(8, 0))
 
+    def build_scrollable_tab_content(self, parent):
+        container = ttk.Frame(parent)
+        container.pack(fill="both", expand=True)
+        canvas = tk.Canvas(container, highlightthickness=0)
+        vertical = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        horizontal = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
+        canvas.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        container.rowconfigure(0, weight=1)
+        container.columnconfigure(0, weight=1)
+
+        content = ttk.Frame(canvas, padding=(0, 0, 4, 4))
+        window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+
+        def update_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def keep_minimum_width(event):
+            requested_width = max(content.winfo_reqwidth(), event.width)
+            canvas.itemconfigure(window_id, width=requested_width)
+            update_scroll_region()
+
+        def on_mousewheel(event):
+            if event.state & 0x0001:
+                canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+            else:
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        content.bind("<Configure>", update_scroll_region)
+        canvas.bind("<Configure>", keep_minimum_width)
+        canvas.bind("<MouseWheel>", on_mousewheel)
+        content.bind("<MouseWheel>", on_mousewheel)
+        return content
+
     def build_browser_tab(self):
-        gallery = ttk.Frame(self.browser_tab)
+        browser_content = self.build_scrollable_tab_content(self.browser_tab)
+        gallery = ttk.Frame(browser_content)
         gallery.pack(fill="x", pady=(0, 8))
         ttk.Label(gallery, text="Telescope").pack(side="left")
         self.telescope_var = tk.StringVar(value=SETTINGS.get("telescope", "Hubble / HST"))
@@ -246,7 +283,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(gallery, text="Use Target", command=self.use_target_gallery).pack(side="left")
         ttk.Button(gallery, text="Search HLA Target", command=self.search_target_gallery_hla).pack(side="left", padx=(8, 0))
 
-        top = ttk.Frame(self.browser_tab)
+        top = ttk.Frame(browser_content)
         top.pack(fill="x")
         ttk.Label(top, text="Target").pack(side="left")
         self.target_var = tk.StringVar(value=SETTINGS.get("last_target", "M51"))
@@ -271,7 +308,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.stop_browser_button = ttk.Button(top, text="Stop", command=self.cancel_browser_activity, state="disabled")
         self.stop_browser_button.pack(side="left", padx=(8, 0))
 
-        source_tools = ttk.Frame(self.browser_tab)
+        source_tools = ttk.Frame(browser_content)
         source_tools.pack(fill="x", pady=(6, 0))
         self.better_sources_button = ttk.Button(
             source_tools,
@@ -292,7 +329,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             wraplength=720,
         ).pack(side="left", padx=(12, 0))
 
-        panes = ttk.PanedWindow(self.browser_tab, orient="horizontal")
+        panes = ttk.PanedWindow(browser_content, orient="horizontal")
         panes.pack(fill="both", expand=True, pady=(8, 0))
 
         left = ttk.Frame(panes)
@@ -422,19 +459,19 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ).pack(anchor="w", pady=(8, 0))
 
         self.browser_status = tk.StringVar(value="")
-        self.browser_progress = ttk.Progressbar(self.browser_tab, mode="indeterminate")
+        self.browser_progress = ttk.Progressbar(browser_content, mode="indeterminate")
         self.browser_progress.pack(fill="x", pady=(8, 0))
         self.download_progress_var = tk.DoubleVar(value=0)
         self.download_progress = ttk.Progressbar(
-            self.browser_tab,
+            browser_content,
             mode="determinate",
             variable=self.download_progress_var,
             maximum=100,
         )
         self.download_progress.pack(fill="x", pady=(6, 0))
         self.download_detail = tk.StringVar(value="")
-        ttk.Label(self.browser_tab, textvariable=self.download_detail).pack(anchor="w", pady=(4, 0))
-        ttk.Label(self.browser_tab, textvariable=self.browser_status).pack(anchor="w", pady=(6, 0))
+        ttk.Label(browser_content, textvariable=self.download_detail).pack(anchor="w", pady=(4, 0))
+        ttk.Label(browser_content, textvariable=self.browser_status).pack(anchor="w", pady=(6, 0))
 
     def build_rgb_candidate_column(self, parent, title, column):
         frame = ttk.Frame(parent)
@@ -461,40 +498,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
 
     def build_observatory_scroll_area(self):
-        container = ttk.Frame(self.observatory_tab)
-        container.pack(fill="both", expand=True)
-        canvas = tk.Canvas(container, highlightthickness=0)
-        vertical = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        horizontal = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
-        canvas.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        vertical.grid(row=0, column=1, sticky="ns")
-        horizontal.grid(row=1, column=0, sticky="ew")
-        container.rowconfigure(0, weight=1)
-        container.columnconfigure(0, weight=1)
-
-        content = ttk.Frame(canvas, padding=(0, 0, 4, 4))
-        window_id = canvas.create_window((0, 0), window=content, anchor="nw")
-
-        def update_scroll_region(_event=None):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-
-        def keep_minimum_width(event):
-            requested_width = max(content.winfo_reqwidth(), event.width)
-            canvas.itemconfigure(window_id, width=requested_width)
-            update_scroll_region()
-
-        def on_mousewheel(event):
-            if event.state & 0x0001:
-                canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
-            else:
-                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        content.bind("<Configure>", update_scroll_region)
-        canvas.bind("<Configure>", keep_minimum_width)
-        canvas.bind("<MouseWheel>", on_mousewheel)
-        content.bind("<MouseWheel>", on_mousewheel)
-        return content
+        return self.build_scrollable_tab_content(self.observatory_tab)
 
     def build_observatory_tab(self):
         """Version 2.0 foundation: multi-observatory overview and sky mosaic coverage."""
@@ -797,7 +801,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         return super().observatory_show_composition_readiness()
 
     def build_convert_tab(self):
-        top = ttk.Frame(self.convert_tab)
+        convert_content = self.build_scrollable_tab_content(self.convert_tab)
+        top = ttk.Frame(convert_content)
         top.pack(fill="x")
         self.convert_path_var = tk.StringVar(value="")
         ttk.Button(top, text="Choose FITS", command=self.choose_convert_file).pack(side="left")
@@ -807,7 +812,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(top, text="Preview", command=self.preview_fits_async).pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Save PNG/TIFF", command=self.save_preview_outputs).pack(side="left", padx=(8, 0))
 
-        body = ttk.PanedWindow(self.convert_tab, orient="horizontal")
+        body = ttk.PanedWindow(convert_content, orient="horizontal")
         body.pack(fill="both", expand=True, pady=(8, 0))
         image_panel = ttk.Frame(body)
         info_panel = ttk.Frame(body)
@@ -819,10 +824,11 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.header_text = tk.Text(info_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.header_text.pack(fill="both", expand=True)
         self.convert_status = tk.StringVar(value="")
-        ttk.Label(self.convert_tab, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
+        ttk.Label(convert_content, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
 
     def build_compose_tab(self):
-        form = ttk.Frame(self.compose_tab)
+        compose_content = self.build_scrollable_tab_content(self.compose_tab)
+        form = ttk.Frame(compose_content)
         form.pack(fill="x")
         self.red_path_var = tk.StringVar()
         self.green_path_var = tk.StringVar()
@@ -837,7 +843,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             ttk.Button(form, text="Choose", command=lambda v=var: self.choose_channel(v)).grid(row=row, column=2, pady=3)
         form.columnconfigure(1, weight=1)
 
-        controls = ttk.Frame(self.compose_tab)
+        controls = ttk.Frame(compose_content)
         controls.pack(fill="x", pady=(6, 8))
         self.compose_stretch_var = tk.StringVar(value="asinh")
         self.high_quality_var = tk.BooleanVar(value=SETTINGS.get("high_quality_processing", True))
@@ -859,7 +865,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(controls, text="Save Project", command=self.save_project_file).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Open Project", command=self.open_project_file).pack(side="left", padx=(8, 0))
 
-        tuning = ttk.Frame(self.compose_tab)
+        tuning = ttk.Frame(compose_content)
         tuning.pack(fill="x", pady=(0, 8))
         self.black_point_var = tk.DoubleVar(value=0)
         self.brightness_var = tk.DoubleVar(value=0)
@@ -876,7 +882,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.build_tuning_slider(tuning, "Green", self.green_balance_var, 0.5, 1.8, 5)
         self.build_tuning_slider(tuning, "Blue", self.blue_balance_var, 0.5, 1.8, 6)
 
-        presentation = ttk.Frame(self.compose_tab)
+        presentation = ttk.Frame(compose_content)
         presentation.pack(fill="x", pady=(0, 8))
         self.straighten_angle_var = tk.DoubleVar(value=SETTINGS.get("straighten_angle", 0.0))
         self.auto_crop_presentation_var = tk.BooleanVar(value=SETTINGS.get("auto_crop_presentation", True))
@@ -898,7 +904,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             command=self.apply_image_tuning,
         ).pack(side="left", padx=(12, 0))
 
-        advanced = ttk.LabelFrame(self.compose_tab, text="Advanced stretch before preview")
+        advanced = ttk.LabelFrame(compose_content, text="Advanced stretch before preview")
         advanced.pack(fill="x", pady=(0, 8))
         self.channel_stretch_vars = {}
         for row, (channel, label) in enumerate((("red", "Red"), ("green", "Green"), ("blue", "Blue"))):
@@ -926,7 +932,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
                 spin.bind("<FocusOut>", self.on_stretch_setting_changed)
         ttk.Button(advanced, text="Reset Advanced Stretch", command=self.reset_advanced_stretch).grid(row=0, column=9, rowspan=3, sticky="ns", padx=(10, 8), pady=3)
 
-        presets = ttk.Frame(self.compose_tab)
+        presets = ttk.Frame(compose_content)
         presets.pack(fill="x", pady=(0, 8))
         ttk.Label(presets, text="Presets").pack(side="left")
         for name in ("Natural", "High Contrast", "Nebula", "Blue/Pink Nebula", "Galaxy", "Soft Stretch"):
@@ -944,7 +950,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Label(presets, text="Zoom").pack(side="left", padx=(14, 4))
         ttk.Scale(presets, variable=self.preview_zoom_var, from_=0.5, to=3.0, command=lambda _v: self.update_rgb_preview()).pack(side="left", fill="x", expand=True)
 
-        compare = ttk.LabelFrame(self.compose_tab, text="Try Looks")
+        compare = ttk.LabelFrame(compose_content, text="Try Looks")
         compare.pack(fill="x", pady=(0, 8))
         self.preset_preview_canvases = {}
         for name in ("Natural", "Nebula", "Blue/Pink Nebula", "High Contrast", "Soft Stretch"):
@@ -956,7 +962,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             canvas.bind("<Button-1>", lambda _event, n=name: self.apply_preset_preview(n))
             self.preset_preview_canvases[name] = canvas
 
-        thumbs = ttk.Frame(self.compose_tab)
+        thumbs = ttk.Frame(compose_content)
         thumbs.pack(fill="x", pady=(0, 8))
         self.channel_thumbnail_canvases = {}
         for label in ("Blue", "Green", "Red"):
@@ -967,14 +973,14 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             canvas.pack(fill="x")
             self.channel_thumbnail_canvases[label.lower()] = canvas
 
-        self.rgb_canvas = tk.Canvas(self.compose_tab, bg="#111827", highlightthickness=0)
+        self.rgb_canvas = tk.Canvas(compose_content, bg="#111827", highlightthickness=0)
         self.rgb_canvas.pack(fill="both", expand=True)
         self.compose_status = tk.StringVar(value="")
-        self.compose_progress = ttk.Progressbar(self.compose_tab, mode="indeterminate")
+        self.compose_progress = ttk.Progressbar(compose_content, mode="indeterminate")
         self.compose_progress.pack(fill="x", pady=(6, 0))
-        ttk.Label(self.compose_tab, textvariable=self.compose_status).pack(anchor="w", pady=(6, 0))
+        ttk.Label(compose_content, textvariable=self.compose_status).pack(anchor="w", pady=(6, 0))
         self.why_var = tk.StringVar(value="")
-        ttk.Label(self.compose_tab, textvariable=self.why_var, wraplength=1080).pack(anchor="w", pady=(0, 4))
+        ttk.Label(compose_content, textvariable=self.why_var, wraplength=1080).pack(anchor="w", pady=(0, 4))
 
     def build_tuning_slider(self, parent, label, variable, from_, to, column):
         frame = ttk.Frame(parent)

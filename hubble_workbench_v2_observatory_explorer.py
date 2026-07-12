@@ -459,6 +459,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(rgb_actions, text="Download Selected RGB Channels", command=self.download_rgb_candidates_async).pack(side="left")
         ttk.Button(rgb_actions, text="Download Easy All Sensors RGB", command=self.download_easy_all_sensors_rgb_async).pack(side="left", padx=(8, 0))
         ttk.Button(rgb_actions, text="Save Easy Summary", command=self.save_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
+        ttk.Button(rgb_actions, text="Copy Easy Summary", command=self.copy_easy_all_sensors_summary).pack(side="left", padx=(8, 0))
         ttk.Button(rgb_actions, text="Copy RGB Picks", command=self.copy_rgb_candidates).pack(side="left", padx=(8, 0))
         ttk.Label(
             rgb_tab,
@@ -1077,6 +1078,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def save_easy_all_sensors_summary(self):
         return super().save_easy_all_sensors_summary()
+
+    def copy_easy_all_sensors_summary(self):
+        return super().copy_easy_all_sensors_summary()
 
     def copy_rgb_candidates(self):
         return super().copy_rgb_candidates()

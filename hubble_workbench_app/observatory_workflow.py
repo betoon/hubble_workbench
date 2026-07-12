@@ -1151,7 +1151,8 @@ class ObservatoryWorkflowMixin:
         payload = self.easy_all_sensors_summary_payload()
         text = self.easy_all_sensors_summary_text()
         SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        base = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_easy_all_sensors_summary"
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        base = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_easy_all_sensors_summary_{stamp}"
         json_path = base.with_suffix(".json")
         text_path = base.with_suffix(".txt")
         json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -1173,6 +1174,22 @@ class ObservatoryWorkflowMixin:
             except Exception:
                 pass
         return text_path
+
+    def copy_easy_all_sensors_summary(self):
+        text = self.easy_all_sensors_summary_text()
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = "Copied Easy All Sensors summary to the clipboard."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("copied", message, mirror=False)
+        return text
 
     def observatory_show_mixed_rgb_recipe(self):
         text = self.observatory_mixed_rgb_recipe_text()

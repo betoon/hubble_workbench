@@ -162,6 +162,10 @@ class ObservatoryWorkflowMixin:
             except Exception:
                 pass
             self.set_easy_all_sensors_status("selected", "Best mixed-sensor RGB picks are ready. " + guidance["summary"] + " Use Download Easy All Sensors RGB when you are ready.")
+            try:
+                self.save_easy_all_sensors_summary(update_ui=False)
+            except Exception:
+                pass
             self.easy_all_sensors_pending_stage = None
             return prepared
 
@@ -1091,6 +1095,84 @@ class ObservatoryWorkflowMixin:
         for step in payload["next_steps"]:
             lines.append(f"- {step}")
         return "\n".join(lines)
+
+    def easy_all_sensors_summary_payload(self):
+        recipe = self.observatory_mixed_rgb_recipe_payload()
+        rgb_set = self.observatory_best_cross_sensor_rgb_set()
+        guidance = self.easy_all_sensors_alignment_guidance(rgb_set) if rgb_set else {
+            "level": "not ready",
+            "summary": recipe.get("message", "No Easy All Sensors set is ready."),
+        }
+        status_var = getattr(self, "easy_all_sensors_status_var", None)
+        try:
+            status_text = status_var.get() if status_var is not None else ""
+        except Exception:
+            status_text = ""
+        return {
+            "target": recipe.get("target", self.current_target_for_log()),
+            "kind": "easy_all_sensors_summary",
+            "ready": bool(recipe.get("ready")),
+            "status": status_text,
+            "alignment_guidance": guidance,
+            "mixed_sensor_recipe": recipe,
+            "next_actions": [
+                "Use Download Easy All Sensors RGB to fetch the selected channels.",
+                "Let Auto compose load and combine the RGB set, then inspect crop and registration.",
+                "Save PNG/TIFF + Notes after the composed image looks right.",
+            ],
+        }
+
+    def easy_all_sensors_summary_text(self):
+        payload = self.easy_all_sensors_summary_payload()
+        lines = [f"Easy All Sensors Summary for {payload['target']}", ""]
+        lines.append(f"Ready: {'yes' if payload.get('ready') else 'no'}")
+        if payload.get("status"):
+            lines.append("Status: " + payload["status"])
+        guidance = payload.get("alignment_guidance", {})
+        lines.append("Alignment: " + guidance.get("summary", "not available"))
+        recipe = payload.get("mixed_sensor_recipe", {})
+        if not payload.get("ready"):
+            lines.append("")
+            lines.append(recipe.get("message", "No Easy All Sensors RGB set is ready yet."))
+            return "\n".join(lines)
+        lines.append("")
+        lines.append("Selected channels:")
+        for channel in ("blue", "green", "red"):
+            item = recipe.get("channels", {}).get(channel, {})
+            coord = f"RA {item.get('ra')}, Dec {item.get('dec')}" if item.get("ra") and item.get("dec") else "coordinates not listed"
+            lines.append(f"- {channel.title()}: {item.get('sensor', '')} | {item.get('filters', '')} | {item.get('productFilename', '')} | {coord}")
+        lines.append("")
+        lines.append("Next actions:")
+        for step in payload.get("next_actions", []):
+            lines.append("- " + step)
+        return "\n".join(lines)
+
+    def save_easy_all_sensors_summary(self, update_ui=True):
+        payload = self.easy_all_sensors_summary_payload()
+        text = self.easy_all_sensors_summary_text()
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        base = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_easy_all_sensors_summary"
+        json_path = base.with_suffix(".json")
+        text_path = base.with_suffix(".txt")
+        json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        text_path.write_text(text + "\n", encoding="utf-8")
+        message = f"Saved Easy All Sensors summary to {text_path.name} and {json_path.name}."
+        if update_ui:
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("saved", message, mirror=False)
+            try:
+                self.observatory_report_text.delete("1.0", "end")
+                self.observatory_report_text.insert("end", text)
+                self.observatory_report_text.see("1.0")
+            except Exception:
+                pass
+        return text_path
 
     def observatory_show_mixed_rgb_recipe(self):
         text = self.observatory_mixed_rgb_recipe_text()

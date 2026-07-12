@@ -1681,24 +1681,29 @@ class ObservatoryWorkflowMixin:
                 return True
         return False
 
-    def observatory_mosaic_click(self, event):
-        markers = list(getattr(self, "mosaic_marker_points", []) or [])
-        if not markers:
-            if hasattr(self, "mosaic_status_var"):
-                self.mosaic_status_var.set("No mosaic marker is available to select yet.")
-            return None
-        nearest = None
-        nearest_distance = None
-        for marker in markers:
-            distance = math.hypot(event.x - marker["x"], event.y - marker["y"])
-            if nearest is None or distance < nearest_distance:
-                nearest = marker
-                nearest_distance = distance
-        if nearest is None or nearest_distance > max(14, nearest.get("size", 4) + 8):
-            if hasattr(self, "mosaic_status_var"):
-                self.mosaic_status_var.set("Click closer to a mosaic marker to select an observation.")
-            return None
-        row = nearest["row"]
+    @staticmethod
+    def observatory_point_in_polygon(x, y, polygon):
+        if len(polygon) < 3:
+            return False
+        inside = False
+        j = len(polygon) - 1
+        for i, (xi, yi) in enumerate(polygon):
+            xj, yj = polygon[j]
+            if (yi > y) != (yj > y):
+                x_intersect = (xj - xi) * (y - yi) / ((yj - yi) or 1e-9) + xi
+                if x < x_intersect:
+                    inside = not inside
+            j = i
+        return inside
+
+    def observatory_mosaic_footprint_at(self, x, y):
+        footprints = list(getattr(self, "mosaic_footprint_polygons", []) or [])
+        for footprint in reversed(footprints):
+            if self.observatory_point_in_polygon(x, y, footprint.get("points", [])):
+                return footprint
+        return None
+
+    def observatory_select_mosaic_row_from_map(self, row):
         detail = self.observatory_mosaic_marker_detail(row)
         if hasattr(self, "mosaic_status_var"):
             self.mosaic_status_var.set(detail.replace("\n", " "))
@@ -1711,6 +1716,29 @@ class ObservatoryWorkflowMixin:
         self.observatory_select_observation_row(row)
         self.observatory_draw_current_mosaic()
         return row
+
+    def observatory_mosaic_click(self, event):
+        markers = list(getattr(self, "mosaic_marker_points", []) or [])
+        footprints = list(getattr(self, "mosaic_footprint_polygons", []) or [])
+        if not markers and not footprints:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("No mosaic marker or footprint is available to select yet.")
+            return None
+        nearest = None
+        nearest_distance = None
+        for marker in markers:
+            distance = math.hypot(event.x - marker["x"], event.y - marker["y"])
+            if nearest is None or distance < nearest_distance:
+                nearest = marker
+                nearest_distance = distance
+        if nearest is not None and nearest_distance <= max(14, nearest.get("size", 4) + 8):
+            return self.observatory_select_mosaic_row_from_map(nearest["row"])
+        footprint = self.observatory_mosaic_footprint_at(event.x, event.y)
+        if footprint is not None:
+            return self.observatory_select_mosaic_row_from_map(footprint["row"])
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Click closer to a mosaic marker or inside a drawn footprint to select an observation.")
+        return None
 
     def observatory_copy_marker_details(self):
         row = getattr(self, "selected_mosaic_row", None)
@@ -1866,6 +1894,7 @@ class ObservatoryWorkflowMixin:
             return
         canvas.delete("all")
         self.mosaic_marker_points = []
+        self.mosaic_footprint_polygons = []
         width = max(400, int(canvas.winfo_width() or 700))
         height = max(300, int(canvas.winfo_height() or 500))
         rows = self.observatory_current_mosaic_rows()
@@ -1985,6 +2014,8 @@ class ObservatoryWorkflowMixin:
                 if len(coords) >= 6:
                     fill, outline, _group = self.observatory_marker_style(row, color_mode, color_indexes)
                     canvas.create_polygon(coords, outline=fill, fill="", width=1, dash=(2, 3))
+                    polygon_points = [(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)]
+                    self.mosaic_footprint_polygons.append({"points": polygon_points, "row": row})
                     footprint_count += 1
 
         for ra, dec, row in points[:1000]:

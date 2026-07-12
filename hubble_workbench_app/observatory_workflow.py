@@ -1626,6 +1626,33 @@ class ObservatoryWorkflowMixin:
             })
         return rows
 
+    def observatory_select_next_mosaic_rgb_pick(self):
+        rgb_set = self.observatory_current_mosaic_rgb_set()
+        if not rgb_set:
+            message = "No complete Mosaic RGB Plan is available yet. Click Mosaic RGB Plan first or widen the search."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            self.observatory_show_mosaic_rgb_plan()
+            return None
+        channels = ("blue", "green", "red")
+        current_index = getattr(self, "selected_mosaic_rgb_channel_index", -1)
+        channel = channels[(current_index + 1) % len(channels)]
+        self.selected_mosaic_rgb_channel_index = (current_index + 1) % len(channels)
+        row = rgb_set[channel]
+        self.selected_mosaic_row = row
+        self.observatory_select_observation_row(row)
+        detail = self.observatory_mosaic_marker_detail(row)
+        try:
+            self.observatory_report_text.insert("end", f"\n\nSelected Mosaic RGB {channel.title()} Pick\n" + detail)
+            self.observatory_report_text.see("end")
+        except Exception:
+            pass
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            obs_id = row.get("obs_id", "") or row.get("obsid", "") or "selected observation"
+            self.mosaic_status_var.set(f"Selected Mosaic RGB {channel.title()} pick: {obs_id}. Use Get Marker Products next, or click Next RGB Pick again.")
+        return row
+
     def observatory_copy_mosaic_rgb_plan(self):
         rows = self.observatory_mosaic_rgb_export_rows()
         if not rows:

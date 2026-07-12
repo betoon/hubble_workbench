@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import threading
+from datetime import datetime
 from tkinter import messagebox
 
 from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
@@ -1147,16 +1148,46 @@ class ObservatoryWorkflowMixin:
             lines.append("- " + step)
         return "\n".join(lines)
 
+    def easy_all_sensors_run_index_path(self):
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        return SEARCH_LOG_DIR / "easy_all_sensors_runs.csv"
+
+    def record_easy_all_sensors_summary_run(self, payload, text_path, json_path, stamp):
+        index_path = self.easy_all_sensors_run_index_path()
+        guidance = payload.get("alignment_guidance", {})
+        recipe = payload.get("mixed_sensor_recipe", {})
+        alignment = recipe.get("alignment", {})
+        row = {
+            "timestamp": stamp,
+            "target": payload.get("target", self.current_target_for_log()),
+            "ready": "yes" if payload.get("ready") else "no",
+            "alignment_level": guidance.get("level", ""),
+            "alignment_status": alignment.get("status", guidance.get("status", "")),
+            "alignment_score": alignment.get("score", guidance.get("score", "")),
+            "summary_text": text_path.name,
+            "summary_json": json_path.name,
+            "status": payload.get("status", ""),
+        }
+        fieldnames = list(row.keys())
+        write_header = not index_path.exists()
+        with index_path.open("a", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+        return index_path
+
     def save_easy_all_sensors_summary(self, update_ui=True):
         payload = self.easy_all_sensors_summary_payload()
         text = self.easy_all_sensors_summary_text()
         SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         base = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_easy_all_sensors_summary_{stamp}"
         json_path = base.with_suffix(".json")
         text_path = base.with_suffix(".txt")
         json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         text_path.write_text(text + "\n", encoding="utf-8")
+        self.record_easy_all_sensors_summary_run(payload, text_path, json_path, stamp)
         message = f"Saved Easy All Sensors summary to {text_path.name} and {json_path.name}."
         if update_ui:
             if hasattr(self, "browser_status"):
@@ -1230,6 +1261,22 @@ class ObservatoryWorkflowMixin:
         if hasattr(self, "set_easy_all_sensors_status"):
             self.set_easy_all_sensors_status("opened", message, mirror=False)
         return SEARCH_LOG_DIR
+
+    def open_easy_all_sensors_run_index(self):
+        path = self.easy_all_sensors_run_index_path()
+        if not path.exists():
+            message = "No Easy All Sensors run index has been saved yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            messagebox.showinfo("Easy All Sensors Run Index", message)
+            return None
+        self.open_file(path)
+        message = f"Opened Easy All Sensors run index: {path.name}."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("opened", message, mirror=False)
+        return path
 
     def observatory_show_mixed_rgb_recipe(self):
         text = self.observatory_mixed_rgb_recipe_text()

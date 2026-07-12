@@ -460,11 +460,48 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         return candidate_list
 
 
+    def build_observatory_scroll_area(self):
+        container = ttk.Frame(self.observatory_tab)
+        container.pack(fill="both", expand=True)
+        canvas = tk.Canvas(container, highlightthickness=0)
+        vertical = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        horizontal = ttk.Scrollbar(container, orient="horizontal", command=canvas.xview)
+        canvas.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        canvas.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        container.rowconfigure(0, weight=1)
+        container.columnconfigure(0, weight=1)
+
+        content = ttk.Frame(canvas, padding=(0, 0, 4, 4))
+        window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+
+        def update_scroll_region(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def keep_minimum_width(event):
+            requested_width = max(content.winfo_reqwidth(), event.width)
+            canvas.itemconfigure(window_id, width=requested_width)
+            update_scroll_region()
+
+        def on_mousewheel(event):
+            if event.state & 0x0001:
+                canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+            else:
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        content.bind("<Configure>", update_scroll_region)
+        canvas.bind("<Configure>", keep_minimum_width)
+        canvas.bind("<MouseWheel>", on_mousewheel)
+        content.bind("<MouseWheel>", on_mousewheel)
+        return content
+
     def build_observatory_tab(self):
         """Version 2.0 foundation: multi-observatory overview and sky mosaic coverage."""
-        ttk.Label(self.observatory_tab, text="Observatory Explorer 2.0", style="Title.TLabel").pack(anchor="w")
+        observatory_content = self.build_observatory_scroll_area()
+        ttk.Label(observatory_content, text="Observatory Explorer 2.0", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
-            self.observatory_tab,
+            observatory_content,
             text=(
                 "Explore the target across Hubble/JWST observations, check filter coverage, "
                 "and draw a first-pass sky mosaic map from MAST observation coordinates."
@@ -472,7 +509,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             wraplength=1050,
         ).pack(anchor="w", pady=(4, 10))
 
-        controls = ttk.Frame(self.observatory_tab)
+        controls = ttk.Frame(observatory_content)
         controls.pack(fill="x", pady=(0, 8))
         ttk.Button(controls, text="Analyze Current Search", command=self.observatory_analyze_current, style="Accent.TButton").pack(side="left")
         ttk.Button(controls, text="Build Sky Mosaic View", command=self.observatory_draw_current_mosaic).pack(side="left", padx=(8, 0))
@@ -483,7 +520,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(controls, text="Composition Strategy", command=self.observatory_show_composition_strategy, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
 
-        sensor_panel = ttk.LabelFrame(self.observatory_tab, text="Sensor / Instrument Coverage", padding=8)
+        sensor_panel = ttk.LabelFrame(observatory_content, text="Sensor / Instrument Coverage", padding=8)
         sensor_panel.pack(fill="x", pady=(0, 8))
         sensor_tools = ttk.Frame(sensor_panel)
         sensor_tools.pack(fill="x")
@@ -531,7 +568,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.sensor_summary_list.bind("<Double-Button-1>", lambda _event: self.observatory_use_selected_sensor())
         self.observatory_update_sensor_dashboard()
 
-        body = ttk.PanedWindow(self.observatory_tab, orient="horizontal")
+        body = ttk.PanedWindow(observatory_content, orient="horizontal")
         body.pack(fill="both", expand=True)
         left = ttk.Frame(body)
         right = ttk.Frame(body)

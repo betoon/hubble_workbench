@@ -2406,13 +2406,18 @@ class ObservatoryWorkflowMixin:
         legend_x = plot_x1 - 245
         legend_y = plot_y0 + 12
         legend_items = self.observatory_mosaic_legend_items(color_counts, color_indexes, color_mode)
-        legend_height = max(34, min(190, 26 + len(legend_items) * 20))
+        rgb_legend_rows = 2 if rgb_highlight_count else 0
+        legend_height = max(34, min(190, 26 + len(legend_items) * 20 + rgb_legend_rows * 18))
         canvas.create_rectangle(legend_x - 10, legend_y - 8, plot_x1 - 10, legend_y + legend_height, fill="#111827", outline="#374151")
         canvas.create_text(legend_x, legend_y - 1, anchor="w", text=f"Color: {color_mode}", fill="#f9fafb", font=("Segoe UI", 8, "bold"))
         for index, (color, label) in enumerate(legend_items):
             y = legend_y + 18 + index * 20
             canvas.create_oval(legend_x, y, legend_x + 10, y + 10, fill=color, outline="#111827")
             canvas.create_text(legend_x + 18, y + 5, anchor="w", text=label, fill="#d1d5db", font=("Segoe UI", 8))
+        if rgb_highlight_count:
+            y = legend_y + 24 + len(legend_items) * 20
+            canvas.create_text(legend_x, y, anchor="w", text="B/G/R = Mosaic RGB picks", fill="#f9fafb", font=("Segoe UI", 8, "bold"))
+            canvas.create_text(legend_x, y + 18, anchor="w", text="+ or P = products requested", fill="#facc15", font=("Segoe UI", 8, "bold"))
 
         canvas.create_text(plot_x0, height - 30, anchor="w", text=f"RA {ra_min:.5f} to {ra_max:.5f} deg", fill="#d1d5db")
         canvas.create_text(plot_x1, height - 30, anchor="e", text=f"Dec {dec_min:.5f} to {dec_max:.5f} deg", fill="#d1d5db")

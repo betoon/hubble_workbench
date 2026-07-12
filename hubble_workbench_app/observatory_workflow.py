@@ -1449,6 +1449,145 @@ class ObservatoryWorkflowMixin:
             rows = self.observatory_rows_in_bounds(rows, self.observatory_hst_jwst_overlap_bounds())
         return rows
 
+    @staticmethod
+    def observatory_mosaic_channel_for_bucket(bucket):
+        if str(bucket).startswith("Blue"):
+            return "blue"
+        if str(bucket).startswith("Green"):
+            return "green"
+        if str(bucket).startswith("Red"):
+            return "red"
+        return None
+
+    def observatory_mosaic_observation_score(self, row):
+        score = 0
+        if self.numeric_row_value(row, "s_ra", "ra", "RA") is not None:
+            score += 10
+        if self.numeric_row_value(row, "s_dec", "dec", "DEC") is not None:
+            score += 10
+        try:
+            score += min(22, int(float(row.get("t_exptime", 0) or 0) / 90))
+        except Exception:
+            pass
+        if self.observation_filter_bucket(row) != "Unknown/other":
+            score += 14
+        if str(row.get("obs_collection", "")).upper() in ("HST", "JWST"):
+            score += 6
+        if self.observatory_s_region_vertices(row):
+            score += 8
+        bounds = self.observatory_hst_jwst_overlap_bounds()
+        if bounds and self.observatory_rows_in_bounds([row], bounds):
+            score += 10
+        return score
+
+    def observatory_mosaic_rgb_candidates(self):
+        candidates = {"blue": [], "green": [], "red": []}
+        for row in self.observatory_current_mosaic_rows():
+            if self.observatory_row_coordinate(row) is None:
+                continue
+            channel = self.observatory_mosaic_channel_for_bucket(self.observation_filter_bucket(row))
+            if channel in candidates:
+                candidates[channel].append(row)
+        for channel in candidates:
+            candidates[channel].sort(
+                key=lambda row: (-self.observatory_mosaic_observation_score(row), self.observatory_observation_label(row))
+            )
+        return candidates
+
+    def observatory_mosaic_rgb_set_score(self, rgb_set):
+        score = sum(self.observatory_mosaic_observation_score(rgb_set[channel]) for channel in ("blue", "green", "red"))
+        sensors = {self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        missions = {str(rgb_set[channel].get("obs_collection", "")).upper() for channel in ("blue", "green", "red")}
+        if len(sensors) > 1:
+            score += 14
+        if "HST" in missions and "JWST" in missions:
+            score += 18
+        if all(self.observatory_s_region_vertices(rgb_set[channel]) for channel in ("blue", "green", "red")):
+            score += 10
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        score += int(assessment.get("score", 0) / 4)
+        return score
+
+    def observatory_best_mosaic_rgb_set(self):
+        candidates = self.observatory_mosaic_rgb_candidates()
+        if not all(candidates[channel] for channel in ("blue", "green", "red")):
+            return None
+        choices = []
+        for blue in candidates["blue"][:6]:
+            for green in candidates["green"][:6]:
+                for red in candidates["red"][:6]:
+                    rgb_set = {"blue": blue, "green": green, "red": red}
+                    choices.append((self.observatory_mosaic_rgb_set_score(rgb_set), rgb_set))
+        choices.sort(key=lambda item: item[0], reverse=True)
+        return choices[0][1] if choices else None
+
+    def observatory_mosaic_rgb_plan_text(self):
+        candidates = self.observatory_mosaic_rgb_candidates()
+        rgb_set = self.observatory_best_mosaic_rgb_set()
+        target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        layer = self.observatory_selected_mosaic_label()
+        if self.observatory_mosaic_best_only():
+            layer = f"{layer} - best candidates"
+        if self.observatory_mosaic_overlap_only():
+            layer = f"{layer} - overlap candidates"
+        sensor_filter = self.observatory_sensor_filter_name()
+        if sensor_filter not in ("", "All sensors"):
+            layer = f"{layer} - {sensor_filter}"
+        lines = [f"Mosaic RGB Plan for {target or 'current target'}", ""]
+        lines.append(f"Map selection: {layer}")
+        lines.append(f"Coordinate-bearing mosaic rows reviewed: {len(self.observatory_mosaic_export_rows())}")
+        lines.append("")
+        for channel in ("blue", "green", "red"):
+            channel_rows = candidates[channel]
+            lines.append(f"- {channel.title()} observation candidates: {len(channel_rows)}")
+            if channel_rows:
+                row = channel_rows[0]
+                coordinate = self.observatory_row_coordinate(row)
+                coord_text = f"RA {coordinate[0]:.6f}, Dec {coordinate[1]:.6f}" if coordinate else "coordinates not listed"
+                lines.append(f"  Best: {self.observatory_sensor_family(row)} | {self.observatory_observation_label(row)} | {coord_text}")
+        lines.append("")
+        if not rgb_set:
+            missing = [channel.title() for channel in ("blue", "green", "red") if not candidates[channel]]
+            lines.append("No complete mosaic-level RGB set is available from the current map selection yet.")
+            lines.append("Missing channels: " + ", ".join(missing))
+            lines.append("Try switching off Best candidates only, widening the radius, changing the sensor filter, or searching both Hubble and JWST.")
+            return "\n".join(lines)
+        sensors = {channel: self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")}
+        missions = sorted({str(rgb_set[channel].get("obs_collection", "") or "Unknown").upper() for channel in ("blue", "green", "red")})
+        lines.append("Recommended mosaic RGB observations:")
+        for channel in ("blue", "green", "red"):
+            row = rgb_set[channel]
+            coordinate = self.observatory_row_coordinate(row)
+            coord_text = f"RA {coordinate[0]:.6f}, Dec {coordinate[1]:.6f}" if coordinate else "coordinates not listed"
+            lines.append(f"- {channel.title()}: {sensors[channel]} | {self.observatory_observation_label(row)} | {coord_text}")
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        lines.append(f"- Missions: {', '.join(missions)}")
+        lines.append(f"- Sensors: {', '.join(sorted(set(sensors.values())))}")
+        lines.append(f"- Mosaic RGB score: {self.observatory_mosaic_rgb_set_score(rgb_set)}")
+        lines.append(f"- Alignment check: {assessment['status']} ({assessment['score']}/100). {assessment['message']}")
+        lines.append("")
+        lines.append("Next actions:")
+        lines.append("- Click each recommended marker or footprint on the mosaic and use Get Marker Products.")
+        lines.append("- After products load, use Prepare Mixed RGB or Prepare Best RGB Layer to send channels to the RGB Picker.")
+        return "\n".join(lines)
+
+    def observatory_show_mosaic_rgb_plan(self):
+        text = self.observatory_mosaic_rgb_plan_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        rgb_set = self.observatory_best_mosaic_rgb_set()
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            if rgb_set:
+                assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+                self.mosaic_status_var.set(f"Generated mosaic RGB plan. Alignment: {assessment['status']} ({assessment['score']}/100).")
+            else:
+                self.mosaic_status_var.set("Generated mosaic RGB plan; one or more RGB channels are missing from the current map selection.")
+        return text
+
     def observatory_mosaic_export_rows(self):
         rows = []
         for row in self.observatory_current_mosaic_rows():

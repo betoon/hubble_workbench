@@ -1281,22 +1281,108 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(message)
         return path
 
-    def observatory_marker_style(self, row):
-        mission = str(row.get("obs_collection", "")).upper()
-        bucket = self.observation_filter_bucket(row)
-        if "Blue" in bucket:
-            fill = "skyblue"
-        elif "Green" in bucket:
-            fill = "lightgreen"
-        elif "Red" in bucket:
-            fill = "salmon"
-        elif mission == "JWST":
-            fill = "cyan"
-        else:
-            fill = "white"
-        outline = "#facc15" if mission == "JWST" else "#111827"
-        return fill, outline, bucket
+    def observatory_mosaic_color_mode(self):
+        try:
+            return self.mosaic_color_mode_var.get()
+        except Exception:
+            return "Wavelength"
 
+    def observatory_mosaic_show_footprints(self):
+        try:
+            return bool(self.mosaic_footprints_var.get())
+        except Exception:
+            return False
+
+    @staticmethod
+    def observatory_palette_color(label, index=0):
+        fixed = {
+            "HST": "#93c5fd",
+            "JWST": "#67e8f9",
+            "Blue/short": "skyblue",
+            "Green/mid": "lightgreen",
+            "Red/IR": "salmon",
+            "Short exposure": "#a7f3d0",
+            "Medium exposure": "#fde68a",
+            "Long exposure": "#fca5a5",
+            "Unknown exposure": "#d1d5db",
+        }
+        if label in fixed:
+            return fixed[label]
+        palette = [
+            "#c4b5fd", "#f9a8d4", "#86efac", "#fdba74", "#5eead4",
+            "#fef08a", "#bfdbfe", "#f0abfc", "#a5b4fc", "#fda4af",
+        ]
+        return palette[index % len(palette)]
+
+    def observatory_mosaic_color_group(self, row, mode=None):
+        mode = mode or self.observatory_mosaic_color_mode()
+        if mode == "Mission":
+            return str(row.get("obs_collection", "") or row.get("mission", "") or "Unknown").upper()
+        if mode == "Instrument":
+            return self.observatory_sensor_family(row) or "Unknown sensor"
+        if mode == "Exposure":
+            try:
+                exposure = float(row.get("t_exptime", 0) or 0)
+            except Exception:
+                exposure = 0
+            if exposure <= 0:
+                return "Unknown exposure"
+            if exposure < 300:
+                return "Short exposure"
+            if exposure < 1200:
+                return "Medium exposure"
+            return "Long exposure"
+        return self.observation_filter_bucket(row)
+
+    def observatory_marker_style(self, row, mode=None, color_indexes=None):
+        mission = str(row.get("obs_collection", "")).upper()
+        group = self.observatory_mosaic_color_group(row, mode)
+        index = 0
+        if color_indexes is not None:
+            index = color_indexes.setdefault(group, len(color_indexes))
+        fill = self.observatory_palette_color(group, index)
+        outline = "#facc15" if mission == "JWST" else "#111827"
+        return fill, outline, group
+
+    @staticmethod
+    def observatory_s_region_vertices(row):
+        text = str(row.get("s_region", "") or row.get("S_REGION", "") or "").strip()
+        if not text or "POLYGON" not in text.upper():
+            return []
+        values = []
+        for token in text.replace("(", " ").replace(")", " ").replace(",", " ").split():
+            try:
+                values.append(float(token))
+            except Exception:
+                pass
+        if len(values) < 6:
+            return []
+        if len(values) % 2:
+            values = values[:-1]
+        vertices = [(values[index], values[index + 1]) for index in range(0, len(values), 2)]
+        return vertices if len(vertices) >= 3 else []
+
+    def observatory_mosaic_legend_items(self, color_counts, color_indexes, color_mode):
+        if not color_counts:
+            if color_mode == "Wavelength":
+                names = ["Blue/short", "Green/mid", "Red/IR"]
+            elif color_mode == "Mission":
+                names = ["HST", "JWST"]
+            elif color_mode == "Exposure":
+                names = ["Short exposure", "Medium exposure", "Long exposure"]
+            else:
+                names = []
+        else:
+            names = [name for name, _count in sorted(color_counts.items(), key=lambda item: (-item[1], str(item[0])))]
+        items = []
+        for name in names[:8]:
+            index = color_indexes.get(name, len(color_indexes)) if isinstance(color_indexes, dict) else 0
+            count = color_counts.get(name, 0) if isinstance(color_counts, dict) else 0
+            label = f"{name} ({count})" if count else name
+            items.append((self.observatory_palette_color(name, index), label))
+        if len(names) > 8:
+            items.append(("#9ca3af", f"+{len(names) - 8} more"))
+        return items
 
     def observatory_selected_mosaic_rows(self, rows):
         layer = "All active sources"
@@ -1376,6 +1462,8 @@ class ObservatoryWorkflowMixin:
                 "instrument_name": row.get("instrument_name", ""),
                 "filters": row.get("filters", "") or row.get("Spectral_Elt", ""),
                 "wavelength_bucket": self.observation_filter_bucket(row),
+                "mosaic_color_group": self.observatory_mosaic_color_group(row),
+                "footprint_vertices": len(self.observatory_s_region_vertices(row)),
                 "t_exptime": row.get("t_exptime", ""),
                 "ra": f"{ra:.8f}",
                 "dec": f"{dec:.8f}",
@@ -1445,6 +1533,8 @@ class ObservatoryWorkflowMixin:
                 "instrument_name": row.get("instrument_name", ""),
                 "filters": row.get("filters", "") or row.get("Spectral_Elt", ""),
                 "wavelength_bucket": self.observation_filter_bucket(row),
+                "mosaic_color_group": self.observatory_mosaic_color_group(row),
+                "footprint_vertices": len(self.observatory_s_region_vertices(row)),
                 "t_exptime": row.get("t_exptime", ""),
                 "ra": f"{ra:.8f}" if ra is not None else "",
                 "dec": f"{dec:.8f}" if dec is not None else "",
@@ -1788,6 +1878,9 @@ class ObservatoryWorkflowMixin:
         sensor_filter = self.observatory_sensor_filter_name()
         if sensor_filter not in ("", "All sensors"):
             layer_label = f"{layer_label} - {sensor_filter}"
+        color_mode = self.observatory_mosaic_color_mode()
+        color_indexes = {}
+        color_counts = {}
         points = []
         mission_counts = {}
         bucket_counts = {}
@@ -1800,6 +1893,8 @@ class ObservatoryWorkflowMixin:
             mission_counts[mission] = mission_counts.get(mission, 0) + 1
             bucket = self.observation_filter_bucket(row)
             bucket_counts[bucket] = bucket_counts.get(bucket, 0) + 1
+            color_group = self.observatory_mosaic_color_group(row, color_mode)
+            color_counts[color_group] = color_counts.get(color_group, 0) + 1
             points.append((ra, dec, row))
 
         canvas.create_text(width // 2, 22, text=f"Sky Mosaic / Coverage Map - {layer_label}", fill="#ffffff", font=("Segoe UI", 14, "bold"))
@@ -1852,7 +1947,7 @@ class ObservatoryWorkflowMixin:
         mid_x, mid_y = map_point(ra_mid, dec_mid)
         canvas.create_line(mid_x, plot_y0, mid_x, plot_y1, fill="#374151", dash=(3, 4))
         canvas.create_line(plot_x0, mid_y, plot_x1, mid_y, fill="#374151", dash=(3, 4))
-        guide_text = "Marker size hints exposure time; color hints likely wavelength bucket."
+        guide_text = f"Marker size hints exposure time; color mode: {color_mode}."
         if best_only:
             guide_text = "Showing the strongest observation candidates by coordinates, exposure, wavelength, and mission."
         canvas.create_text(plot_x0, 38, anchor="w", text=guide_text, fill="#d1d5db")
@@ -1877,9 +1972,24 @@ class ObservatoryWorkflowMixin:
             canvas.create_rectangle(min(x0, x1), min(y_top, y_bottom), max(x0, x1), max(y_top, y_bottom), outline="#facc15", width=3)
             canvas.create_text(max(x0, x1) - 6, max(y_top, y_bottom) - 10, anchor="e", text="HST/JWST overlap", fill="#facc15", font=("Segoe UI", 8, "bold"))
 
+        footprint_count = 0
+        if self.observatory_mosaic_show_footprints():
+            for _ra, _dec, row in points[:300]:
+                vertices = self.observatory_s_region_vertices(row)
+                if not vertices:
+                    continue
+                coords = []
+                for vertex_ra, vertex_dec in vertices:
+                    x, y = map_point(vertex_ra, vertex_dec)
+                    coords.extend([x, y])
+                if len(coords) >= 6:
+                    fill, outline, _group = self.observatory_marker_style(row, color_mode, color_indexes)
+                    canvas.create_polygon(coords, outline=fill, fill="", width=1, dash=(2, 3))
+                    footprint_count += 1
+
         for ra, dec, row in points[:1000]:
             x, y = map_point(ra, dec)
-            fill, outline, _bucket = self.observatory_marker_style(row)
+            fill, outline, _group = self.observatory_marker_style(row, color_mode, color_indexes)
             size = 4
             try:
                 exp = float(row.get("t_exptime", 0) or 0)
@@ -1892,18 +2002,14 @@ class ObservatoryWorkflowMixin:
                 canvas.create_text(x, y - size - 12, text="selected", fill="#facc15", font=("Segoe UI", 8, "bold"))
             self.mosaic_marker_points.append({"x": x, "y": y, "size": size, "row": row})
 
-        legend_x = plot_x1 - 225
+        legend_x = plot_x1 - 245
         legend_y = plot_y0 + 12
-        canvas.create_rectangle(legend_x - 10, legend_y - 8, plot_x1 - 10, legend_y + 102, fill="#111827", outline="#374151")
-        legend_items = [
-            ("skyblue", "Blue/short"),
-            ("lightgreen", "Green/mid"),
-            ("salmon", "Red/IR"),
-            ("cyan", "JWST/other"),
-            ("white", "HST/other"),
-        ]
+        legend_items = self.observatory_mosaic_legend_items(color_counts, color_indexes, color_mode)
+        legend_height = max(34, min(190, 26 + len(legend_items) * 20))
+        canvas.create_rectangle(legend_x - 10, legend_y - 8, plot_x1 - 10, legend_y + legend_height, fill="#111827", outline="#374151")
+        canvas.create_text(legend_x, legend_y - 1, anchor="w", text=f"Color: {color_mode}", fill="#f9fafb", font=("Segoe UI", 8, "bold"))
         for index, (color, label) in enumerate(legend_items):
-            y = legend_y + index * 20
+            y = legend_y + 18 + index * 20
             canvas.create_oval(legend_x, y, legend_x + 10, y + 10, fill=color, outline="#111827")
             canvas.create_text(legend_x + 18, y + 5, anchor="w", text=label, fill="#d1d5db", font=("Segoe UI", 8))
 
@@ -1916,8 +2022,9 @@ class ObservatoryWorkflowMixin:
         if selected_row is not None and any(self.observatory_mosaic_row_matches(marker["row"], selected_row) for marker in self.mosaic_marker_points):
             selected_note = " Selected marker is highlighted."
         self.mosaic_status_var.set(
-            f"Plotted {len(points)} observation centers for {layer_label}. Missions: {mission_text}. Wavelength buckets: {bucket_text}."
-            f"{selected_note} True footprint polygons remain a later Phase 2 upgrade."
+            f"Plotted {len(points)} observation centers for {layer_label}. Color mode: {color_mode}. "
+            f"Missions: {mission_text}. Wavelength buckets: {bucket_text}. Footprints drawn: {footprint_count}."
+            f"{selected_note}"
         )
         self.observatory_update_sensor_dashboard()
 

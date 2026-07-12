@@ -572,6 +572,17 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         )
         self.mosaic_layer_combo.pack(side="left")
         self.mosaic_layer_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
+        ttk.Label(mosaic_tools, text="Color").pack(side="left", padx=(12, 6))
+        self.mosaic_color_mode_var = tk.StringVar(value="Wavelength")
+        self.mosaic_color_mode_combo = ttk.Combobox(
+            mosaic_tools,
+            textvariable=self.mosaic_color_mode_var,
+            values=["Wavelength", "Mission", "Instrument", "Exposure"],
+            state="readonly",
+            width=12,
+        )
+        self.mosaic_color_mode_combo.pack(side="left")
+        self.mosaic_color_mode_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
         self.mosaic_best_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
             mosaic_tools,
@@ -584,6 +595,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             mosaic_tools,
             text="Overlap only",
             variable=self.mosaic_overlap_only_var,
+            command=self.observatory_draw_current_mosaic,
+        ).pack(side="left", padx=(10, 0))
+        self.mosaic_footprints_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            mosaic_tools,
+            text="Footprints",
+            variable=self.mosaic_footprints_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(10, 0))
         ttk.Button(mosaic_tools, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))

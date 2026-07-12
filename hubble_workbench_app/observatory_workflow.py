@@ -1731,6 +1731,16 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(f"Mosaic RGB progress: products requested for {len(requested)}/3 picks.")
         return text
 
+    def observatory_copy_mosaic_rgb_progress(self):
+        text = self.observatory_mosaic_rgb_progress_text()
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        requested = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"Copied Mosaic RGB progress to the clipboard. Products requested for {len(requested)}/3 picks.")
+        return text
+
     def observatory_reset_mosaic_rgb_progress(self):
         self.visited_mosaic_rgb_channels = set()
         self.product_requested_mosaic_rgb_channels = set()

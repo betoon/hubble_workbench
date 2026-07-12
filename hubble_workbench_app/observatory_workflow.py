@@ -1263,16 +1263,30 @@ class ObservatoryWorkflowMixin:
         )
         return paths[0] if paths else None
 
+    def latest_easy_all_sensors_run_summary_path(self):
+        row = self.latest_easy_all_sensors_run_row()
+        if not row:
+            return None
+        summary_text = str(row.get("summary_text", "") or "").strip()
+        if not summary_text:
+            return None
+        path = Path(summary_text)
+        if not path.is_absolute():
+            path = SEARCH_LOG_DIR / summary_text
+        return path if path.exists() else None
+
     def open_latest_easy_all_sensors_summary(self):
-        path = self.latest_easy_all_sensors_summary_path()
+        path = self.latest_easy_all_sensors_run_summary_path() or self.latest_easy_all_sensors_summary_path()
         if path is None:
-            message = "No saved Easy All Sensors summary was found for this target yet."
+            message = "No saved Easy All Sensors summary was found yet."
             if hasattr(self, "browser_status"):
                 self.browser_status.set(message)
             if hasattr(self, "sensor_status_var"):
                 self.sensor_status_var.set(message)
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
             messagebox.showinfo("Easy All Sensors Summary", message)
             return None
         self.open_file(path)

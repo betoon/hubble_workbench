@@ -830,6 +830,54 @@ class ObservatoryWorkflowMixin:
             return None
         return ra, dec
 
+    def observatory_row_footprint_bounds(self, row):
+        vertices = self.observatory_s_region_vertices(row)
+        if not vertices:
+            return None
+        ras = [point[0] for point in vertices]
+        decs = [point[1] for point in vertices]
+        return {
+            "ra_min": min(ras),
+            "ra_max": max(ras),
+            "dec_min": min(decs),
+            "dec_max": max(decs),
+            "ra_span": max(ras) - min(ras),
+            "dec_span": max(decs) - min(decs),
+        }
+
+    def observatory_rgb_footprint_bounds(self, rgb_set):
+        bounds = []
+        for channel in ("blue", "green", "red"):
+            row = rgb_set.get(channel) if rgb_set else None
+            if not row:
+                continue
+            row_bounds = self.observatory_row_footprint_bounds(row)
+            if row_bounds:
+                bounds.append((channel, row_bounds))
+        return bounds
+
+    @staticmethod
+    def observatory_bounds_intersection(bounds):
+        if not bounds:
+            return None
+        current = dict(bounds[0])
+        for row_bounds in bounds[1:]:
+            ra_min = max(current["ra_min"], row_bounds["ra_min"])
+            ra_max = min(current["ra_max"], row_bounds["ra_max"])
+            dec_min = max(current["dec_min"], row_bounds["dec_min"])
+            dec_max = min(current["dec_max"], row_bounds["dec_max"])
+            if ra_max < ra_min or dec_max < dec_min:
+                return None
+            current = {
+                "ra_min": ra_min,
+                "ra_max": ra_max,
+                "dec_min": dec_min,
+                "dec_max": dec_max,
+                "ra_span": ra_max - ra_min,
+                "dec_span": dec_max - dec_min,
+            }
+        return current
+
     def observatory_rgb_coordinate_rows(self, rgb_set):
         rows = []
         for channel in ("blue", "green", "red"):
@@ -846,18 +894,51 @@ class ObservatoryWorkflowMixin:
                 "status": "not ready",
                 "score": 0,
                 "coordinate_channels": 0,
+                "footprint_channels": 0,
+                "footprint_overlap": None,
                 "message": "No complete mixed-sensor RGB set is available yet.",
                 "ra_span": None,
                 "dec_span": None,
             }
+
+        footprint_bounds = self.observatory_rgb_footprint_bounds(rgb_set)
+        footprint_overlap = self.observatory_bounds_intersection([item[1] for item in footprint_bounds])
         coordinate_rows = self.observatory_rgb_coordinate_rows(rgb_set)
         sensors = sorted({self.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")})
+        if len(footprint_bounds) == 3:
+            if footprint_overlap:
+                overlap_span = max(abs(footprint_overlap["ra_span"]), abs(footprint_overlap["dec_span"]))
+                if overlap_span >= 0.01:
+                    status = "strong"
+                    score = 94
+                    message = "All three channel footprints overlap; mixed-sensor alignment looks promising."
+                else:
+                    status = "usable"
+                    score = 78
+                    message = "All three channel footprints touch, but the shared area may be small; inspect crop before final save."
+            else:
+                status = "poor"
+                score = 18
+                message = "All three channel footprints are available, but their bounding boxes do not overlap."
+            return {
+                "status": status,
+                "score": score,
+                "coordinate_channels": len(coordinate_rows),
+                "footprint_channels": len(footprint_bounds),
+                "footprint_overlap": footprint_overlap,
+                "message": message,
+                "ra_span": None,
+                "dec_span": None,
+            }
+
         if len(coordinate_rows) < 2:
             return {
                 "status": "unknown",
                 "score": 35 if len(sensors) == 1 else 25,
                 "coordinate_channels": len(coordinate_rows),
-                "message": "Not enough channel coordinates are available to estimate mixed-sensor overlap.",
+                "footprint_channels": len(footprint_bounds),
+                "footprint_overlap": footprint_overlap,
+                "message": "Not enough channel coordinates or footprints are available to estimate mixed-sensor overlap.",
                 "ra_span": None,
                 "dec_span": None,
             }
@@ -882,10 +963,14 @@ class ObservatoryWorkflowMixin:
             status = "poor"
             score = 22
             message = "Channel coordinates are far apart; this mixed set may not overlap well."
+        if len(footprint_bounds) in (1, 2):
+            message += f" Footprints are available for {len(footprint_bounds)}/3 channels."
         return {
             "status": status,
             "score": score,
             "coordinate_channels": len(coordinate_rows),
+            "footprint_channels": len(footprint_bounds),
+            "footprint_overlap": footprint_overlap,
             "message": message,
             "ra_span": ra_span,
             "dec_span": dec_span,
@@ -897,6 +982,13 @@ class ObservatoryWorkflowMixin:
         lines = ["Mixed-Sensor Alignment Check", ""]
         lines.append(f"Status: {assessment['status']} ({assessment['score']}/100)")
         lines.append(f"Coordinate-bearing RGB channels: {assessment['coordinate_channels']}/3")
+        lines.append(f"Footprint-bearing RGB channels: {assessment.get('footprint_channels', 0)}/3")
+        overlap = assessment.get("footprint_overlap")
+        if overlap:
+            lines.append(
+                f"Shared footprint overlap: RA {overlap['ra_min']:.6f} to {overlap['ra_max']:.6f}, "
+                f"Dec {overlap['dec_min']:.6f} to {overlap['dec_max']:.6f}"
+            )
         if assessment["ra_span"] is not None and assessment["dec_span"] is not None:
             lines.append(f"RA span: {assessment['ra_span']:.6f} deg")
             lines.append(f"Dec span: {assessment['dec_span']:.6f} deg")

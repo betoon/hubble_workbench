@@ -26,6 +26,8 @@ class DebugConsoleMixin:
         header = ttk.Frame(self.debug_tab)
         header.pack(fill="x", pady=(0, 8))
         ttk.Label(header, text="Debug Console", style="Title.TLabel").pack(side="left")
+        self.debug_console_show_on_issue_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(header, text="Show on issue", variable=self.debug_console_show_on_issue_var).pack(side="left", padx=(12, 0))
         ttk.Button(header, text="Clear", command=self.clear_debug_console).pack(side="right")
         ttk.Button(header, text="Copy Console", command=self.copy_debug_console).pack(side="right", padx=(0, 8))
         ttk.Button(header, text="Copy Last Issue", command=self.copy_last_debug_issue).pack(side="right", padx=(0, 8))
@@ -110,6 +112,34 @@ class DebugConsoleMixin:
             return
         self.debug_console_write(f"{label}: {value}")
 
+
+    def debug_console_is_issue_line(self, line):
+        issue_tokens = (
+            "[ERROR]",
+            "[WARNING]",
+            "Traceback",
+            " failed",
+            " Failed",
+            " error",
+            " Error",
+            "exception",
+            "Exception",
+        )
+        return any(token in line for token in issue_tokens)
+
+    def debug_console_show_if_issue(self, line):
+        var = getattr(self, "debug_console_show_on_issue_var", None)
+        try:
+            enabled = bool(var.get()) if var is not None else False
+        except Exception:
+            enabled = False
+        if not enabled or not self.debug_console_is_issue_line(line):
+            return
+        try:
+            self.notebook.select(self.debug_tab)
+        except Exception:
+            pass
+
     def debug_console_write(self, message):
         widget = getattr(self, "debug_console_text", None)
         if widget is None:
@@ -125,6 +155,7 @@ class DebugConsoleMixin:
             widget.insert("end", line.rstrip() + "\n")
             widget.see("end")
             widget.configure(state="disabled")
+            self.debug_console_show_if_issue(line)
         except Exception:
             pass
 

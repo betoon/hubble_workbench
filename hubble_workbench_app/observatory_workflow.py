@@ -1307,6 +1307,40 @@ class ObservatoryWorkflowMixin:
             self.set_easy_all_sensors_status("opened", message, mirror=False)
         return SEARCH_LOG_DIR
 
+    def latest_easy_all_sensors_run_folder_path(self):
+        row = self.latest_easy_all_sensors_run_row()
+        if row:
+            preview_image = str(row.get("preview_image", "") or "").strip()
+            if preview_image:
+                preview_path = Path(preview_image)
+                if preview_path.exists():
+                    return preview_path.parent
+            summary_path = self.latest_easy_all_sensors_run_summary_path()
+            if summary_path is not None:
+                return summary_path.parent
+        fallback = self.latest_easy_all_sensors_summary_path()
+        if fallback is not None:
+            return fallback.parent
+        return None
+
+    def open_latest_easy_all_sensors_run_folder(self):
+        path = self.latest_easy_all_sensors_run_folder_path()
+        if path is None:
+            message = "No Easy All Sensors run folder was found yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Run Folder", message)
+            return None
+        self.open_folder(path)
+        message = f"Opened Easy All Sensors run folder: {path}."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("opened", message, mirror=False)
+        return path
+
     def open_easy_all_sensors_run_index(self):
         path = self.easy_all_sensors_run_index_path()
         if not path.exists():

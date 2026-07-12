@@ -70,10 +70,12 @@ class ObservatoryWorkflowMixin:
         if not product_rows:
             search_rows = list(getattr(self, "search_results", []) or [])
             if search_rows:
-                message = "Easy All Sensors is getting all available products first. When the product list finishes loading, click Easy All Sensors again to prepare the best mixed-sensor image."
+                self.easy_all_sensors_pending_stage = "products"
+                message = "Easy All Sensors is getting all available products first. It will automatically prepare the best mixed-sensor image when the scan finishes."
                 next_action = self.products_all_async
             else:
-                message = "Easy All Sensors is searching MAST first. When the observation list finishes loading, click Easy All Sensors again to gather products from all sensors."
+                self.easy_all_sensors_pending_stage = "search"
+                message = "Easy All Sensors is searching MAST first. It will automatically gather products from all sensors when the observation list finishes."
                 next_action = self.search_async
             if hasattr(self, "browser_status"):
                 self.browser_status.set(message)
@@ -105,6 +107,7 @@ class ObservatoryWorkflowMixin:
                 self.observatory_report_text.see("1.0")
             except Exception:
                 pass
+            self.easy_all_sensors_pending_stage = None
             return prepared
 
         self.observatory_show_cross_sensor_rgb_plan()
@@ -121,7 +124,80 @@ class ObservatoryWorkflowMixin:
             self.observatory_report_text.see("end")
         except Exception:
             pass
+        self.easy_all_sensors_pending_stage = None
         return False
+
+    def observatory_continue_easy_all_sensors_after_search(self):
+        if getattr(self, "easy_all_sensors_pending_stage", None) != "search":
+            return False
+        search_rows = list(getattr(self, "search_results", []) or [])
+        if not search_rows:
+            self.easy_all_sensors_pending_stage = None
+            message = "Easy All Sensors did not find observations to scan. Try a wider radius or another telescope."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            try:
+                self.observatory_report_text.insert("end", "\n\nEasy All Sensors stopped:\n- " + message)
+                self.observatory_report_text.see("end")
+            except Exception:
+                pass
+            return True
+
+        self.easy_all_sensors_pending_stage = "products"
+        message = "Easy All Sensors found observations and is now gathering products across sensors."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        try:
+            self.observatory_report_text.insert("end", "\n- " + message)
+            self.observatory_report_text.see("end")
+        except Exception:
+            pass
+        self.products_all_async()
+        return True
+
+    def observatory_continue_easy_all_sensors_after_products(self, all_observations=False):
+        if getattr(self, "easy_all_sensors_pending_stage", None) != "products":
+            return False
+        product_rows = list(getattr(self, "product_results", []) or [])
+        if not product_rows:
+            self.easy_all_sensors_pending_stage = None
+            message = "Easy All Sensors did not find FITS products to combine. Try a wider search or different telescope."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            try:
+                self.observatory_report_text.insert("end", "\n\nEasy All Sensors stopped:\n- " + message)
+                self.observatory_report_text.see("end")
+            except Exception:
+                pass
+            return True
+
+        self.easy_all_sensors_pending_stage = "prepare"
+        message = "Easy All Sensors found products and is preparing the best mixed-sensor RGB selection."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        try:
+            self.observatory_report_text.insert("end", "\n- " + message)
+            self.observatory_report_text.see("end")
+        except Exception:
+            pass
+        self.easy_all_sensors_async()
+        return True
 
     @staticmethod
     def numeric_row_value(row, *names):

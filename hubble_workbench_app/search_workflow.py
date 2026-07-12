@@ -196,6 +196,8 @@ class SearchWorkflowMixin:
             return
         rows, error = result
         if error:
+            if getattr(self, "easy_all_sensors_pending_stage", None) == "search":
+                self.easy_all_sensors_pending_stage = None
             if TELESCOPE_CHOICES.get(self.telescope_var.get()) == "JWST":
                 self.stop_browser_activity(f"MAST search failed: {error}")
             else:
@@ -217,3 +219,8 @@ class SearchWorkflowMixin:
                 "observations": rows[:1000],
             })
         self.stop_browser_activity(f"Found {len(rows)} image observations. Select one, then choose Get Products.")
+        if hasattr(self, "observatory_continue_easy_all_sensors_after_search"):
+            try:
+                self.after(250, self.observatory_continue_easy_all_sensors_after_search)
+            except Exception:
+                pass

@@ -298,6 +298,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.easy_button.pack(side="left", padx=(8, 0))
         self.easy_hq_button = ttk.Button(top, text="Easy High Quality", command=self.easy_high_quality_async, style="Accent.TButton")
         self.easy_hq_button.pack(side="left", padx=(8, 0))
+        self.easy_all_sensors_button = ttk.Button(top, text="Easy All Sensors", command=self.easy_all_sensors_async, style="Accent.TButton")
+        self.easy_all_sensors_button.pack(side="left", padx=(8, 0))
         self.hla_button = ttk.Button(top, text="Search HLA Fallback", command=self.hla_search_async)
         self.hla_button.pack(side="left", padx=(8, 0))
         self.products_button = ttk.Button(top, text="Get Products", command=self.products_async)
@@ -1034,6 +1036,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def easy_rgb_async(self, high_quality=False):
         return super().easy_rgb_async(high_quality)
+
+    def easy_all_sensors_async(self):
+        return super().easy_all_sensors_async()
 
     def hla_search_async(self, fallback_message=None):
         return super().hla_search_async(fallback_message)

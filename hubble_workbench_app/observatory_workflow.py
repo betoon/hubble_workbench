@@ -51,6 +51,78 @@ SENSOR_FAMILIES = [
 
 
 class ObservatoryWorkflowMixin:
+    def easy_all_sensors_async(self):
+        if not self.require_astroquery():
+            return False
+        target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        if not target:
+            messagebox.showinfo("Easy All Sensors", "Choose a target first.")
+            return False
+
+        if hasattr(self, "high_quality_var"):
+            self.high_quality_var.set(True)
+        if hasattr(self, "prefer_drizzled_var"):
+            self.prefer_drizzled_var.set(True)
+        if hasattr(self, "composite_size_var"):
+            self.composite_size_var.set("Largest channel")
+
+        product_rows = list(getattr(self, "product_results", []) or [])
+        if not product_rows:
+            search_rows = list(getattr(self, "search_results", []) or [])
+            if search_rows:
+                message = "Easy All Sensors is getting all available products first. When the product list finishes loading, click Easy All Sensors again to prepare the best mixed-sensor image."
+                next_action = self.products_all_async
+            else:
+                message = "Easy All Sensors is searching MAST first. When the observation list finishes loading, click Easy All Sensors again to gather products from all sensors."
+                next_action = self.search_async
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            try:
+                self.observatory_report_text.delete("1.0", "end")
+                self.observatory_report_text.insert("end", "Easy All Sensors\n\n- " + message)
+            except Exception:
+                pass
+            next_action()
+            return False
+
+        self.observatory_analyze_current()
+        rgb_set = self.observatory_best_cross_sensor_rgb_set()
+        if rgb_set:
+            prepared = self.observatory_prepare_cross_sensor_rgb_layer()
+            recipe = self.observatory_mixed_rgb_recipe_text()
+            try:
+                self.observatory_report_text.delete("1.0", "end")
+                self.observatory_report_text.insert("end", "Easy All Sensors\n\n")
+                self.observatory_report_text.insert("end", recipe)
+                self.observatory_report_text.insert(
+                    "end",
+                    "\n\nPrepared selection:\n- The best available mixed-sensor RGB channels are selected in the MAST Browser RGB Picker.\n- Next, use Download Selected Products, then compose the image.",
+                )
+                self.observatory_report_text.see("1.0")
+            except Exception:
+                pass
+            return prepared
+
+        self.observatory_show_cross_sensor_rgb_plan()
+        self.observatory_prepare_best_rgb_layer()
+        message = "No complete mixed-sensor RGB set is available yet, so Easy All Sensors prepared the best standard RGB layer it could find. Use Mixed RGB Plan to see which channels are missing."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        try:
+            self.observatory_report_text.insert("end", "\n\nEasy All Sensors fallback:\n- " + message)
+            self.observatory_report_text.see("end")
+        except Exception:
+            pass
+        return False
+
     @staticmethod
     def numeric_row_value(row, *names):
         for name in names:

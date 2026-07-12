@@ -1579,14 +1579,34 @@ class ObservatoryWorkflowMixin:
         except Exception:
             pass
         rgb_set = self.observatory_best_mosaic_rgb_set()
+        self.selected_mosaic_rgb_set = rgb_set
         self.observatory_draw_current_mosaic()
         if hasattr(self, "mosaic_status_var"):
             if rgb_set:
                 assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
-                self.mosaic_status_var.set(f"Generated mosaic RGB plan. Alignment: {assessment['status']} ({assessment['score']}/100).")
+                self.mosaic_status_var.set(f"Generated mosaic RGB plan and highlighted B/G/R markers. Alignment: {assessment['status']} ({assessment['score']}/100).")
             else:
                 self.mosaic_status_var.set("Generated mosaic RGB plan; one or more RGB channels are missing from the current map selection.")
         return text
+
+    def observatory_mosaic_rgb_highlight_channel(self, row, rgb_set=None):
+        rgb_set = rgb_set or getattr(self, "selected_mosaic_rgb_set", None)
+        if not rgb_set:
+            return None
+        for channel in ("blue", "green", "red"):
+            candidate = rgb_set.get(channel) if isinstance(rgb_set, dict) else None
+            if candidate is not None and self.observatory_mosaic_row_matches(row, candidate):
+                return channel
+        return None
+
+    @staticmethod
+    def observatory_mosaic_rgb_highlight_style(channel):
+        styles = {
+            "blue": {"label": "B", "color": "#60a5fa", "text": "#dbeafe"},
+            "green": {"label": "G", "color": "#34d399", "text": "#d1fae5"},
+            "red": {"label": "R", "color": "#fb7185", "text": "#ffe4e6"},
+        }
+        return styles.get(channel, {"label": "?", "color": "#facc15", "text": "#fef3c7"})
 
     def observatory_mosaic_export_rows(self):
         rows = []
@@ -2157,6 +2177,9 @@ class ObservatoryWorkflowMixin:
                     self.mosaic_footprint_polygons.append({"points": polygon_points, "row": row})
                     footprint_count += 1
 
+        rgb_highlight_count = 0
+        active_rgb_set = getattr(self, "selected_mosaic_rgb_set", None)
+        visible_rgb_channels = set()
         for ra, dec, row in points[:1000]:
             x, y = map_point(ra, dec)
             fill, outline, _group = self.observatory_marker_style(row, color_mode, color_indexes)
@@ -2167,10 +2190,21 @@ class ObservatoryWorkflowMixin:
             except Exception:
                 pass
             canvas.create_oval(x - size, y - size, x + size, y + size, fill=fill, outline=outline, width=1)
+            rgb_channel = self.observatory_mosaic_rgb_highlight_channel(row, active_rgb_set)
+            if rgb_channel:
+                style = self.observatory_mosaic_rgb_highlight_style(rgb_channel)
+                visible_rgb_channels.add(rgb_channel)
+                rgb_highlight_count += 1
+                ring = size + 8
+                canvas.create_oval(x - ring, y - ring, x + ring, y + ring, outline=style["color"], width=3)
+                canvas.create_text(x, y - ring - 10, text=style["label"], fill=style["text"], font=("Segoe UI", 10, "bold"))
             if self.observatory_mosaic_row_matches(row, getattr(self, "selected_mosaic_row", {})):
                 canvas.create_oval(x - size - 4, y - size - 4, x + size + 4, y + size + 4, outline="#facc15", width=3)
                 canvas.create_text(x, y - size - 12, text="selected", fill="#facc15", font=("Segoe UI", 8, "bold"))
             self.mosaic_marker_points.append({"x": x, "y": y, "size": size, "row": row})
+
+        if active_rgb_set and rgb_highlight_count == 0:
+            self.selected_mosaic_rgb_set = None
 
         legend_x = plot_x1 - 245
         legend_y = plot_y0 + 12
@@ -2191,10 +2225,14 @@ class ObservatoryWorkflowMixin:
         selected_row = getattr(self, "selected_mosaic_row", None)
         if selected_row is not None and any(self.observatory_mosaic_row_matches(marker["row"], selected_row) for marker in self.mosaic_marker_points):
             selected_note = " Selected marker is highlighted."
+        rgb_note = ""
+        if rgb_highlight_count:
+            labels = "/".join(channel[0].upper() for channel in ("blue", "green", "red") if channel in visible_rgb_channels)
+            rgb_note = f" Mosaic RGB Plan highlights: {labels}."
         self.mosaic_status_var.set(
             f"Plotted {len(points)} observation centers for {layer_label}. Color mode: {color_mode}. "
             f"Missions: {mission_text}. Wavelength buckets: {bucket_text}. Footprints drawn: {footprint_count}."
-            f"{selected_note}"
+            f"{selected_note}{rgb_note}"
         )
         self.observatory_update_sensor_dashboard()
 

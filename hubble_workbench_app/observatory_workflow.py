@@ -1191,6 +1191,46 @@ class ObservatoryWorkflowMixin:
             self.set_easy_all_sensors_status("copied", message, mirror=False)
         return text
 
+    def latest_easy_all_sensors_summary_path(self):
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        target = self.current_target_for_log()
+        paths = sorted(
+            SEARCH_LOG_DIR.glob(f"{target}_easy_all_sensors_summary_*.txt"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        return paths[0] if paths else None
+
+    def open_latest_easy_all_sensors_summary(self):
+        path = self.latest_easy_all_sensors_summary_path()
+        if path is None:
+            message = "No saved Easy All Sensors summary was found for this target yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(message)
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            messagebox.showinfo("Easy All Sensors Summary", message)
+            return None
+        self.open_file(path)
+        message = f"Opened latest Easy All Sensors summary: {path.name}."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("opened", message, mirror=False)
+        return path
+
+    def open_easy_all_sensors_summary_folder(self):
+        SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        self.open_folder(SEARCH_LOG_DIR)
+        message = "Opened the folder containing Easy All Sensors summaries."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("opened", message, mirror=False)
+        return SEARCH_LOG_DIR
+
     def observatory_show_mixed_rgb_recipe(self):
         text = self.observatory_mixed_rgb_recipe_text()
         try:

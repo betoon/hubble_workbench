@@ -1121,10 +1121,12 @@ class ObservatoryWorkflowMixin:
         except Exception:
             status_text = ""
         preview_path = getattr(self, "easy_all_sensors_latest_preview_path", "")
+        run_result = getattr(self, "easy_all_sensors_stage", "ready")
         return {
             "target": recipe.get("target", self.current_target_for_log()),
             "kind": "easy_all_sensors_summary",
             "ready": bool(recipe.get("ready")),
+            "run_result": run_result,
             "status": status_text,
             "preview_image": preview_path,
             "alignment_guidance": guidance,
@@ -1140,6 +1142,7 @@ class ObservatoryWorkflowMixin:
         payload = self.easy_all_sensors_summary_payload()
         lines = [f"Easy All Sensors Summary for {payload['target']}", ""]
         lines.append(f"Ready: {'yes' if payload.get('ready') else 'no'}")
+        lines.append("Run result: " + str(payload.get("run_result", "")))
         if payload.get("status"):
             lines.append("Status: " + payload["status"])
         if payload.get("preview_image"):
@@ -1176,6 +1179,7 @@ class ObservatoryWorkflowMixin:
             "timestamp": stamp,
             "target": payload.get("target", self.current_target_for_log()),
             "ready": "yes" if payload.get("ready") else "no",
+            "run_result": payload.get("run_result", ""),
             "alignment_level": guidance.get("level", ""),
             "alignment_status": alignment.get("status", guidance.get("status", "")),
             "alignment_score": alignment.get("score", guidance.get("score", "")),
@@ -1376,6 +1380,7 @@ class ObservatoryWorkflowMixin:
             f"Timestamp: {row.get('timestamp', '')}",
             f"Target: {row.get('target', '')}",
             f"Ready: {row.get('ready', '')}",
+            f"Run result: {row.get('run_result', '')}",
             f"Alignment: {row.get('alignment_level', '')} / {row.get('alignment_status', '')}{alignment_suffix}",
             f"Summary text: {row.get('summary_text', '')}",
             f"Summary JSON: {row.get('summary_json', '')}",

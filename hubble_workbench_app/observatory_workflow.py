@@ -1236,7 +1236,8 @@ class ObservatoryWorkflowMixin:
         text = self.easy_all_sensors_summary_text()
         SEARCH_LOG_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        base = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_easy_all_sensors_summary_{stamp}"
+        result_slug = "".join(ch if ch.isalnum() else "_" for ch in str(payload.get("run_result", "snapshot")).lower()).strip("_") or "snapshot"
+        base = SEARCH_LOG_DIR / f"{self.current_target_for_log()}_easy_all_sensors_summary_{result_slug}_{stamp}"
         json_path = base.with_suffix(".json")
         text_path = base.with_suffix(".txt")
         json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

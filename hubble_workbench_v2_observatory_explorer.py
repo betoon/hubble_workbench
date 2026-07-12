@@ -454,10 +454,11 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(rgb_actions, text="Use Suggested Set", command=self.use_suggested_rgb_set).pack(side="left")
         ttk.Button(rgb_actions, text="Pick Best Available Channels", command=self.pick_best_available_rgb_channels).pack(side="left", padx=(8, 0))
         ttk.Button(rgb_actions, text="Download Selected RGB Channels", command=self.download_rgb_candidates_async).pack(side="left")
+        ttk.Button(rgb_actions, text="Download Easy All Sensors RGB", command=self.download_easy_all_sensors_rgb_async).pack(side="left", padx=(8, 0))
         ttk.Button(rgb_actions, text="Copy RGB Picks", command=self.copy_rgb_candidates).pack(side="left", padx=(8, 0))
         ttk.Label(
             rgb_tab,
-            text="Tip: use Get All Products when blue, green, and red filters are in separate observations. Then choose one row in each RGB column and download selected RGB channels.",
+            text="Tip: Easy All Sensors can pick mixed-sensor RGB channels for you. Use Download Easy All Sensors RGB to download, load, and auto-compose those picks.",
             wraplength=760,
         ).pack(anchor="w", pady=(8, 0))
 
@@ -1066,6 +1067,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def download_rgb_candidates_async(self):
         return super().download_rgb_candidates_async()
+
+    def download_easy_all_sensors_rgb_async(self):
+        return super().download_easy_all_sensors_rgb_async()
 
     def copy_rgb_candidates(self):
         return super().copy_rgb_candidates()

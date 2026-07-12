@@ -113,6 +113,7 @@ class ObservatoryWorkflowMixin:
             return False
 
         self.easy_all_sensors_latest_preview_path = ""
+        self.easy_all_sensors_run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
         if hasattr(self, "high_quality_var"):
             self.high_quality_var.set(True)
@@ -1127,9 +1128,11 @@ class ObservatoryWorkflowMixin:
             status_text = ""
         preview_path = getattr(self, "easy_all_sensors_latest_preview_path", "")
         run_result = getattr(self, "easy_all_sensors_stage", "ready")
+        run_id = getattr(self, "easy_all_sensors_run_id", "")
         return {
             "target": recipe.get("target", self.current_target_for_log()),
             "kind": "easy_all_sensors_summary",
+            "run_id": run_id,
             "ready": bool(recipe.get("ready")),
             "run_result": run_result,
             "status": status_text,
@@ -1147,6 +1150,8 @@ class ObservatoryWorkflowMixin:
         payload = self.easy_all_sensors_summary_payload()
         lines = [f"Easy All Sensors Summary for {payload['target']}", ""]
         lines.append(f"Ready: {'yes' if payload.get('ready') else 'no'}")
+        if payload.get("run_id"):
+            lines.append("Run ID: " + str(payload.get("run_id", "")))
         lines.append("Run result: " + str(payload.get("run_result", "")))
         if payload.get("status"):
             lines.append("Status: " + payload["status"])
@@ -1183,6 +1188,7 @@ class ObservatoryWorkflowMixin:
         row = {
             "timestamp": stamp,
             "target": payload.get("target", self.current_target_for_log()),
+            "run_id": payload.get("run_id", ""),
             "ready": "yes" if payload.get("ready") else "no",
             "run_result": payload.get("run_result", ""),
             "alignment_level": guidance.get("level", ""),
@@ -1390,6 +1396,7 @@ class ObservatoryWorkflowMixin:
             "",
             f"Timestamp: {row.get('timestamp', '')}",
             f"Target: {row.get('target', '')}",
+            f"Run ID: {row.get('run_id', '')}",
             f"Ready: {row.get('ready', '')}",
             f"Run result: {row.get('run_result', '')}",
             f"Alignment: {row.get('alignment_level', '')} / {row.get('alignment_status', '')}{alignment_suffix}",

@@ -1580,6 +1580,8 @@ class ObservatoryWorkflowMixin:
             pass
         rgb_set = self.observatory_best_mosaic_rgb_set()
         self.selected_mosaic_rgb_set = rgb_set
+        self.visited_mosaic_rgb_channels = set()
+        self.product_requested_mosaic_rgb_channels = set()
         self.observatory_draw_current_mosaic()
         if hasattr(self, "mosaic_status_var"):
             if rgb_set:
@@ -1640,6 +1642,9 @@ class ObservatoryWorkflowMixin:
         self.selected_mosaic_rgb_channel_index = (current_index + 1) % len(channels)
         row = rgb_set[channel]
         self.selected_mosaic_row = row
+        visited = set(getattr(self, "visited_mosaic_rgb_channels", set()) or set())
+        visited.add(channel)
+        self.visited_mosaic_rgb_channels = visited
         self.observatory_select_observation_row(row)
         detail = self.observatory_mosaic_marker_detail(row)
         try:
@@ -1669,10 +1674,54 @@ class ObservatoryWorkflowMixin:
                 return False
         row = getattr(self, "selected_mosaic_row", None)
         channel = self.observatory_mosaic_rgb_highlight_channel(row) or "RGB"
+        if channel in ("blue", "green", "red"):
+            requested = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
+            requested.add(channel)
+            self.product_requested_mosaic_rgb_channels = requested
         if hasattr(self, "mosaic_status_var"):
             obs_id = row.get("obs_id", "") or row.get("obsid", "") or "selected observation"
             self.mosaic_status_var.set(f"Getting products for Mosaic RGB {channel.title()} pick: {obs_id}.")
         return self.observatory_get_marker_products()
+
+    def observatory_mosaic_rgb_progress_text(self):
+        rows = self.observatory_mosaic_rgb_export_rows()
+        if not rows:
+            return "Mosaic RGB Progress\n\nNo complete Mosaic RGB Plan is available yet. Click Mosaic RGB Plan first or widen the search."
+        rgb_set = self.observatory_current_mosaic_rgb_set()
+        visited = set(getattr(self, "visited_mosaic_rgb_channels", set()) or set())
+        requested = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
+        selected_row = getattr(self, "selected_mosaic_row", None)
+        lines = ["Mosaic RGB Progress", ""]
+        complete_count = 0
+        for row in rows:
+            channel = row["channel"]
+            selected = "selected now" if selected_row is not None and self.observatory_mosaic_row_matches(selected_row, rgb_set[channel]) else ""
+            selected_mark = "yes" if channel in visited else "no"
+            product_mark = "yes" if channel in requested else "no"
+            if channel in requested:
+                complete_count += 1
+            suffix = f" ({selected})" if selected else ""
+            lines.append(f"- {channel.title()}: selected {selected_mark}; products requested {product_mark}{suffix}")
+            lines.append(f"  {row['obs_collection']} | {row['obs_id']} | {row['sensor']} | {row['filters']} | RA {row['ra']}, Dec {row['dec']}")
+        lines.append("")
+        lines.append(f"Products requested for {complete_count}/3 Mosaic RGB picks.")
+        if complete_count < 3:
+            lines.append("Use Next RGB Pick and Get RGB Pick Products until Blue, Green, and Red are all requested.")
+        else:
+            lines.append("All Mosaic RGB picks have had products requested. Review the RGB Picker and prepare the composed image.")
+        return "\n".join(lines)
+
+    def observatory_show_mosaic_rgb_progress(self):
+        text = self.observatory_mosaic_rgb_progress_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        requested = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"Mosaic RGB progress: products requested for {len(requested)}/3 picks.")
+        return text
 
     def observatory_copy_mosaic_rgb_plan(self):
         rows = self.observatory_mosaic_rgb_export_rows()

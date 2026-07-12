@@ -1117,16 +1117,18 @@ class ObservatoryWorkflowMixin:
             status_text = status_var.get() if status_var is not None else ""
         except Exception:
             status_text = ""
+        preview_path = getattr(self, "easy_all_sensors_latest_preview_path", "")
         return {
             "target": recipe.get("target", self.current_target_for_log()),
             "kind": "easy_all_sensors_summary",
             "ready": bool(recipe.get("ready")),
             "status": status_text,
+            "preview_image": preview_path,
             "alignment_guidance": guidance,
             "mixed_sensor_recipe": recipe,
             "next_actions": [
-                "Use Download Easy All Sensors RGB to fetch the selected channels.",
-                "Let Auto compose load and combine the RGB set, then inspect crop and registration.",
+                "If the run is still in progress, wait for Easy All Sensors to finish downloading and composing.",
+                "Inspect the composed preview for crop, registration, and sensor-color balance.",
                 "Save PNG/TIFF + Notes after the composed image looks right.",
             ],
         }
@@ -1137,6 +1139,8 @@ class ObservatoryWorkflowMixin:
         lines.append(f"Ready: {'yes' if payload.get('ready') else 'no'}")
         if payload.get("status"):
             lines.append("Status: " + payload["status"])
+        if payload.get("preview_image"):
+            lines.append("Preview image: " + payload["preview_image"])
         guidance = payload.get("alignment_guidance", {})
         lines.append("Alignment: " + guidance.get("summary", "not available"))
         recipe = payload.get("mixed_sensor_recipe", {})
@@ -1174,9 +1178,27 @@ class ObservatoryWorkflowMixin:
             "alignment_score": alignment.get("score", guidance.get("score", "")),
             "summary_text": text_path.name,
             "summary_json": json_path.name,
+            "preview_image": payload.get("preview_image", ""),
             "status": payload.get("status", ""),
         }
         fieldnames = list(row.keys())
+        existing_rows = []
+        rewrite_index = False
+        if index_path.exists():
+            with index_path.open("r", newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle)
+                existing_fieldnames = list(reader.fieldnames or [])
+                existing_rows = list(reader)
+            for name in fieldnames:
+                if name not in existing_fieldnames:
+                    existing_fieldnames.append(name)
+                    rewrite_index = True
+            fieldnames = existing_fieldnames or fieldnames
+        if rewrite_index:
+            with index_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(handle, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(existing_rows)
         write_header = not index_path.exists()
         with index_path.open("a", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -1306,6 +1328,7 @@ class ObservatoryWorkflowMixin:
             f"Alignment: {row.get('alignment_level', '')} / {row.get('alignment_status', '')}{alignment_suffix}",
             f"Summary text: {row.get('summary_text', '')}",
             f"Summary JSON: {row.get('summary_json', '')}",
+            f"Preview image: {row.get('preview_image', '')}",
         ]
         status = row.get("status", "")
         if status:

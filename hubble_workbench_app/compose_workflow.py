@@ -175,7 +175,10 @@ class ComposeWorkflowMixin:
         if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "compose":
             detail = f"Composite ready at {size_text}{engine_text}."
             if preview_path:
+                self.easy_all_sensors_latest_preview_path = str(preview_path)
                 detail += f" Auto-saved {preview_path.name}."
+            else:
+                self.easy_all_sensors_latest_preview_path = ""
             self.set_easy_all_sensors_status("complete", detail)
             try:
                 self.save_easy_all_sensors_summary(update_ui=False)

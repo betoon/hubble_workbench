@@ -217,6 +217,14 @@ class DebugConsoleMixin:
         filters = row.get("filters", "") or row.get("Spectral_Elt", "") or row.get("filter", "") or "unknown filter"
         return f"{mission} | {instrument} | {filters} | {obs_id}"
 
+    def debug_easy_all_sensors_alignment_summary(self):
+        if not hasattr(self, "easy_all_sensors_alignment_guidance"):
+            return "not available"
+        try:
+            return self.easy_all_sensors_alignment_guidance().get("summary", "not available")
+        except Exception as exc:
+            return f"not available ({exc})"
+
     def debug_test_snapshot_text(self):
         lines = [
             "Hubble Workbench Test Snapshot",
@@ -245,6 +253,7 @@ class DebugConsoleMixin:
             "Current Status",
             "--------------",
             f"Easy All Sensors: {self.debug_var_value('easy_all_sensors_status_var', '')}",
+            f"Easy All Sensors alignment: {self.debug_easy_all_sensors_alignment_summary()}",
             f"Browser: {self.debug_var_value('browser_status', '')}",
             f"Download: {self.debug_var_value('download_detail', '')}",
             f"Sensor: {self.debug_var_value('sensor_status_var', '')}",

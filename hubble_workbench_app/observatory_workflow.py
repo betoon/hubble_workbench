@@ -76,6 +76,32 @@ class ObservatoryWorkflowMixin:
                 pass
         return text
 
+    def easy_all_sensors_alignment_guidance(self, rgb_set=None):
+        assessment = self.observatory_cross_sensor_alignment_assessment(rgb_set)
+        status = str(assessment.get("status", "unknown")).lower()
+        score = int(assessment.get("score", 0) or 0)
+        message = assessment.get("message", "")
+        if status == "strong" or score >= 85:
+            level = "ready"
+            action = "Alignment looks strong enough to continue."
+        elif status == "usable" or score >= 65:
+            level = "review"
+            action = "Alignment looks usable, but inspect the mosaic and final crop before saving."
+        elif status in ("unknown", "not ready"):
+            level = "unknown"
+            action = "Alignment could not be fully estimated; compose a test image and inspect registration."
+        else:
+            level = "risky"
+            action = "Alignment looks risky; expect cropping or registration work before this becomes a final image."
+        return {
+            "level": level,
+            "status": assessment.get("status", "unknown"),
+            "score": score,
+            "message": message,
+            "action": action,
+            "summary": f"Alignment {assessment.get('status', 'unknown')} ({score}/100). {message} {action}".strip(),
+        }
+
     def easy_all_sensors_async(self):
         if not self.require_astroquery():
             return False
@@ -120,6 +146,7 @@ class ObservatoryWorkflowMixin:
         self.observatory_analyze_current()
         rgb_set = self.observatory_best_cross_sensor_rgb_set()
         if rgb_set:
+            guidance = self.easy_all_sensors_alignment_guidance(rgb_set)
             prepared = self.observatory_prepare_cross_sensor_rgb_layer()
             recipe = self.observatory_mixed_rgb_recipe_text()
             try:
@@ -130,10 +157,11 @@ class ObservatoryWorkflowMixin:
                     "end",
                     "\n\nPrepared selection:\n- The best available mixed-sensor RGB channels are selected in the MAST Browser RGB Picker.\n- Next, use Download Easy All Sensors RGB to download, load, and auto-compose this set.",
                 )
+                self.observatory_report_text.insert("end", "\n- " + guidance["summary"])
                 self.observatory_report_text.see("1.0")
             except Exception:
                 pass
-            self.set_easy_all_sensors_status("selected", "Best mixed-sensor RGB picks are ready. Use Download Easy All Sensors RGB when you are ready to fetch and compose them.")
+            self.set_easy_all_sensors_status("selected", "Best mixed-sensor RGB picks are ready. " + guidance["summary"] + " Use Download Easy All Sensors RGB when you are ready.")
             self.easy_all_sensors_pending_stage = None
             return prepared
 
@@ -174,6 +202,7 @@ class ObservatoryWorkflowMixin:
                 pass
             return False
 
+        guidance = self.easy_all_sensors_alignment_guidance(rgb_set)
         prepared = self.observatory_prepare_cross_sensor_rgb_layer()
         if not prepared:
             return False
@@ -182,11 +211,11 @@ class ObservatoryWorkflowMixin:
         if hasattr(self, "browser_status"):
             self.browser_status.set("Downloading the Easy All Sensors RGB channels. The Compose tab will load them when the download finishes.")
         self.easy_all_sensors_pending_stage = "download"
-        self.set_easy_all_sensors_status("download", "Downloading the selected RGB channels. The Compose tab will load them when download finishes.")
+        self.set_easy_all_sensors_status("download", "Downloading selected RGB channels. " + guidance["summary"])
         try:
             self.observatory_report_text.insert(
                 "end",
-                "\n\nDownload Easy All Sensors RGB:\n- Downloading the selected mixed-sensor RGB channels.\n- The Compose tab will load them automatically when download finishes.\n- Auto compose is enabled for this handoff.",
+                "\n\nDownload Easy All Sensors RGB:\n- Downloading the selected mixed-sensor RGB channels.\n- " + guidance["summary"] + "\n- The Compose tab will load them automatically when download finishes.\n- Auto compose is enabled for this handoff.",
             )
             self.observatory_report_text.see("end")
         except Exception:

@@ -1582,6 +1582,7 @@ class ObservatoryWorkflowMixin:
         self.selected_mosaic_rgb_set = rgb_set
         self.visited_mosaic_rgb_channels = set()
         self.product_requested_mosaic_rgb_channels = set()
+        self.selected_mosaic_rgb_channel_index = -1
         self.observatory_draw_current_mosaic()
         if hasattr(self, "mosaic_status_var"):
             if rgb_set:
@@ -1721,6 +1722,22 @@ class ObservatoryWorkflowMixin:
         requested = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
         if hasattr(self, "mosaic_status_var"):
             self.mosaic_status_var.set(f"Mosaic RGB progress: products requested for {len(requested)}/3 picks.")
+        return text
+
+    def observatory_reset_mosaic_rgb_progress(self):
+        self.visited_mosaic_rgb_channels = set()
+        self.product_requested_mosaic_rgb_channels = set()
+        self.selected_mosaic_rgb_channel_index = -1
+        self.selected_mosaic_row = None
+        self.observatory_draw_current_mosaic()
+        text = self.observatory_mosaic_rgb_progress_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Reset Mosaic RGB progress. Next RGB Pick will start at Blue.")
         return text
 
     def observatory_copy_mosaic_rgb_plan(self):

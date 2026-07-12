@@ -1410,6 +1410,35 @@ class ObservatoryWorkflowMixin:
             lines.extend(["", "Status:", status])
         return "\n".join(lines)
 
+    def copy_latest_easy_all_sensors_run_id(self):
+        row = self.latest_easy_all_sensors_run_row()
+        if not row:
+            message = "No Easy All Sensors run has been saved yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Run ID", message)
+            return None
+        run_id = str(row.get("run_id", "") or "").strip()
+        if not run_id:
+            message = "The latest Easy All Sensors run does not have a Run ID yet."
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", message, mirror=False)
+            messagebox.showinfo("Easy All Sensors Run ID", message)
+            return None
+        self.clipboard_clear()
+        self.clipboard_append(run_id)
+        self.update()
+        message = f"Copied Easy All Sensors Run ID: {run_id}."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("copied", message, mirror=False)
+        return run_id
+
     def latest_easy_all_sensors_preview_path(self):
         row = self.latest_easy_all_sensors_run_row()
         if not row:

@@ -474,6 +474,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(easy_rgb_summary_row, text="Open Folder", command=self.open_easy_all_sensors_summary_folder).pack(side="left", padx=(8, 0))
         ttk.Button(easy_rgb_summary_row, text="Run Index", command=self.open_easy_all_sensors_run_index).pack(side="left", padx=(8, 0))
         ttk.Button(easy_rgb_summary_row, text="Copy Latest Run", command=self.copy_latest_easy_all_sensors_run).pack(side="left", padx=(8, 0))
+        ttk.Button(easy_rgb_summary_row, text="Copy Run ID", command=self.copy_latest_easy_all_sensors_run_id).pack(side="left", padx=(8, 0))
         ttk.Button(easy_rgb_output_row, text="Open Preview", command=self.open_latest_easy_all_sensors_preview).pack(side="left")
         ttk.Button(easy_rgb_output_row, text="Copy Preview Path", command=self.copy_latest_easy_all_sensors_preview_path).pack(side="left", padx=(8, 0))
         ttk.Button(easy_rgb_output_row, text="Open Run Folder", command=self.open_latest_easy_all_sensors_run_folder).pack(side="left", padx=(8, 0))
@@ -1109,6 +1110,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def copy_latest_easy_all_sensors_run(self):
         return super().copy_latest_easy_all_sensors_run()
+
+    def copy_latest_easy_all_sensors_run_id(self):
+        return super().copy_latest_easy_all_sensors_run_id()
 
     def open_latest_easy_all_sensors_preview(self):
         return super().open_latest_easy_all_sensors_preview()

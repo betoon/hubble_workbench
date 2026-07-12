@@ -1384,33 +1384,46 @@ class ObservatoryWorkflowMixin:
             lines.extend(["", "Status:", status])
         return "\n".join(lines)
 
-    def open_latest_easy_all_sensors_preview(self):
+    def latest_easy_all_sensors_preview_path(self):
         row = self.latest_easy_all_sensors_run_row()
         if not row:
-            message = "No Easy All Sensors run has been saved yet."
-            if hasattr(self, "browser_status"):
-                self.browser_status.set(message)
-            if hasattr(self, "set_easy_all_sensors_status"):
-                self.set_easy_all_sensors_status("waiting", message, mirror=False)
-            messagebox.showinfo("Easy All Sensors Preview", message)
-            return None
+            return None, "No Easy All Sensors run has been saved yet."
         preview_image = str(row.get("preview_image", "") or "").strip()
         if not preview_image:
-            message = "The latest Easy All Sensors run does not have a saved preview image yet."
-            if hasattr(self, "browser_status"):
-                self.browser_status.set(message)
-            if hasattr(self, "set_easy_all_sensors_status"):
-                self.set_easy_all_sensors_status("waiting", message, mirror=False)
-            messagebox.showinfo("Easy All Sensors Preview", message)
-            return None
+            return None, "The latest Easy All Sensors run does not have a saved preview image yet."
         path = Path(preview_image)
         if not path.exists():
-            message = f"The latest Easy All Sensors preview image was not found: {preview_image}"
+            return None, f"The latest Easy All Sensors preview image was not found: {preview_image}"
+        return path, ""
+
+    def copy_latest_easy_all_sensors_preview_path(self):
+        path, error = self.latest_easy_all_sensors_preview_path()
+        if path is None:
             if hasattr(self, "browser_status"):
-                self.browser_status.set(message)
+                self.browser_status.set(error)
             if hasattr(self, "set_easy_all_sensors_status"):
-                self.set_easy_all_sensors_status("missing", message, mirror=False)
-            messagebox.showinfo("Easy All Sensors Preview", message)
+                self.set_easy_all_sensors_status("waiting", error, mirror=False)
+            messagebox.showinfo("Easy All Sensors Preview", error)
+            return None
+        text = str(path)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.update()
+        message = f"Copied Easy All Sensors preview path: {path.name}."
+        if hasattr(self, "browser_status"):
+            self.browser_status.set(message)
+        if hasattr(self, "set_easy_all_sensors_status"):
+            self.set_easy_all_sensors_status("copied", message, mirror=False)
+        return text
+
+    def open_latest_easy_all_sensors_preview(self):
+        path, error = self.latest_easy_all_sensors_preview_path()
+        if path is None:
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(error)
+            if hasattr(self, "set_easy_all_sensors_status"):
+                self.set_easy_all_sensors_status("waiting", error, mirror=False)
+            messagebox.showinfo("Easy All Sensors Preview", error)
             return None
         self.open_file(path)
         message = f"Opened Easy All Sensors preview image: {path.name}."

@@ -151,6 +151,10 @@ class ComposeWorkflowMixin:
         image, headers, source_shapes, resize_mode, rgb_float, engine_note, base_image, base_float, error = result
         if error:
             self.compose_status.set(f"RGB compose failed: {error}")
+            if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "compose":
+                self.set_easy_all_sensors_status("stopped", f"RGB compose failed: {error}")
+                self.save_easy_all_sensors_status_snapshot()
+                self.easy_all_sensors_pending_stage = None
             return
         self.rgb_full_base_image = image
         self.rgb_full_base_float = rgb_float

@@ -135,6 +135,7 @@ class DownloadWorkflowMixin:
         if error:
             if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
                 self.set_easy_all_sensors_status("stopped", "Download failed before the RGB set could be loaded.")
+                self.save_easy_all_sensors_status_snapshot()
                 self.easy_all_sensors_pending_stage = None
             self.stop_browser_activity(f"Download failed: {self.format_error_message(error)}")
             return
@@ -159,6 +160,7 @@ class DownloadWorkflowMixin:
         if missing:
             if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
                 self.set_easy_all_sensors_status("stopped", "Downloaded the RGB files, but could not match one or more channels.")
+                self.save_easy_all_sensors_status_snapshot()
                 self.easy_all_sensors_pending_stage = None
             self.stop_browser_activity(
                 f"Downloaded RGB products to {download_path}, but could not identify: {', '.join(missing)}. "

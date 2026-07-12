@@ -173,6 +173,7 @@ class ObservatoryWorkflowMixin:
             if not prepared:
                 self.easy_all_sensors_pending_stage = None
                 self.set_easy_all_sensors_status("stopped", "Easy All Sensors selected channels, but could not prepare the RGB layer for download.")
+                self.save_easy_all_sensors_status_snapshot()
                 return False
             self.easy_all_sensors_pending_stage = "selected"
             try:
@@ -196,6 +197,7 @@ class ObservatoryWorkflowMixin:
         except Exception:
             pass
         self.set_easy_all_sensors_status("fallback", message)
+        self.save_easy_all_sensors_status_snapshot()
         self.easy_all_sensors_pending_stage = None
         return False
 
@@ -210,6 +212,7 @@ class ObservatoryWorkflowMixin:
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
             self.set_easy_all_sensors_status("stopped", message)
+            self.save_easy_all_sensors_status_snapshot()
             try:
                 self.observatory_show_cross_sensor_rgb_plan()
                 self.observatory_report_text.insert("end", "\n\nDownload Easy All Sensors RGB:\n- " + message)
@@ -253,6 +256,7 @@ class ObservatoryWorkflowMixin:
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
             self.set_easy_all_sensors_status("stopped", message)
+            self.save_easy_all_sensors_status_snapshot()
             try:
                 self.observatory_report_text.insert("end", "\n\nEasy All Sensors stopped:\n- " + message)
                 self.observatory_report_text.see("end")
@@ -291,6 +295,7 @@ class ObservatoryWorkflowMixin:
             if hasattr(self, "mosaic_status_var"):
                 self.mosaic_status_var.set(message)
             self.set_easy_all_sensors_status("stopped", message)
+            self.save_easy_all_sensors_status_snapshot()
             try:
                 self.observatory_report_text.insert("end", "\n\nEasy All Sensors stopped:\n- " + message)
                 self.observatory_report_text.see("end")
@@ -1213,6 +1218,12 @@ class ObservatoryWorkflowMixin:
                 writer.writeheader()
             writer.writerow(row)
         return index_path
+
+    def save_easy_all_sensors_status_snapshot(self):
+        try:
+            return self.save_easy_all_sensors_summary(update_ui=False)
+        except Exception:
+            return None
 
     def save_easy_all_sensors_summary(self, update_ui=True):
         payload = self.easy_all_sensors_summary_payload()

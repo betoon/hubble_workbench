@@ -204,7 +204,7 @@ class SearchWorkflowMixin:
                 self.hla_search_async(fallback_message=f"MAST search failed: {error}. Trying HLA fallback...")
             return
         self.search_results = rows
-        self.search_results_target = target
+        self.search_results_target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
         self.product_results_target = ""
         for row in rows[:500]:
             label = (

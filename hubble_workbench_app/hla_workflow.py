@@ -147,7 +147,9 @@ class HlaWorkflowMixin:
             self.stop_browser_activity(f"HLA search failed: {error}")
             return
         self.search_results = []
+        self.search_results_target = ""
         self.product_results = rows
+        self.product_results_target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
         self.obs_list.insert("end", "HLA search returned direct downloadable products.")
         self.obs_list.insert("end", "Select one or more products on the right, then choose Download Selected Products.")
         self.refresh_product_list()

@@ -104,6 +104,31 @@ class ObservatoryWorkflowMixin:
             "summary": f"Alignment {assessment.get('status', 'unknown')} ({score}/100). {message} {action}".strip(),
         }
 
+    @staticmethod
+    def normalized_target_key(target):
+        return str(target or "").strip().casefold()
+
+    def clear_stale_easy_all_sensors_rows(self, target):
+        current_key = self.normalized_target_key(target)
+        search_key = self.normalized_target_key(getattr(self, "search_results_target", ""))
+        product_key = self.normalized_target_key(getattr(self, "product_results_target", ""))
+        has_search = bool(getattr(self, "search_results", []) or [])
+        has_products = bool(getattr(self, "product_results", []) or [])
+        if (has_search and search_key and search_key != current_key) or (has_products and product_key and product_key != current_key):
+            message = "Target changed; previous search and product rows were cleared before Easy All Sensors started."
+            if hasattr(self, "clear_target_dependent_results"):
+                self.clear_target_dependent_results(status_message=message)
+            else:
+                self.search_results = []
+                self.product_results = []
+                self.visible_product_results = []
+                self.search_results_target = ""
+                self.product_results_target = ""
+            if hasattr(self, "browser_status"):
+                self.browser_status.set(message)
+            return True
+        return False
+
     def easy_all_sensors_async(self):
         if not self.require_astroquery():
             return False
@@ -112,6 +137,7 @@ class ObservatoryWorkflowMixin:
             messagebox.showinfo("Easy All Sensors", "Choose a target first.")
             return False
 
+        self.clear_stale_easy_all_sensors_rows(target)
         self.easy_all_sensors_latest_preview_path = ""
         self.easy_all_sensors_run_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 

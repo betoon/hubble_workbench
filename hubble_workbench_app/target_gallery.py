@@ -33,7 +33,7 @@ class TargetGalleryMixin:
     def current_gallery(self):
         return JWST_TARGET_GALLERY if TELESCOPE_CHOICES.get(self.telescope_var.get()) == "JWST" else TARGET_GALLERY
 
-    def clear_target_dependent_results(self):
+    def clear_target_dependent_results(self, status_message="Loaded a new target; previous search and product rows were cleared."):
         for attr_name in ("search_results", "product_results", "visible_product_results", "rgb_suggested_sets"):
             if hasattr(self, attr_name):
                 setattr(self, attr_name, [])
@@ -48,8 +48,10 @@ class TargetGalleryMixin:
             self.easy_all_sensors_latest_preview_path = ""
         if hasattr(self, "easy_all_sensors_pending_stage"):
             self.easy_all_sensors_pending_stage = None
+        self.search_results_target = ""
+        self.product_results_target = ""
         if hasattr(self, "set_easy_all_sensors_status"):
-            self.set_easy_all_sensors_status("ready", "Loaded a new target; previous search and product rows were cleared.", mirror=False)
+            self.set_easy_all_sensors_status("ready", status_message, mirror=False)
 
     def use_target_gallery(self):
         selected = self.target_gallery_var.get()

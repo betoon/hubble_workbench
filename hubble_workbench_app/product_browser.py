@@ -422,6 +422,7 @@ class ProductBrowserMixin:
             self.stop_browser_activity(f"Product lookup failed: {error}")
             return
         self.product_results = rows
+        self.product_results_target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
         self.refresh_product_list()
         if all_observations:
             self.rgb_sets_only_var.set(False)

@@ -16,6 +16,54 @@ class MastSearchHelperMixin:
     def is_solar_system_target(target):
         return str(target or "").strip().upper() in SOLAR_SYSTEM_TARGETS
 
+
+    @staticmethod
+    def numeric_observation_value(row, *keys):
+        for key in keys:
+            try:
+                value = row.get(key)
+            except Exception:
+                value = None
+            if value in (None, ""):
+                continue
+            try:
+                return float(value)
+            except Exception:
+                continue
+        return None
+
+    @classmethod
+    def solar_system_observation_score(cls, row, target):
+        target_key = str(target or "").strip().upper()
+        target_name = str(row.get("target_name", "") or row.get("Target", "") or "").upper()
+        obs_id = str(row.get("obs_id", "") or row.get("obsid", "") or "").upper()
+        instrument = str(row.get("instrument_name", "") or row.get("Detector", "") or "").upper()
+        filters = str(row.get("filters", "") or row.get("Spectral_Elt", "") or "").upper()
+        text = " ".join((target_name, obs_id, instrument, filters))
+        score = 0
+        if target_name == target_key:
+            score += 140
+        elif target_key and target_key in target_name:
+            score += 90
+        elif target_key and target_key in text:
+            score += 45
+        if target_key in {"JUPITER", "SATURN", "URANUS", "NEPTUNE"}:
+            for moon in ("IO", "EUROPA", "GANYMEDE", "CALLISTO", "TITAN", "ENCELADUS", "TRITON"):
+                if moon in target_name and target_name != target_key:
+                    score -= 70
+        for token, value in (("NIRCAM", 55), ("MIRI", 45), ("WFC3/UVIS", 45), ("ACS/WFC", 38), ("WFPC2", 24), ("WFC3/IR", 22)):
+            if token in instrument:
+                score += value
+        fov = cls.numeric_observation_value(row, "s_fov", "s_region_fov", "fov")
+        if fov is not None:
+            if fov >= 0.01:
+                score += 35
+            elif fov >= 0.004:
+                score += 18
+        exposure = cls.numeric_observation_value(row, "t_exptime", "exptime", "ExposureTime")
+        if exposure is not None:
+            score += min(25, int(exposure // 120))
+        return score
     @staticmethod
     def target_name_variants(target):
         raw = str(target or "").strip()
@@ -92,6 +140,13 @@ class MastSearchHelperMixin:
 
     def mast_image_observation_rows(self, target, radius, telescope_code):
         first_error = None
+        if self.is_solar_system_target(target):
+            target_rows = self.mast_target_name_rows(target, telescope_code)
+            if target_rows:
+                return sorted(
+                    target_rows,
+                    key=lambda row: (-self.solar_system_observation_score(row, target), str(row.get("obs_id", "") or row.get("obsid", ""))),
+                )
         rows = []
         for search_target in self.search_target_variants(target):
             try:
@@ -103,10 +158,6 @@ class MastSearchHelperMixin:
                 continue
             if rows:
                 return rows
-        if self.is_solar_system_target(target):
-            target_rows = self.mast_target_name_rows(target, telescope_code)
-            if target_rows:
-                return target_rows
         if first_error:
             raise first_error
         return []

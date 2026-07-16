@@ -81,9 +81,10 @@ class SearchWorkflowMixin:
 
                 best = None
                 checked = 0
-                for obs_row in obs_rows[:25]:
+                scan_limit = 60 if self.is_solar_system_target(target) else 25
+                for obs_row in obs_rows[:scan_limit]:
                     checked += 1
-                    self.after(0, lambda c=checked, total=min(25, len(obs_rows)): self.set_download_progress(operation_id, min(40, c / total * 40), f"Checking observation {c} of {total} for RGB products..."))
+                    self.after(0, lambda c=checked, total=min(scan_limit, len(obs_rows)): self.set_download_progress(operation_id, min(40, c / total * 40), f"Checking observation {c} of {total} for RGB products..."))
                     obsid = obs_row.get("obsid")
                     products = OBSERVATIONS.get_product_list(obsid)
                     rows = [self.normalize_product_row({name: self.table_value(row, name) for name in row.colnames}, obs_row) for row in products]
@@ -98,7 +99,7 @@ class SearchWorkflowMixin:
                         score = self.rgb_set_score(candidate, recipe=recipe)
                         if best is None or score > best[0]:
                             best = (score, obs_row, rows, candidate)
-                            if score >= (140 if high_quality else 100):
+                            if not self.is_solar_system_target(target) and score >= (140 if high_quality else 100):
                                 break
                 if best is None:
                     if telescope_code in ("HST", "BOTH"):

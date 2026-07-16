@@ -71,6 +71,8 @@ class ProductBrowserMixin:
             channel = self.product_rgb_channel(row)
             if channel:
                 self.rgb_candidate_rows[channel].append(row)
+        for channel in self.rgb_candidate_rows:
+            self.rgb_candidate_rows[channel].sort(key=lambda row: (-self.product_quality_score(row), self.product_sort_key(row)))
         for channel, widget in (
             ("blue", self.blue_candidate_list),
             ("green", self.green_candidate_list),
@@ -118,6 +120,8 @@ class ProductBrowserMixin:
             channel = self.product_rgb_channel(row)
             if channel:
                 candidate_rows[channel].append(row)
+        for channel in candidate_rows:
+            candidate_rows[channel].sort(key=lambda row: (-self.product_quality_score(row), self.product_sort_key(row)))
         groups = {}
         for channel, channel_rows in candidate_rows.items():
             for row in channel_rows:
@@ -385,7 +389,7 @@ class ProductBrowserMixin:
     @staticmethod
     def normalize_product_row(row, obs):
         row = dict(row)
-        for key in ("obs_collection", "instrument_name", "target_name", "filters", "obs_id"):
+        for key in ("obs_collection", "instrument_name", "target_name", "filters", "obs_id", "s_fov", "s_region", "t_exptime", "t_min", "t_max", "proposal_id"):
             if not row.get(key) and obs.get(key):
                 row[key] = obs.get(key)
         if row.get("obs_collection"):

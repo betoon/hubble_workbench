@@ -4,6 +4,7 @@ from .catalogs import (
     HST_BLUE_FILTERS,
     HST_GREEN_FILTERS,
     HST_RED_FILTERS,
+    SOLAR_SYSTEM_TARGETS,
 )
 from .paths import ENHANCED_PRODUCT_TOKENS
 
@@ -65,6 +66,70 @@ class ProductScoringMixin:
             badges.append("Usable")
         return badges
 
+    def current_target_is_solar_system(self):
+        try:
+            target = self.target_var.get()
+        except Exception:
+            target = ""
+        return str(target or "").strip().upper() in SOLAR_SYSTEM_TARGETS
+
+    def current_solar_system_target_key(self):
+        try:
+            target = self.target_var.get()
+        except Exception:
+            target = ""
+        target_key = str(target or "").strip().upper()
+        return target_key if target_key in SOLAR_SYSTEM_TARGETS else ""
+
+    @staticmethod
+    def product_numeric_value(row, *keys):
+        for key in keys:
+            value = row.get(key)
+            if value in (None, ""):
+                continue
+            try:
+                return float(value)
+            except Exception:
+                continue
+        return None
+
+    def solar_system_frame_score(self, row):
+        target_key = self.current_solar_system_target_key()
+        if not target_key:
+            return 0
+        name = str(row.get("productFilename", "") or "").upper()
+        target_name = str(row.get("Target", "") or row.get("target_name", "") or "").upper()
+        obs_id = str(row.get("obs_id", "") or row.get("obsid", "") or "").upper()
+        instrument = str(row.get("Detector", "") or row.get("instrument_name", "") or "").upper()
+        text = " ".join((name, target_name, obs_id, instrument, self.product_filter_text(row)))
+        score = 0
+        if target_name == target_key:
+            score += 85
+        elif target_key in target_name:
+            score += 55
+        elif target_key in text:
+            score += 25
+        for token in ("FULL", "FULLDISK", "FULL_DISK", "GLOBAL", "PLANET", "OPAL", "MAP", "MOSAIC", "COMBINED", "COADD"):
+            if token in text:
+                score += 22
+        for token in ("SUBARRAY", "SUBARR", "CORNER", "PARTIAL", "LIMB", "AURORA", "SPOT", "GRS", "RING", "MOON"):
+            if token in text:
+                score -= 25
+        if target_key in {"JUPITER", "SATURN", "URANUS", "NEPTUNE"}:
+            for moon in ("IO", "EUROPA", "GANYMEDE", "CALLISTO", "TITAN", "ENCELADUS", "TRITON"):
+                if moon in target_name and target_name != target_key:
+                    score -= 45
+        for token, value in (("NIRCAM", 32), ("MIRI", 26), ("WFC3/UVIS", 28), ("ACS/WFC", 24), ("WFPC2", 14)):
+            if token in instrument:
+                score += value
+        fov = self.product_numeric_value(row, "s_fov", "s_region_fov", "fov")
+        if fov is not None:
+            if fov >= 0.01:
+                score += 28
+            elif fov >= 0.004:
+                score += 12
+        return score
+
     def product_quality_score(self, row):
         name = str(row.get("productFilename", "")).lower()
         score = 0
@@ -75,6 +140,7 @@ class ProductScoringMixin:
                 score += value
         if "raw" in name or "uncal" in name:
             score -= 70
+        score += self.solar_system_frame_score(row)
         if self.product_rgb_channel(row):
             score += 20
         if row.get("_source") == "HLA":
@@ -276,4 +342,10 @@ class ProductScoringMixin:
                 text = self.product_filter_text(rgb_set[channel])
                 if any(token in text for token in wanted):
                     score += 22
+        if self.current_target_is_solar_system():
+            frame_scores = [self.solar_system_frame_score(rgb_set[channel]) for channel in ("blue", "green", "red")]
+            score += min(frame_scores) + int(sum(frame_scores) / 6)
+            targets = {str(rgb_set[channel].get("Target", "") or rgb_set[channel].get("target_name", "")).upper() for channel in ("blue", "green", "red")}
+            if len(targets) == 1:
+                score += 25
         return score

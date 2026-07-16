@@ -1,13 +1,20 @@
 from tkinter import messagebox
 
-from hubble_workbench_app.catalogs import JWST_TARGET_GALLERY, TARGET_GALLERY, TARGET_RECIPES, TELESCOPE_CHOICES
+from hubble_workbench_app.catalogs import JWST_TARGET_GALLERY, TARGET_ALIASES, TARGET_GALLERY, TARGET_RECIPES, TELESCOPE_CHOICES
 
 
 class TargetGalleryMixin:
     def target_recipe(self, target):
-        text = f" {target.upper()} "
+        raw = str(target or "").strip()
+        target_key = raw.upper()
+        alias = TARGET_ALIASES.get(target_key)
+        if alias and alias in TARGET_RECIPES:
+            return TARGET_RECIPES[alias]
+        if target_key in TARGET_RECIPES:
+            return TARGET_RECIPES[target_key]
+        text = f" {target_key} "
         for key, recipe in TARGET_RECIPES.items():
-            if f" {key} " in text or key == target.upper().strip():
+            if f" {key} " in text:
                 return recipe
         return None
 

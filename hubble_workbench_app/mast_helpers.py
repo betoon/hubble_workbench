@@ -86,6 +86,7 @@ class MastSearchHelperMixin:
         if exposure is not None:
             score += min(25, int(exposure // 120))
         return score
+
     @staticmethod
     def target_name_variants(target):
         raw = str(target or "").strip()

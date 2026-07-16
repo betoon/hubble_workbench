@@ -549,24 +549,34 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         controls = ttk.Frame(observatory_content)
         controls.pack(fill="x", pady=(0, 8))
-        ttk.Button(controls, text="Analyze Current Search", command=self.observatory_analyze_current, style="Accent.TButton").pack(side="left")
-        ttk.Button(controls, text="Build Sky Mosaic View", command=self.observatory_draw_current_mosaic).pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Search Wider Radius", command=self.observatory_search_wider_async).pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Find Better Sources", command=self.better_sources_async).pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Completeness Check", command=self.completeness_check_async).pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Prepare Best RGB Layer", command=self.observatory_prepare_best_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Composition Strategy", command=self.observatory_show_composition_strategy, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
+        controls_primary = ttk.Frame(controls)
+        controls_primary.pack(fill="x")
+        controls_secondary = ttk.Frame(controls)
+        controls_secondary.pack(fill="x", pady=(4, 0))
+        ttk.Button(controls_primary, text="Analyze Current Search", command=self.observatory_analyze_current, style="Accent.TButton").pack(side="left")
+        ttk.Button(controls_primary, text="Build Sky Mosaic View", command=self.observatory_draw_current_mosaic).pack(side="left", padx=(8, 0))
+        ttk.Button(controls_primary, text="Prepare Best RGB Layer", command=self.observatory_prepare_best_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(controls_primary, text="Composition Strategy", command=self.observatory_show_composition_strategy, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(controls_secondary, text="Search Wider Radius", command=self.observatory_search_wider_async).pack(side="left")
+        ttk.Button(controls_secondary, text="Find Better Sources", command=self.better_sources_async).pack(side="left", padx=(8, 0))
+        ttk.Button(controls_secondary, text="Completeness Check", command=self.completeness_check_async).pack(side="left", padx=(8, 0))
+        ttk.Button(controls_secondary, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
 
         sensor_panel = ttk.LabelFrame(observatory_content, text="Sensor / Instrument Coverage", padding=8)
         sensor_panel.pack(fill="x", pady=(0, 8))
         sensor_tools = ttk.Frame(sensor_panel)
         sensor_tools.pack(fill="x")
-        ttk.Label(sensor_tools, text="Sensor filter").pack(side="left")
+        sensor_filter_row = ttk.Frame(sensor_tools)
+        sensor_filter_row.pack(fill="x")
+        sensor_primary_row = ttk.Frame(sensor_tools)
+        sensor_primary_row.pack(fill="x", pady=(4, 0))
+        sensor_secondary_row = ttk.Frame(sensor_tools)
+        sensor_secondary_row.pack(fill="x", pady=(4, 0))
+        ttk.Label(sensor_filter_row, text="Sensor filter").pack(side="left")
         self.sensor_filter_var = tk.StringVar(value="All sensors")
         sensor_names = ["All sensors", "WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NIRCam", "MIRI", "Other Hubble", "Other JWST", "Unknown sensor"]
         self.sensor_filter_combo = ttk.Combobox(
-            sensor_tools,
+            sensor_filter_row,
             textvariable=self.sensor_filter_var,
             values=sensor_names,
             state="readonly",
@@ -574,23 +584,23 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         )
         self.sensor_filter_combo.pack(side="left", padx=(8, 0))
         self.sensor_filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
-        ttk.Button(sensor_tools, text="Refresh Sensors", command=self.observatory_update_sensor_dashboard).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Sensor Report", command=self.observatory_show_sensor_report, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Rank Sensors", command=self.observatory_show_sensor_readiness).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Use Best Sensor", command=self.observatory_use_best_sensor).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Sensor RGB Plan", command=self.observatory_show_sensor_rgb_plan).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Mixed RGB Plan", command=self.observatory_show_cross_sensor_rgb_plan).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Check Mixed Alignment", command=self.observatory_show_cross_sensor_alignment).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Mixed Recipe", command=self.observatory_show_mixed_rgb_recipe).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Save Recipe", command=self.observatory_save_mixed_rgb_recipe).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Save Plan", command=self.observatory_save_sensor_rgb_plan).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Prepare Sensor RGB", command=self.observatory_prepare_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Prepare Mixed RGB", command=self.observatory_prepare_cross_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Copy Sensors", command=self.observatory_copy_sensor_summary).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Export Sensors", command=self.observatory_export_sensor_summary_csv).pack(side="left", padx=(8, 0))
-        ttk.Button(sensor_tools, text="Show Selected Sensor", command=self.observatory_use_selected_sensor).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_filter_row, text="Refresh Sensors", command=self.observatory_update_sensor_dashboard).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_primary_row, text="Sensor Report", command=self.observatory_show_sensor_report, style="Accent.TButton").pack(side="left")
+        ttk.Button(sensor_primary_row, text="Rank Sensors", command=self.observatory_show_sensor_readiness).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_primary_row, text="Use Best Sensor", command=self.observatory_use_best_sensor).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_primary_row, text="Sensor RGB Plan", command=self.observatory_show_sensor_rgb_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_primary_row, text="Mixed RGB Plan", command=self.observatory_show_cross_sensor_rgb_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_primary_row, text="Prepare Sensor RGB", command=self.observatory_prepare_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_primary_row, text="Prepare Mixed RGB", command=self.observatory_prepare_cross_sensor_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_secondary_row, text="Check Mixed Alignment", command=self.observatory_show_cross_sensor_alignment).pack(side="left")
+        ttk.Button(sensor_secondary_row, text="Mixed Recipe", command=self.observatory_show_mixed_rgb_recipe).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_secondary_row, text="Save Recipe", command=self.observatory_save_mixed_rgb_recipe).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_secondary_row, text="Save Plan", command=self.observatory_save_sensor_rgb_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_secondary_row, text="Copy Sensors", command=self.observatory_copy_sensor_summary).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_secondary_row, text="Export Sensors", command=self.observatory_export_sensor_summary_csv).pack(side="left", padx=(8, 0))
+        ttk.Button(sensor_secondary_row, text="Show Selected Sensor", command=self.observatory_use_selected_sensor).pack(side="left", padx=(8, 0))
         self.sensor_status_var = tk.StringVar(value="Run a search to populate sensor coverage.")
-        ttk.Label(sensor_tools, textvariable=self.sensor_status_var, wraplength=520).pack(side="left", padx=(12, 0), fill="x", expand=True)
+        ttk.Label(sensor_filter_row, textvariable=self.sensor_status_var, wraplength=520).pack(side="left", padx=(12, 0), fill="x", expand=True)
         self.sensor_summary_list = tk.Listbox(
             sensor_panel,
             height=4,
@@ -635,11 +645,17 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         mosaic_tools = ttk.Frame(right)
         mosaic_tools.pack(fill="x")
-        ttk.Label(mosaic_tools, text="Sky Mosaic / Coverage Map", style="Section.TLabel").pack(side="left")
-        ttk.Label(mosaic_tools, text="Layer").pack(side="left", padx=(18, 6))
+        mosaic_filter_row = ttk.Frame(mosaic_tools)
+        mosaic_filter_row.pack(fill="x")
+        mosaic_rgb_row = ttk.Frame(mosaic_tools)
+        mosaic_rgb_row.pack(fill="x", pady=(4, 0))
+        mosaic_export_row = ttk.Frame(mosaic_tools)
+        mosaic_export_row.pack(fill="x", pady=(4, 0))
+        ttk.Label(mosaic_filter_row, text="Sky Mosaic / Coverage Map", style="Section.TLabel").pack(side="left")
+        ttk.Label(mosaic_filter_row, text="Layer").pack(side="left", padx=(18, 6))
         self.mosaic_layer_var = tk.StringVar(value="All active sources")
         self.mosaic_layer_combo = ttk.Combobox(
-            mosaic_tools,
+            mosaic_filter_row,
             textvariable=self.mosaic_layer_var,
             values=["All active sources", "Hubble / HST", "JWST"],
             state="readonly",
@@ -647,10 +663,10 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         )
         self.mosaic_layer_combo.pack(side="left")
         self.mosaic_layer_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
-        ttk.Label(mosaic_tools, text="Color").pack(side="left", padx=(12, 6))
+        ttk.Label(mosaic_filter_row, text="Color").pack(side="left", padx=(12, 6))
         self.mosaic_color_mode_var = tk.StringVar(value="Wavelength")
         self.mosaic_color_mode_combo = ttk.Combobox(
-            mosaic_tools,
+            mosaic_filter_row,
             textvariable=self.mosaic_color_mode_var,
             values=["Wavelength", "Mission", "Instrument", "Exposure"],
             state="readonly",
@@ -660,42 +676,42 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.mosaic_color_mode_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
         self.mosaic_best_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            mosaic_tools,
+            mosaic_filter_row,
             text="Best candidates only",
             variable=self.mosaic_best_only_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(14, 0))
         self.mosaic_overlap_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            mosaic_tools,
+            mosaic_filter_row,
             text="Overlap only",
             variable=self.mosaic_overlap_only_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(10, 0))
         self.mosaic_footprints_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
-            mosaic_tools,
+            mosaic_filter_row,
             text="Footprints",
             variable=self.mosaic_footprints_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(10, 0))
-        ttk.Button(mosaic_tools, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
-        ttk.Button(mosaic_tools, text="Mosaic RGB Plan", command=self.observatory_show_mosaic_rgb_plan, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Next RGB Pick", command=self.observatory_select_next_mosaic_rgb_pick, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Get RGB Pick Products", command=self.observatory_get_mosaic_rgb_pick_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="RGB Progress", command=self.observatory_show_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Copy RGB Progress", command=self.observatory_copy_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Reset RGB Progress", command=self.observatory_reset_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Copy RGB Plan", command=self.observatory_copy_mosaic_rgb_plan).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Export RGB Plan", command=self.observatory_export_mosaic_rgb_plan_csv).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Overlap Candidates", command=self.observatory_show_overlap_candidates).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Select Best", command=self.observatory_select_best_overlap_candidate, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Copy Overlap", command=self.observatory_copy_overlap_candidates).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Export Overlap", command=self.observatory_export_overlap_candidates_csv).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Copy Marker Details", command=self.observatory_copy_marker_details).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Copy Mosaic Rows", command=self.observatory_copy_mosaic_rows).pack(side="left", padx=(8, 0))
-        ttk.Button(mosaic_tools, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_filter_row, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_rgb_row, text="Mosaic RGB Plan", command=self.observatory_show_mosaic_rgb_plan, style="Accent.TButton").pack(side="left")
+        ttk.Button(mosaic_rgb_row, text="Next RGB Pick", command=self.observatory_select_next_mosaic_rgb_pick, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="Get RGB Pick Products", command=self.observatory_get_mosaic_rgb_pick_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="RGB Progress", command=self.observatory_show_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="Copy RGB Progress", command=self.observatory_copy_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="Reset RGB Progress", command=self.observatory_reset_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="Copy RGB Plan", command=self.observatory_copy_mosaic_rgb_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="Export RGB Plan", command=self.observatory_export_mosaic_rgb_plan_csv).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Overlap Candidates", command=self.observatory_show_overlap_candidates).pack(side="left")
+        ttk.Button(mosaic_export_row, text="Select Best", command=self.observatory_select_best_overlap_candidate, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Copy Overlap", command=self.observatory_copy_overlap_candidates).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Export Overlap", command=self.observatory_export_overlap_candidates_csv).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Copy Marker Details", command=self.observatory_copy_marker_details).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Copy Mosaic Rows", command=self.observatory_copy_mosaic_rows).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")

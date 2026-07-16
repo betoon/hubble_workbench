@@ -699,6 +699,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(mosaic_rgb_row, text="Mosaic RGB Plan", command=self.observatory_show_mosaic_rgb_plan, style="Accent.TButton").pack(side="left")
         ttk.Button(mosaic_rgb_row, text="Next RGB Pick", command=self.observatory_select_next_mosaic_rgb_pick, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_rgb_row, text="Get RGB Pick Products", command=self.observatory_get_mosaic_rgb_pick_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_rgb_row, text="Auto RGB Products", command=self.observatory_auto_collect_mosaic_rgb_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_rgb_row, text="RGB Progress", command=self.observatory_show_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_rgb_row, text="Copy RGB Progress", command=self.observatory_copy_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_rgb_row, text="Reset RGB Progress", command=self.observatory_reset_mosaic_rgb_progress).pack(side="left", padx=(8, 0))
@@ -745,6 +746,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def observatory_show_mosaic_rgb_progress(self):
         return super().observatory_show_mosaic_rgb_progress()
+
+    def observatory_auto_collect_mosaic_rgb_products(self):
+        return super().observatory_auto_collect_mosaic_rgb_products()
 
     def observatory_copy_mosaic_rgb_progress(self):
         return super().observatory_copy_mosaic_rgb_progress()

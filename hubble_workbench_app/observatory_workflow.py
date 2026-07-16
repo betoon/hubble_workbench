@@ -7,8 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
-from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, SEARCH_LOG_DIR
+from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
+from hubble_workbench_app.fits_io import OBSERVATIONS
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -2474,6 +2475,121 @@ class ObservatoryWorkflowMixin:
             self.mosaic_status_var.set(f"Getting products for Mosaic RGB {channel.title()} pick: {obs_id}.")
         return self.observatory_get_marker_products()
 
+    def observatory_auto_collect_mosaic_rgb_products(self):
+        if not self.require_astroquery():
+            return False
+        rgb_set = self.observatory_current_mosaic_rgb_set()
+        if not rgb_set:
+            self.observatory_show_mosaic_rgb_plan()
+            message = "No complete Mosaic RGB Plan is available yet. Widen the search or change the mosaic filters first."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+
+        channels = ("blue", "green", "red")
+        picks = [(channel, rgb_set[channel]) for channel in channels]
+        operation_id = self.start_browser_activity("Mosaic RGB: loading products for blue, green, and red picks...")
+        self.product_list.delete(0, "end")
+        self.product_results = []
+        self.visible_product_results = []
+        self.product_requested_mosaic_rgb_channels = set(channels)
+        self.visited_mosaic_rgb_channels = set(channels)
+        self.selected_mosaic_rgb_channel_index = 2
+        self.selected_mosaic_row = picks[-1][1]
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Mosaic RGB: loading products for Blue, Green, and Red picks...")
+
+        def worker():
+            try:
+                rows = []
+                seen = set()
+                log_entries = []
+                total = len(picks)
+                for index, (channel, obs) in enumerate(picks, start=1):
+                    obsid = obs.get("obsid")
+                    obs_label = obs.get("obs_id") or obsid or f"{channel} observation"
+                    self.after(
+                        0,
+                        lambda i=index, t=total, ch=channel, label=obs_label: self.set_download_progress(
+                            operation_id,
+                            min(95, i / max(1, t) * 90),
+                            f"Mosaic RGB products {i} of {t}: {ch.title()} {label}",
+                        ),
+                    )
+                    if not obsid:
+                        log_entries.append({"channel": channel, "obs_id": obs_label, "product_count": 0, "warning": "missing obsid"})
+                        continue
+                    try:
+                        products = OBSERVATIONS.get_product_list(obsid)
+                    except Exception as exc:
+                        log_entries.append({"channel": channel, "obs_id": obs_label, "product_count": 0, "warning": str(exc)})
+                        continue
+                    count = 0
+                    for product in products:
+                        item = self.normalize_product_row({name: self.table_value(product, name) for name in product.colnames}, obs)
+                        if not str(item.get("productFilename", "")).lower().endswith((".fits", ".fits.gz")):
+                            continue
+                        item["mosaic_rgb_channel_hint"] = channel
+                        key = self.row_identity(item)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        rows.append(item)
+                        count += 1
+                    log_entries.append({"channel": channel, "obs_id": obs_label, "product_count": count})
+                rows.sort(key=self.product_sort_key)
+                result = (rows, log_entries, None)
+            except Exception as exc:
+                result = ([], [], exc)
+            self.after(0, lambda: self.finish_observatory_auto_collect_mosaic_rgb_products(operation_id, result))
+
+        self.reset_download_progress()
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_observatory_auto_collect_mosaic_rgb_products(self, operation_id, result):
+        if operation_id != self.browser_operation_id:
+            return
+        rows, log_entries, error = result
+        if error:
+            self.stop_browser_activity(f"Mosaic RGB product collection failed: {self.format_error_message(error)}")
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("Mosaic RGB product collection failed. See Debug Console for details.")
+            return
+
+        self.product_results = rows
+        self.product_results_target = self.target_var.get().strip() if hasattr(self, "target_var") else ""
+        self.rgb_sets_only_var.set(False)
+        self.refresh_product_list()
+        try:
+            self.notebook.select(self.browser_tab)
+        except Exception:
+            pass
+        try:
+            self.use_best_rgb_set()
+        except Exception:
+            pass
+
+        if self.save_product_lists_var.get():
+            self.save_diagnostic_json(PRODUCT_LOG_DIR, f"{self.current_target_for_log()}_mosaic_rgb_products", {
+                "target": self.current_target_for_log(),
+                "product_count": len(rows),
+                "mosaic_rgb_channels": log_entries,
+                "products": rows[:5000],
+            })
+
+        channel_counts = {entry.get("channel", "?"): entry.get("product_count", 0) for entry in log_entries}
+        summary = ", ".join(f"{channel.title()} {channel_counts.get(channel, 0)}" for channel in ("blue", "green", "red"))
+        message = f"Mosaic RGB loaded {len(rows)} FITS products ({summary}). Review the RGB Picker, then download or compose."
+        self.stop_browser_activity(message)
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(message)
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", self.observatory_mosaic_rgb_progress_text())
+        except Exception:
+            pass
     def observatory_mosaic_rgb_progress_text(self):
         rows = self.observatory_mosaic_rgb_export_rows()
         if not rows:

@@ -53,8 +53,8 @@ TARGET_GALLERY = [
     ("M13 - Great Hercules Cluster", "M13", "0.08 deg"),
     ("M31 - Andromeda Galaxy", "M31", "0.12 deg"),
     ("M33 - Triangulum Galaxy", "M33", "0.12 deg"),
-    ("M16 - Eagle Nebula", "M16", "0.12 deg"),
-    ("M16 - Pillars of Creation / Fingers of God", "M16", "0.08 deg"),
+    ("M16 - Eagle Nebula (wide field)", "M16", "0.12 deg"),
+    ("M16 - Pillars of Creation / Fingers of God", "M16-PILLARS", "0.035 deg"),
     ("M17 - Omega Nebula", "M17", "0.10 deg"),
     ("M20 - Trifid Nebula", "M20", "0.08 deg"),
     ("M42 - Orion Nebula", "M42", "0.12 deg"),
@@ -82,7 +82,7 @@ JWST_TARGET_GALLERY = [
     ("Stephan's Quintet", "Stephan's Quintet", "0.08 deg"),
     ("Southern Ring Nebula", "NGC 3132", "0.05 deg"),
     ("Tarantula Nebula", "30 Doradus", "0.10 deg"),
-    ("Pillars of Creation", "M16", "0.08 deg"),
+    ("Pillars of Creation", "M16-PILLARS", "0.035 deg"),
     ("Orion Bar", "M42", "0.08 deg"),
     ("Phantom Galaxy", "M74", "0.12 deg"),
     ("Cartwheel Galaxy", "ESO 350-40", "0.12 deg"),
@@ -102,9 +102,22 @@ SOLAR_SYSTEM_TARGETS = {
     "IO", "EUROPA", "GANYMEDE", "CALLISTO", "TITAN", "ENCELADUS", "TRITON",
 }
 
+TARGET_SEARCH_PROFILES = {
+    "M16-PILLARS": {
+        "display_name": "Pillars of Creation / Fingers of God",
+        "parent_target": "M16",
+        "coordinate": "18h18m48s -13d49m00s",
+        "radius": "0.035 deg",
+        "target_names": ("M16-PILLARS", "PILLARS", "PILLARS OF CREATION", "M16"),
+    },
+}
+
 TARGET_ALIASES = {
-    "PILLARS OF CREATION": "M16",
-    "THE PILLARS OF CREATION": "M16",
+    "PILLARS OF CREATION": "M16-PILLARS",
+    "THE PILLARS OF CREATION": "M16-PILLARS",
+    "FINGERS OF GOD": "M16-PILLARS",
+    "M16 PILLARS": "M16-PILLARS",
+    "M16-PILLARS": "M16-PILLARS",
     "EAGLE NEBULA": "M16",
     "M 16": "M16",
     "M-16": "M16",
@@ -158,6 +171,12 @@ TARGET_RECIPES = {
         "filters": {"blue": ("F435W", "F438W"), "green": ("F502N", "F555W"), "red": ("F658N", "F656N", "F814W")},
         "preset": "Nebula",
         "stretch": {"low": 0.15, "high": 99.85, "gamma": 1.0, "asinh": 14.0},
+    },
+    "M16-PILLARS": {
+        "name": "Pillars of Creation / Fingers of God",
+        "filters": {"blue": ("F435W", "F438W", "F090W", "F115W"), "green": ("F502N", "F555W", "F200W", "F335M"), "red": ("F658N", "F656N", "F814W", "F444W", "F470N")},
+        "preset": "Nebula",
+        "stretch": {"low": 0.12, "high": 99.9, "gamma": 0.95, "asinh": 16.0},
     },
     "M51": {
         "name": "Whirlpool Galaxy",

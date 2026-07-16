@@ -1,4 +1,4 @@
-from .catalogs import SOLAR_SYSTEM_TARGETS, TARGET_ALIASES
+from .catalogs import SOLAR_SYSTEM_TARGETS, TARGET_ALIASES, TARGET_SEARCH_PROFILES
 from .fits_io import OBSERVATIONS
 
 
@@ -11,6 +11,28 @@ class MastSearchHelperMixin:
         elif text.endswith("d"):
             text = text[:-1].strip()
         return float(text or "0.05")
+
+    @classmethod
+    def target_search_profile(cls, target):
+        raw = str(target or "").strip()
+        key = raw.upper()
+        alias = TARGET_ALIASES.get(key)
+        return TARGET_SEARCH_PROFILES.get(alias or key)
+
+    @staticmethod
+    def angular_radius(radius_text, fallback="0.05 deg"):
+        try:
+            from astropy import units as u
+        except Exception:
+            return radius_text or fallback
+        text = str(radius_text or fallback).strip().lower()
+        value = float(text.replace("deg", "").replace("d", "").strip() or "0.05")
+        return value * u.deg
+
+    @staticmethod
+    def skycoord_from_text(coordinate_text):
+        from astropy.coordinates import SkyCoord
+        return SkyCoord(coordinate_text)
 
     @staticmethod
     def is_solar_system_target(target):
@@ -69,7 +91,13 @@ class MastSearchHelperMixin:
         raw = str(target or "").strip()
         variants = [raw, raw.upper(), raw.title()]
         alias = TARGET_ALIASES.get(raw.upper())
-        if alias:
+        profile = TARGET_SEARCH_PROFILES.get(alias or raw.upper())
+        if profile:
+            variants = list(profile.get("target_names", ())) + variants
+            parent = profile.get("parent_target")
+            if parent:
+                variants.append(parent)
+        elif alias:
             variants.insert(0, alias)
             variants.extend([alias.upper(), alias.title()])
         compact = raw.replace(" ", "")
@@ -77,14 +105,21 @@ class MastSearchHelperMixin:
             variants.extend([compact, compact.upper()])
             compact_alias = TARGET_ALIASES.get(compact.upper())
             if compact_alias:
-                variants.insert(0, compact_alias)
-                variants.extend([compact_alias.upper(), compact_alias.title()])
+                compact_profile = TARGET_SEARCH_PROFILES.get(compact_alias.upper())
+                if compact_profile:
+                    variants = list(compact_profile.get("target_names", ())) + variants
+                    parent = compact_profile.get("parent_target")
+                    if parent:
+                        variants.append(parent)
+                else:
+                    variants.insert(0, compact_alias)
+                    variants.extend([compact_alias.upper(), compact_alias.title()])
         seen = set()
         clean = []
         for item in variants:
-            key = item.strip().upper()
-            if item.strip() and key not in seen:
-                clean.append(item.strip())
+            key = str(item or "").strip().upper()
+            if str(item or "").strip() and key not in seen:
+                clean.append(str(item).strip())
                 seen.add(key)
         return clean
 
@@ -140,6 +175,18 @@ class MastSearchHelperMixin:
 
     def mast_image_observation_rows(self, target, radius, telescope_code):
         first_error = None
+        profile = self.target_search_profile(target)
+        if profile and profile.get("coordinate"):
+            try:
+                coord = self.skycoord_from_text(profile["coordinate"])
+                query_radius = self.angular_radius(radius or profile.get("radius"), profile.get("radius", "0.05 deg"))
+                obs = OBSERVATIONS.query_region(coord, radius=query_radius)
+                rows = self.mast_row_dicts(obs, telescope_code)
+                if rows:
+                    return rows
+            except Exception as exc:
+                first_error = exc
+
         if self.is_solar_system_target(target):
             target_rows = self.mast_target_name_rows(target, telescope_code)
             if target_rows:

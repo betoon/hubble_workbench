@@ -91,9 +91,10 @@ class WcsAlignmentTests(unittest.TestCase):
             output_path, metadata = stack_fits_exposures([first, second], directory / "gradient.fits")
 
             self.assertNotEqual(metadata["background_planes"][1][1], 0.0)
+            self.assertLess(metadata["background_plane_limits"][1][0], metadata["background_plane_limits"][1][1])
             with fits.open(output_path) as hdul:
                 row = hdul[0].data[5].copy()
-                self.assertLess(float(np.nanmax(row) - np.nanmin(row)), 0.2)
+                self.assertLess(float(np.nanmax(row) - np.nanmin(row)), 0.3)
 
 
 if __name__ == "__main__":

@@ -211,7 +211,7 @@ def _background_plane(reference, source, overlap, gain):
     yy, xx = np.where(overlap)
     if xx.size < 20:
         offset = float(np.nanmedian(reference[overlap] - gain * source[overlap])) if xx.size else 0.0
-        return (offset, 0.0, 0.0)
+        return (offset, 0.0, 0.0), (offset, offset)
     step = max(1, int(math.ceil(xx.size / 200_000)))
     yy = yy[::step]
     xx = xx[::step]
@@ -228,7 +228,10 @@ def _background_plane(reference, source, overlap, gain):
         keep = np.abs(residual - median) <= 4.0 * 1.4826 * mad
         if keep.sum() >= 20:
             coefficients, *_ = np.linalg.lstsq(design[keep], difference[keep], rcond=None)
-    return tuple(float(value) for value in coefficients)
+    fitted = design @ coefficients
+    low, high = np.percentile(fitted, [2, 98])
+    padding = max(float(high - low) * 0.25, np.finfo(float).eps)
+    return tuple(float(value) for value in coefficients), (float(low - padding), float(high + padding))
 
 
 def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_000_000, sigma=6.0, feather_pixels=12):
@@ -248,46 +251,55 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
     reference = cube[0]
     background_offsets = [0.0]
     background_planes = [(0.0, 0.0, 0.0)]
+    background_plane_limits = [(0.0, 0.0)]
     photometric_gains = [1.0]
     for index in range(1, len(cube)):
         overlap = np.isfinite(reference) & np.isfinite(cube[index])
         if overlap.sum() >= 100:
-            source_values = cube[index][overlap].astype(np.float64)
-            reference_values = reference[overlap].astype(np.float64)
-            source_low, source_high = np.nanpercentile(source_values, [5, 95])
-            reference_low, reference_high = np.nanpercentile(reference_values, [5, 95])
+            source_all = cube[index][overlap].astype(np.float64)
+            reference_all = reference[overlap].astype(np.float64)
+            source_low, source_high = np.nanpercentile(source_all, [5, 95])
+            reference_low, reference_high = np.nanpercentile(reference_all, [5, 95])
             stable = (
-                (source_values >= source_low) & (source_values <= source_high)
-                & (reference_values >= reference_low) & (reference_values <= reference_high)
+                (source_all >= source_low) & (source_all <= source_high)
+                & (reference_all >= reference_low) & (reference_all <= reference_high)
             )
-            source_values = source_values[stable]
-            reference_values = reference_values[stable]
+            source_values = source_all[stable]
+            reference_values = reference_all[stable]
             variance = float(np.var(source_values)) if source_values.size else 0.0
             if source_values.size >= 100 and variance > np.finfo(float).eps:
                 covariance = float(np.mean((source_values - source_values.mean()) * (reference_values - reference_values.mean())))
                 gain = min(4.0, max(0.25, covariance / variance))
             else:
                 gain = 1.0
+            background_stable = (
+                stable
+                & (source_all <= np.nanpercentile(source_values, 45))
+                & (reference_all <= np.nanpercentile(reference_values, 45))
+            )
             stable_overlap = overlap.copy()
             overlap_y, overlap_x = np.where(overlap)
-            stable_overlap[overlap_y, overlap_x] = stable
-            plane = _background_plane(reference, cube[index], stable_overlap, gain)
+            stable_overlap[overlap_y, overlap_x] = background_stable
+            plane, plane_limits = _background_plane(reference, cube[index], stable_overlap, gain)
             offset = plane[0]
         else:
             gain = 1.0
             offset = reference_median - gain * medians[index]
             plane = (offset, 0.0, 0.0)
+            plane_limits = (offset, offset)
         if plane[1] or plane[2]:
             height, width = cube[index].shape
             y_norm = (np.arange(height, dtype=np.float32) - (height - 1) / 2.0) / max(1.0, height / 2.0)
             x_norm = (np.arange(width, dtype=np.float32) - (width - 1) / 2.0) / max(1.0, width / 2.0)
             correction = plane[0] + plane[1] * x_norm[None, :] + plane[2] * y_norm[:, None]
+            correction = np.clip(correction, plane_limits[0], plane_limits[1])
             cube[index] = cube[index] * gain + correction
         else:
             cube[index] = cube[index] * gain + offset
         photometric_gains.append(gain)
         background_offsets.append(offset)
         background_planes.append(plane)
+        background_plane_limits.append(plane_limits)
 
     if weights is None:
         weights = np.ones(len(paths), dtype=np.float32)
@@ -349,6 +361,7 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
         "background_medians": medians,
         "background_offsets": background_offsets,
         "background_planes": [list(values) for values in background_planes],
+        "background_plane_limits": [list(values) for values in background_plane_limits],
         "photometric_gains": photometric_gains,
         "rejected_samples": int((valid & ~keep).sum()),
         "max_coverage": int(coverage.max()) if coverage.size else 0,

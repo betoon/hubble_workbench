@@ -1,3 +1,5 @@
+import math
+
 from .catalogs import (
     JWST_NIRCAM_FILTERS,
     JWST_MIRI_FILTERS,
@@ -10,6 +12,47 @@ from .paths import ENHANCED_PRODUCT_TOKENS
 
 
 class ProductScoringMixin:
+    @staticmethod
+    def product_footprint_bounds(row):
+        text = str(row.get("s_region", "") or row.get("S_REGION", "") or "").strip()
+        if "POLYGON" not in text.upper():
+            return None
+        values = []
+        for token in text.replace("(", " ").replace(")", " ").replace(",", " ").split():
+            try:
+                values.append(float(token))
+            except Exception:
+                continue
+        if len(values) < 6:
+            return None
+        ras = values[0::2]
+        decs = values[1::2]
+        return min(ras), max(ras), min(decs), max(decs)
+
+    @classmethod
+    def product_overlap_status(cls, left, right):
+        """Return 2 for confirmed overlap, 1 for unknown, and 0 for confirmed separation."""
+        left_bounds = cls.product_footprint_bounds(left)
+        right_bounds = cls.product_footprint_bounds(right)
+        if left_bounds and right_bounds:
+            separated = (
+                left_bounds[1] < right_bounds[0] or right_bounds[1] < left_bounds[0]
+                or left_bounds[3] < right_bounds[2] or right_bounds[3] < left_bounds[2]
+            )
+            return 0 if separated else 2
+        try:
+            left_ra = float(left.get("s_ra"))
+            left_dec = float(left.get("s_dec"))
+            right_ra = float(right.get("s_ra"))
+            right_dec = float(right.get("s_dec"))
+            left_fov = float(left.get("s_fov"))
+            right_fov = float(right.get("s_fov"))
+        except (TypeError, ValueError):
+            return 1
+        dec_scale = max(0.01, abs(math.cos(math.radians((left_dec + right_dec) / 2))))
+        distance = math.hypot((left_ra - right_ra) * dec_scale, left_dec - right_dec)
+        return 2 if distance <= (left_fov + right_fov) / 2 else 0
+
     @staticmethod
     def row_identity(row):
         return (
@@ -66,8 +109,11 @@ class ProductScoringMixin:
                 row_filter = str(row.get("filters", "") or row.get("Spectral_Elt", "")).strip().upper()
                 if not selected_filter or row_filter != selected_filter:
                     continue
-                candidates.append((-self.product_quality_score(row), self.product_sort_key(row), row))
-            for _score, _sort, row in sorted(candidates):
+                overlap_status = self.product_overlap_status(selected, row)
+                if overlap_status == 0:
+                    continue
+                candidates.append((-overlap_status, -self.product_quality_score(row), self.product_sort_key(row), row))
+            for _overlap, _score, _sort, row in sorted(candidates):
                 observation = str(row.get("obsid", "") or row.get("obs_id", "") or self.row_identity(row))
                 if observation in seen_observations:
                     continue

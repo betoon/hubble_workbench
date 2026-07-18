@@ -1,6 +1,7 @@
 import unittest
 
 from hubble_workbench_app.product_browser import ProductBrowserMixin
+from hubble_workbench_app.product_scoring import ProductScoringMixin
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -41,6 +42,28 @@ class ObservatorySourceTests(unittest.TestCase):
 
         self.assertEqual(len(selected), 60)
         self.assertEqual(counts, {"NIRCam": 15, "ACS WFC": 15, "WFC3 UVIS": 15, "WFPC2": 15})
+
+    def test_rgb_stack_selection_rejects_non_overlapping_exposure(self):
+        class Scoring(ProductScoringMixin):
+            @staticmethod
+            def product_is_direct_fits(_row): return True
+            @staticmethod
+            def product_is_spectrum(_row): return False
+            @staticmethod
+            def product_rgb_channel(_row): return "green"
+            @staticmethod
+            def product_quality_score(_row): return 10
+            @staticmethod
+            def product_sort_key(row): return row["productFilename"]
+
+        selected = {"obsid": "1", "filters": "F555W", "productFilename": "selected.fits", "s_region": "POLYGON 10 20 10.1 20 10.1 20.1 10 20.1"}
+        overlap = {"obsid": "2", "filters": "F555W", "productFilename": "overlap.fits", "s_region": "POLYGON 10.05 20.05 10.15 20.05 10.15 20.15 10.05 20.15"}
+        separate = {"obsid": "3", "filters": "F555W", "productFilename": "separate.fits", "s_region": "POLYGON 12 22 12.1 22 12.1 22.1 12 22.1"}
+        rgb_set = {channel: dict(selected) for channel in ("blue", "green", "red")}
+
+        stacks = Scoring().rgb_stack_download_rows([selected, overlap, separate], rgb_set, per_channel=3)
+
+        self.assertEqual([row["productFilename"] for row in stacks["green"]], ["selected.fits", "overlap.fits"])
 
     def test_source_product_and_rgb_counts_match_known_codes(self):
         summary = {

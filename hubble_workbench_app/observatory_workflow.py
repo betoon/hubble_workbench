@@ -1655,10 +1655,14 @@ class ObservatoryWorkflowMixin:
             for channel in ("blue", "green", "red")
         }
         choices = []
+        target = self.target_var.get().strip().upper() if hasattr(self, "target_var") else ""
+        planetary = target in {"MERCURY", "VENUS", "MARS", "JUPITER", "SATURN", "URANUS", "NEPTUNE"}
         for blue in shortlists["blue"]:
             for green in shortlists["green"]:
                 for red in shortlists["red"]:
                     rgb_set = {"blue": blue, "green": green, "red": red}
+                    if planetary and hasattr(self, "planetary_rgb_time_coherent") and not self.planetary_rgb_time_coherent(rgb_set):
+                        continue
                     sensor_count = len({
                         self.observatory_sensor_family(rgb_set[channel])
                         for channel in ("blue", "green", "red")

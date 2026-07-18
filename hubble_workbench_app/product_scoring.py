@@ -1,4 +1,5 @@
 import math
+import re
 
 from .catalogs import (
     JWST_NIRCAM_FILTERS,
@@ -194,6 +195,10 @@ class ProductScoringMixin:
         for token in ("SUBARRAY", "SUBARR", "CORNER", "PARTIAL", "LIMB", "AURORA", "SPOT", "GRS", "RING", "MOON"):
             if token in text:
                 score -= 25
+        subarray_match = re.search(r"(?:^|[_-])SUB(\d{2,4})(?:[_\-.]|$)", text)
+        if subarray_match:
+            size = int(subarray_match.group(1))
+            score -= 120 if size <= 320 else 80 if size <= 640 else 45
         if target_key in {"JUPITER", "SATURN", "URANUS", "NEPTUNE"}:
             for moon in ("IO", "EUROPA", "GANYMEDE", "CALLISTO", "TITAN", "ENCELADUS", "TRITON"):
                 if moon in target_name and target_name != target_key:
@@ -208,6 +213,28 @@ class ProductScoringMixin:
             elif fov >= 0.004:
                 score += 12
         return score
+
+    def planetary_rgb_time_span_days(self, rgb_set):
+        if not self.current_target_is_solar_system():
+            return None
+        times = []
+        for channel in ("blue", "green", "red"):
+            value = self.product_numeric_value(rgb_set[channel], "t_min", "t_obs", "mjd", "MJD-OBS")
+            if value is not None:
+                times.append(value)
+        return max(times) - min(times) if len(times) == 3 else None
+
+    def planetary_rgb_time_coherent(self, rgb_set, max_days=0.25):
+        if not self.current_target_is_solar_system():
+            return True
+        span = self.planetary_rgb_time_span_days(rgb_set)
+        if span is not None:
+            return span <= float(max_days)
+        missions = {
+            str(rgb_set[channel].get("obs_collection", "") or rgb_set[channel].get("mission", "")).upper()
+            for channel in ("blue", "green", "red")
+        }
+        return len(missions - {""}) <= 1
 
     def product_quality_score(self, row):
         name = str(row.get("productFilename", "")).lower()
@@ -427,4 +454,12 @@ class ProductScoringMixin:
             targets = {str(rgb_set[channel].get("Target", "") or rgb_set[channel].get("target_name", "")).upper() for channel in ("blue", "green", "red")}
             if len(targets) == 1:
                 score += 25
+            time_span = self.planetary_rgb_time_span_days(rgb_set)
+            if time_span is not None:
+                if time_span <= 0.02:
+                    score += 80
+                elif time_span <= 0.25:
+                    score += 35
+                elif time_span > 1.0:
+                    score -= 300
         return score

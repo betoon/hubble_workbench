@@ -20,6 +20,35 @@ from hubble_workbench_app.observatory_sources import (
 
 
 class ObservatorySourceTests(unittest.TestCase):
+    def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
+        class Scoring(ProductScoringMixin):
+            target_var = type("Var", (), {"get": lambda self: "Jupiter"})()
+
+        scoring = Scoring()
+        common = {"Target": "JUPITER", "Detector": "NIRCAM", "filters": "F335M"}
+        full = {**common, "productFilename": "jw_full_nircam_f335m_i2d.fits", "obs_id": "jw_full"}
+        sub = {**common, "productFilename": "jw_nircam_f335m-sub320_i2d.fits", "obs_id": "jw_sub320"}
+
+        self.assertGreater(scoring.solar_system_frame_score(full), scoring.solar_system_frame_score(sub) + 80)
+
+    def test_planetary_rgb_requires_close_observation_times_across_missions(self):
+        class Scoring(ProductScoringMixin):
+            target_var = type("Var", (), {"get": lambda self: "Jupiter"})()
+
+        close = {
+            "blue": {"t_min": 60000.00, "obs_collection": "JWST"},
+            "green": {"t_min": 60000.01, "obs_collection": "JWST"},
+            "red": {"t_min": 60000.02, "obs_collection": "JWST"},
+        }
+        far = {
+            "blue": {"t_min": 59000.0, "obs_collection": "HST"},
+            "green": {"t_min": 60000.0, "obs_collection": "JWST"},
+            "red": {"t_min": 60000.01, "obs_collection": "JWST"},
+        }
+
+        self.assertTrue(Scoring().planetary_rgb_time_coherent(close))
+        self.assertFalse(Scoring().planetary_rgb_time_coherent(far))
+
     def test_source_observation_count_matches_known_codes(self):
         summary = {"by_mission": {"HST": 3, "JWST": 2, "Other": 1}}
         self.assertEqual(source_observation_count(summary, {"name": "Hubble", "code": "HST"}), 3)

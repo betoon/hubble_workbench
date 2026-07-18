@@ -60,7 +60,7 @@ class HydrogenWorkflowMixin:
         ttk.Label(controls, text="Color preset", style="Section.TLabel").pack(anchor="w", pady=(14, 3))
         preset = ttk.Combobox(controls, textvariable=self.hydrogen_preset_var, values=list(HYDROGEN_PRESETS), state="readonly")
         preset.pack(fill="x")
-        preset.bind("<<ComboboxSelected>>", self.hydrogen_update_preview)
+        preset.bind("<<ComboboxSelected>>", self.hydrogen_schedule_preview)
         self._hydrogen_scale(controls, "Glow strength", self.hydrogen_glow_var, 0, 5)
         self._hydrogen_scale(controls, "H-II region size", self.hydrogen_kernel_var, 5, 31)
         self._hydrogen_scale(controls, "Arcsinh stretch", self.hydrogen_stretch_var, 1, 50)
@@ -70,8 +70,8 @@ class HydrogenWorkflowMixin:
         self._hydrogen_scale(controls, "Red scale", self.hydrogen_red_scale_var, 0.5, 2.0)
         self._hydrogen_scale(controls, "Green scale", self.hydrogen_green_scale_var, 0.5, 2.0)
         self._hydrogen_scale(controls, "Blue scale", self.hydrogen_blue_scale_var, 0.5, 2.0)
-        ttk.Checkbutton(controls, text="Mask matching border color", variable=self.hydrogen_mask_background_var, command=self.hydrogen_update_preview).pack(anchor="w", pady=(8, 0))
-        ttk.Checkbutton(controls, text="Gentle final smoothing", variable=self.hydrogen_smooth_var, command=self.hydrogen_update_preview).pack(anchor="w")
+        ttk.Checkbutton(controls, text="Mask matching border color", variable=self.hydrogen_mask_background_var, command=self.hydrogen_schedule_preview).pack(anchor="w", pady=(8, 0))
+        ttk.Checkbutton(controls, text="Gentle final smoothing", variable=self.hydrogen_smooth_var, command=self.hydrogen_schedule_preview).pack(anchor="w")
         ttk.Button(controls, text="Use Top-Left as Background", command=self.hydrogen_use_corner_background).pack(fill="x", pady=(8, 0))
         ttk.Button(controls, text="Save Enhanced PNG + TIFF", command=self.hydrogen_save_outputs).pack(fill="x", pady=(8, 0))
         self.hydrogen_status_var = tk.StringVar(value="Use the final composite or open an RGB image.")
@@ -84,17 +84,17 @@ class HydrogenWorkflowMixin:
         ttk.Label(view_controls, text="View").pack(side="left")
         view = ttk.Combobox(view_controls, textvariable=self.hydrogen_view_var, values=["Side by Side", "Original", "H-II Mask", "Enhanced"], state="readonly", width=16)
         view.pack(side="left", padx=(6, 0))
-        view.bind("<<ComboboxSelected>>", self.hydrogen_update_preview)
+        view.bind("<<ComboboxSelected>>", self.hydrogen_schedule_preview)
         self.hydrogen_canvas = tk.Canvas(viewer, bg="#111318", highlightthickness=0)
         self.hydrogen_canvas.pack(fill="both", expand=True)
-        self.hydrogen_canvas.bind("<Configure>", self.hydrogen_update_preview)
+        self.hydrogen_canvas.bind("<Configure>", self.hydrogen_schedule_preview)
         self.hydrogen_canvas.bind("<Button-1>", self.hydrogen_select_background)
 
     def _hydrogen_scale(self, parent, label, variable, start, stop):
         frame = ttk.Frame(parent)
         frame.pack(fill="x", pady=(7, 0))
         ttk.Label(frame, text=label).pack(anchor="w")
-        ttk.Scale(frame, variable=variable, from_=start, to=stop, command=self.hydrogen_update_preview).pack(fill="x")
+        ttk.Scale(frame, variable=variable, from_=start, to=stop, command=self.hydrogen_schedule_preview).pack(fill="x")
 
     def hydrogen_use_composite(self):
         if not hasattr(self, "rgb_full_base_image"):
@@ -137,9 +137,22 @@ class HydrogenWorkflowMixin:
 
     def hydrogen_prepare_preview(self):
         image = Image.fromarray(float_rgb_to_uint8(self.hydrogen_full_rgb), mode="RGB")
-        image.thumbnail((1000, 1000), Image.Resampling.LANCZOS)
+        # Keep interactive morphology responsive; saving still processes the full image.
+        image.thumbnail((640, 640), Image.Resampling.LANCZOS)
         self.hydrogen_preview_rgb = np.asarray(image, dtype=np.float32) / 255.0
         self.hydrogen_update_preview()
+
+    def hydrogen_schedule_preview(self, _event=None):
+        """Collapse rapid slider/canvas events into one preview calculation."""
+        if not hasattr(self, "hydrogen_preview_rgb"):
+            return
+        job = getattr(self, "hydrogen_preview_job", None)
+        if job:
+            try:
+                self.after_cancel(job)
+            except Exception:
+                pass
+        self.hydrogen_preview_job = self.after(180, self.hydrogen_update_preview)
 
     def hydrogen_use_corner_background(self):
         if not hasattr(self, "hydrogen_preview_rgb"):
@@ -170,6 +183,7 @@ class HydrogenWorkflowMixin:
         }
 
     def hydrogen_update_preview(self, _event=None):
+        self.hydrogen_preview_job = None
         if not hasattr(self, "hydrogen_preview_rgb"):
             return
         try:

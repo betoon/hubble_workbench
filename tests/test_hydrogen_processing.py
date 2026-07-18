@@ -3,9 +3,34 @@ import unittest
 import numpy as np
 
 from hubble_workbench_app.hydrogen_processing import HYDROGEN_PRESETS, process_hydrogen_rgb
+from hubble_workbench_app.hydrogen_workflow import HydrogenWorkflowMixin
 
 
 class HydrogenProcessingTests(unittest.TestCase):
+    def test_rapid_preview_requests_are_debounced(self):
+        class PreviewHarness(HydrogenWorkflowMixin):
+            def __init__(self):
+                self.hydrogen_preview_rgb = np.zeros((2, 2, 3), dtype=np.float32)
+                self.cancelled = []
+                self.scheduled = []
+
+            def after(self, delay, callback):
+                job = f"job-{len(self.scheduled) + 1}"
+                self.scheduled.append((job, delay, callback))
+                return job
+
+            def after_cancel(self, job):
+                self.cancelled.append(job)
+
+        harness = PreviewHarness()
+        harness.hydrogen_schedule_preview()
+        harness.hydrogen_schedule_preview()
+
+        self.assertEqual(harness.cancelled, ["job-1"])
+        self.assertEqual(len(harness.scheduled), 2)
+        self.assertEqual(harness.scheduled[-1][1], 180)
+        self.assertEqual(harness.scheduled[-1][2], harness.hydrogen_update_preview)
+
     def test_compact_red_blue_structure_is_enhanced_and_background_is_preserved(self):
         image = np.full((41, 41, 3), 0.05, dtype=np.float32)
         image[18:23, 18:23, 0] = 0.8

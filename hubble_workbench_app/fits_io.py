@@ -1,5 +1,7 @@
 import shutil
 import subprocess
+import math
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -67,6 +69,135 @@ def first_image_hdu(path):
                 best_header = hdu.header
                 return arr.astype(np.float64), dict(best_header)
     raise RuntimeError(f"No 2D image data found in {path}")
+
+
+def _celestial_wcs(header):
+    try:
+        from astropy.wcs import WCS
+        clean_header = FITS.Header()
+        for key, value in dict(header).items():
+            if str(key).upper() in ("", "COMMENT", "HISTORY"):
+                continue
+            try:
+                clean_header[key] = value
+            except Exception:
+                continue
+        wcs = WCS(clean_header, relax=True).celestial
+    except Exception as exc:
+        raise RuntimeError(f"FITS header has no usable celestial WCS: {exc}") from exc
+    if wcs.pixel_n_dim != 2 or wcs.world_n_dim != 2 or not wcs.has_celestial:
+        raise RuntimeError("FITS header has no usable two-dimensional celestial WCS.")
+    return wcs
+
+
+def _reproject_bilinear(data, source_wcs, output_wcs, shape, chunk_rows=256):
+    """Reproject one array with bilinear interpolation and NaN outside its footprint."""
+    height, width = shape
+    source_height, source_width = data.shape
+    output = np.full(shape, np.nan, dtype=np.float32)
+    for y_start in range(0, height, chunk_rows):
+        y_stop = min(height, y_start + chunk_rows)
+        yy, xx = np.mgrid[y_start:y_stop, 0:width]
+        world = output_wcs.pixel_to_world_values(xx, yy)
+        source_x, source_y = source_wcs.world_to_pixel_values(*world)
+        valid = (
+            np.isfinite(source_x) & np.isfinite(source_y)
+            & (source_x >= 0) & (source_y >= 0)
+            & (source_x <= source_width - 1) & (source_y <= source_height - 1)
+        )
+        if not valid.any():
+            continue
+        safe_x = np.where(valid, source_x, 0)
+        safe_y = np.where(valid, source_y, 0)
+        x0 = np.floor(safe_x).astype(np.int64)
+        y0 = np.floor(safe_y).astype(np.int64)
+        x0 = np.clip(x0, 0, source_width - 1)
+        y0 = np.clip(y0, 0, source_height - 1)
+        x1 = np.clip(x0 + 1, 0, source_width - 1)
+        y1 = np.clip(y0 + 1, 0, source_height - 1)
+        dx = source_x - x0
+        dy = source_y - y0
+        values = (
+            data[y0, x0] * (1 - dx) * (1 - dy)
+            + data[y0, x1] * dx * (1 - dy)
+            + data[y1, x0] * (1 - dx) * dy
+            + data[y1, x1] * dx * dy
+        )
+        block = output[y_start:y_stop]
+        block[valid] = values[valid].astype(np.float32)
+    return output
+
+
+def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
+    """Place FITS channels on a shared union sky grid using their celestial WCS."""
+    if FITS is None:
+        raise RuntimeError("astropy is not installed.")
+    sources = []
+    for path in paths:
+        data, header = first_image_hdu(path)
+        sources.append({"path": str(path), "data": data, "header": header, "wcs": _celestial_wcs(header)})
+    if len(sources) < 2:
+        raise RuntimeError("At least two FITS channels are required for WCS alignment.")
+
+    reference_wcs = sources[0]["wcs"]
+    reference_points = []
+    for source in sources:
+        height, width = source["data"].shape
+        corners_x = np.array([-0.5, width - 0.5, width - 0.5, -0.5])
+        corners_y = np.array([-0.5, -0.5, height - 0.5, height - 0.5])
+        world = source["wcs"].pixel_to_world_values(corners_x, corners_y)
+        ref_x, ref_y = reference_wcs.world_to_pixel_values(*world)
+        finite = np.isfinite(ref_x) & np.isfinite(ref_y)
+        reference_points.extend(zip(ref_x[finite], ref_y[finite]))
+    if len(reference_points) < 4:
+        raise RuntimeError("The FITS footprints could not be transformed onto a shared sky grid.")
+
+    xs = np.array([point[0] for point in reference_points])
+    ys = np.array([point[1] for point in reference_points])
+    x_min, x_max = int(np.floor(xs.min())), int(np.ceil(xs.max()))
+    y_min, y_max = int(np.floor(ys.min())), int(np.ceil(ys.max()))
+    width, height = x_max - x_min, y_max - y_min
+    if width <= 0 or height <= 0:
+        raise RuntimeError("The shared WCS footprint has invalid dimensions.")
+    output_wcs = deepcopy(reference_wcs)
+    output_wcs.wcs.crpix -= np.array([x_min, y_min], dtype=float)
+    full_resolution_shape = (height, width)
+    scale_factor = 1.0
+    if width * height > int(max_output_pixels):
+        scale_factor = math.sqrt((width * height) / max(1, int(max_output_pixels))) * 1.001
+        while math.ceil(width / scale_factor) * math.ceil(height / scale_factor) > int(max_output_pixels):
+            scale_factor *= 1.01
+        if output_wcs.wcs.has_cd():
+            output_wcs.wcs.cd *= scale_factor
+        else:
+            output_wcs.wcs.cdelt *= scale_factor
+        output_wcs.wcs.crpix = 0.5 + (output_wcs.wcs.crpix - 0.5) / scale_factor
+        width = max(1, int(math.ceil(width / scale_factor)))
+        height = max(1, int(math.ceil(height / scale_factor)))
+    shape = (height, width)
+    aligned = [
+        _reproject_bilinear(source["data"], source["wcs"], output_wcs, shape)
+        for source in sources
+    ]
+    masks = [np.isfinite(channel) for channel in aligned]
+    union = np.logical_or.reduce(masks)
+    overlap = np.logical_and.reduce(masks)
+    union_pixels = int(union.sum())
+    overlap_pixels = int(overlap.sum())
+    output_header = dict(output_wcs.to_header(relax=True))
+    headers = [dict(output_header) for _source in sources]
+    metadata = {
+        "mode": "celestial WCS union",
+        "output_shape": shape,
+        "full_resolution_shape": full_resolution_shape,
+        "pixel_scale_factor": scale_factor,
+        "source_shapes": [source["data"].shape for source in sources],
+        "coverage_fractions": [float(mask.sum() / max(1, union_pixels)) for mask in masks],
+        "overlap_fraction": float(overlap_pixels / max(1, union_pixels)),
+        "union_pixels": union_pixels,
+        "overlap_pixels": overlap_pixels,
+    }
+    return aligned, headers, metadata
 
 
 def find_fits_liberator_cli():

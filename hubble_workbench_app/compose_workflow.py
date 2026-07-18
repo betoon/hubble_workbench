@@ -7,7 +7,7 @@ from tkinter import messagebox
 import numpy as np
 from PIL import Image
 
-from .fits_io import find_fits_liberator_cli, first_image_hdu, run_fits_liberator_channel
+from .fits_io import find_fits_liberator_cli, first_image_hdu, run_fits_liberator_channel, wcs_align_fits_channels
 from .image_processing import (
     downsample_float_rgb_for_preview,
     downsample_image_for_preview,
@@ -63,12 +63,26 @@ class ComposeWorkflowMixin:
         channels = []
         headers = []
         source_shapes = []
+        aligned_data = None
+        alignment_note = ""
+        try:
+            self.after(0, lambda: self.compose_status.set("Aligning RGB channels by sky coordinates..."))
+            aligned_data, headers, alignment = wcs_align_fits_channels(paths)
+            source_shapes = alignment["source_shapes"]
+            overlap_percent = alignment["overlap_fraction"] * 100
+            alignment_note = f" + WCS union alignment ({overlap_percent:.1f}% common overlap)"
+        except Exception as exc:
+            self.after(0, lambda e=exc: self.compose_status.set(f"WCS alignment unavailable; using image-size alignment. {e}"))
         high_quality = bool(self.high_quality_var.get())
         channel_names = ("red", "green", "blue")
-        for channel_name, path in zip(channel_names, paths):
+        for index, (channel_name, path) in enumerate(zip(channel_names, paths)):
             self.after(0, lambda c=channel_name, p=path: self.compose_status.set(f"Reading {c} channel: {Path(p).name}"))
-            data, header = first_image_hdu(path)
-            source_shapes.append(data.shape)
+            if aligned_data is not None:
+                data = aligned_data[index]
+            else:
+                data, header = first_image_hdu(path)
+                source_shapes.append(data.shape)
+                headers.append(header)
             self.after(0, lambda c=channel_name: self.compose_status.set(f"Stretching {c} channel..."))
             if high_quality:
                 settings = self.channel_stretch_vars[channel_name]
@@ -86,17 +100,16 @@ class ComposeWorkflowMixin:
                 ))
             else:
                 channels.append(normalize_image(data, stretch=self.compose_stretch_var.get()))
-            headers.append(header)
         self.after(0, lambda: self.compose_status.set("Combining RGB channels..."))
         resize_mode = "largest" if self.composite_size_var.get() == "Largest channel" else "smallest"
         if high_quality:
             r, g, b = resize_float_to_match(channels, resize_mode)
             rgb_float = np.dstack([r, g, b]).astype(np.float32)
             image = Image.fromarray(float_rgb_to_uint8(rgb_float), mode="RGB")
-            return image, headers, source_shapes, resize_mode, rgb_float, "Python engine"
+            return image, headers, source_shapes, resize_mode, rgb_float, "Python engine" + alignment_note
         r, g, b = resize_to_match(channels, resize_mode)
         rgb = np.dstack([r, g, b]).astype(np.uint8)
-        return Image.fromarray(rgb, mode="RGB"), headers, source_shapes, resize_mode, None, "Python engine"
+        return Image.fromarray(rgb, mode="RGB"), headers, source_shapes, resize_mode, None, "Python engine" + alignment_note
 
     def compose_rgb_with_fits_liberator(self, paths, cli_path):
         channels = []

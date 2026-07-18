@@ -1586,18 +1586,42 @@ class ObservatoryWorkflowMixin:
             score += 16
         return score
 
+    def observatory_cross_sensor_shortlist(self, rows, per_sensor=2):
+        """Keep strong candidates from every sensor, not only the global leaders."""
+        shortlisted = []
+        sensor_counts = {}
+        for row in rows:
+            sensor = self.observatory_sensor_family(row)
+            count = sensor_counts.get(sensor, 0)
+            if count >= per_sensor:
+                continue
+            shortlisted.append(row)
+            sensor_counts[sensor] = count + 1
+        return shortlisted
+
     def observatory_best_cross_sensor_rgb_set(self):
         candidates = self.observatory_cross_sensor_candidates()
         if not all(candidates[channel] for channel in ("blue", "green", "red")):
             return None
+        shortlists = {
+            channel: self.observatory_cross_sensor_shortlist(candidates[channel])
+            for channel in ("blue", "green", "red")
+        }
         choices = []
-        for blue in candidates["blue"][:5]:
-            for green in candidates["green"][:5]:
-                for red in candidates["red"][:5]:
+        for blue in shortlists["blue"]:
+            for green in shortlists["green"]:
+                for red in shortlists["red"]:
                     rgb_set = {"blue": blue, "green": green, "red": red}
-                    choices.append((self.observatory_cross_sensor_set_score(rgb_set), rgb_set))
-        choices.sort(key=lambda item: item[0], reverse=True)
-        return choices[0][1] if choices else None
+                    sensor_count = len({
+                        self.observatory_sensor_family(rgb_set[channel])
+                        for channel in ("blue", "green", "red")
+                    })
+                    choices.append((sensor_count, self.observatory_cross_sensor_set_score(rgb_set), rgb_set))
+        mixed_choices = [item for item in choices if item[0] > 1]
+        if mixed_choices:
+            choices = mixed_choices
+        choices.sort(key=lambda item: (item[1], item[0]), reverse=True)
+        return choices[0][2] if choices else None
 
     def observatory_cross_sensor_rgb_plan_text(self):
         candidates = self.observatory_cross_sensor_candidates()

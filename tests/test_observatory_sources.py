@@ -645,6 +645,25 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertIn("Mixed sensors", plan)
         self.assertIn("Alignment check", plan)
 
+    def test_cross_sensor_rgb_considers_sensor_outside_global_top_five(self):
+        workflow = SensorWorkflowHarness()
+        workflow.product_results = []
+        for index in range(6):
+            workflow.product_results.extend([
+                {"obs_collection": "HST", "instrument_name": "ACS/WFC", "filters": "F438W", "productFilename": f"a{index}_blue.fits", "Format": "image/fits"},
+                {"obs_collection": "HST", "instrument_name": "ACS/WFC", "filters": "F555W", "productFilename": f"a{index}_green.fits", "Format": "image/fits"},
+                {"obs_collection": "HST", "instrument_name": "ACS/WFC", "filters": "F814W", "productFilename": f"a{index}_red.fits", "Format": "image/fits"},
+            ])
+        workflow.product_results.append(
+            {"obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F444W", "productFilename": "z_jwst_red.fits", "Format": "image/fits"}
+        )
+        workflow.target_var = type("Var", (), {"get": lambda self: "M51"})()
+
+        rgb_set = workflow.observatory_best_cross_sensor_rgb_set()
+        sensors = {workflow.observatory_sensor_family(rgb_set[channel]) for channel in ("blue", "green", "red")}
+
+        self.assertEqual(sensors, {"ACS WFC", "NIRCam"})
+
 
     def test_cross_sensor_alignment_scores_coordinate_spread(self):
         workflow = SensorWorkflowHarness()

@@ -211,7 +211,11 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000, require_full_st
     union_pixels = int(union.sum())
     overlap_pixels = int(overlap.sum())
     output_header = dict(output_wcs.to_header(relax=True))
-    headers = [dict(output_header) for _source in sources]
+    headers = []
+    for source in sources:
+        aligned_header = dict(source["header"])
+        aligned_header.update(output_header)
+        headers.append(aligned_header)
     metadata = {
         "mode": "celestial WCS union",
         "output_shape": shape,

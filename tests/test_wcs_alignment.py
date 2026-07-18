@@ -69,6 +69,26 @@ class WcsAlignmentTests(unittest.TestCase):
             self.assertLess(metadata["overlap_fraction"], 1)
             self.assertIn("CTYPE1", headers[0])
 
+    def test_alignment_preserves_channel_metadata_with_shared_wcs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            paths = [directory / f"metadata_{index}.fits" for index in range(2)]
+            self.write_fits(paths[0], 1, (10.0, 20.0))
+            self.write_fits(paths[1], 2, (10.002, 20.0))
+            for index, path in enumerate(paths):
+                with fits.open(path, mode="update") as hdul:
+                    hdul[0].header["TELESCOP"] = "JWST"
+                    hdul[0].header["INSTRUME"] = "MIRI"
+                    hdul[0].header["FILTER"] = f"F{index + 1}000W"
+
+            _channels, headers, _metadata = wcs_align_fits_channels(paths)
+
+            self.assertEqual(headers[0]["TELESCOP"], "JWST")
+            self.assertEqual(headers[0]["INSTRUME"], "MIRI")
+            self.assertEqual(headers[0]["FILTER"], "F1000W")
+            self.assertEqual(headers[1]["FILTER"], "F2000W")
+            self.assertIn("CTYPE1", headers[0])
+
     def test_downsamples_excessive_union_canvas(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)

@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
-from .fits_io import OBSERVATIONS
+from .fits_io import OBSERVATIONS, stack_fits_exposures
 from .paths import DOWNLOAD_DIR, DOWNLOAD_LOG_DIR
 
 
@@ -18,7 +18,7 @@ class DownloadWorkflowMixin:
         rows = [self.visible_product_results[index] for index in selections]
         self.download_product_rows_async(rows)
 
-    def download_product_rows_async(self, rows, folder_label=None, rgb_set=None):
+    def download_product_rows_async(self, rows, folder_label=None, rgb_set=None, stack_rows=None):
         if not (rows and rows[0].get("_source") == "HLA") and not self.require_astroquery():
             return
         target = self.target_var.get().strip().replace(" ", "_") or "target"
@@ -70,9 +70,42 @@ class DownloadWorkflowMixin:
                             ),
                         )
                         manifest = self.download_mast_products_individually(rows, download_path, operation_id, exc)
-                result = (manifest, download_path, None, rgb_set)
+                stacked_paths = {}
+                stack_metadata = {}
+                if rgb_set and stack_rows:
+                    downloaded = self.extract_downloaded_paths(manifest, download_path)
+                    stack_dir = download_path / "processed_stacks"
+                    for channel, channel_rows in stack_rows.items():
+                        matched_paths = []
+                        matched_weights = []
+                        for row in channel_rows:
+                            expected = str(row.get("productFilename", "")).lower()
+                            match = next((path for path in downloaded if path.name.lower() == expected or path.name.lower().endswith(expected)), None)
+                            if match is None:
+                                continue
+                            matched_paths.append(match)
+                            try:
+                                matched_weights.append(max(1.0, float(row.get("t_exptime", 0) or 1)))
+                            except Exception:
+                                matched_weights.append(1.0)
+                        if len(matched_paths) < 2:
+                            continue
+                        self.after(0, lambda ch=channel, count=len(matched_paths): self.set_download_progress(
+                            operation_id, 96, f"Aligning and stacking {count} {ch} exposures..."
+                        ))
+                        try:
+                            stacked_path, metadata = stack_fits_exposures(
+                                matched_paths,
+                                stack_dir / f"{channel}_stacked.fits",
+                                weights=matched_weights,
+                            )
+                            stacked_paths[channel] = stacked_path
+                            stack_metadata[channel] = metadata
+                        except Exception as stack_exc:
+                            stack_metadata[channel] = {"error": str(stack_exc), "exposure_count": len(matched_paths)}
+                result = (manifest, download_path, None, rgb_set, stacked_paths, stack_metadata)
             except Exception as exc:
-                result = (None, download_path, exc, rgb_set)
+                result = (None, download_path, exc, rgb_set, {}, {})
             heartbeat_active["running"] = False
             self.after(0, lambda: self.finish_download(operation_id, result))
 
@@ -131,7 +164,7 @@ class DownloadWorkflowMixin:
     def finish_download(self, operation_id, result):
         if operation_id != self.browser_operation_id:
             return
-        manifest, download_path, error, rgb_set = result
+        manifest, download_path, error, rgb_set, stacked_paths, stack_metadata = result
         if error:
             if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
                 self.set_easy_all_sensors_status("stopped", "Download failed before the RGB set could be loaded.")
@@ -147,15 +180,19 @@ class DownloadWorkflowMixin:
                 "download_path": str(download_path),
                 "manifest": manifest,
                 "rgb_set": rgb_set,
+                "stacked_paths": {channel: str(path) for channel, path in stacked_paths.items()},
+                "stack_metadata": stack_metadata,
             })
         if rgb_set:
-            self.load_downloaded_rgb_set(manifest, download_path, rgb_set)
+            self.load_downloaded_rgb_set(manifest, download_path, rgb_set, stacked_paths=stacked_paths, stack_metadata=stack_metadata)
             return
         self.stop_browser_activity(f"Downloaded products to {download_path}")
 
-    def load_downloaded_rgb_set(self, manifest, download_path, rgb_set):
+    def load_downloaded_rgb_set(self, manifest, download_path, rgb_set, stacked_paths=None, stack_metadata=None):
         downloaded = self.extract_downloaded_paths(manifest, download_path)
         channel_paths = self.match_downloaded_rgb_paths(downloaded, rgb_set)
+        channel_paths.update(stacked_paths or {})
+        self.last_rgb_stack_metadata = stack_metadata or {}
         missing = [channel for channel in ("blue", "green", "red") if channel not in channel_paths]
         if missing:
             if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":

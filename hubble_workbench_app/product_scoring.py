@@ -45,6 +45,39 @@ class ProductScoringMixin:
             candidates.append((-score, self.product_sort_key(row), row))
         return [row for _score, _sort, row in sorted(candidates)[:limit]]
 
+    def rgb_stack_download_rows(self, rows, rgb_set, per_channel=3):
+        """Choose independent, same-filter exposures for each selected RGB channel."""
+        result = {}
+        for channel in ("blue", "green", "red"):
+            selected = rgb_set[channel]
+            selected_filter = str(selected.get("filters", "") or selected.get("Spectral_Elt", "")).strip().upper()
+            chosen = [selected]
+            seen_observations = {
+                str(selected.get("obsid", "") or selected.get("obs_id", "") or self.row_identity(selected))
+            }
+            candidates = []
+            for row in rows:
+                if self.row_identity(row) == self.row_identity(selected):
+                    continue
+                if not self.product_is_direct_fits(row) or self.product_is_spectrum(row):
+                    continue
+                if self.product_rgb_channel(row) != channel:
+                    continue
+                row_filter = str(row.get("filters", "") or row.get("Spectral_Elt", "")).strip().upper()
+                if not selected_filter or row_filter != selected_filter:
+                    continue
+                candidates.append((-self.product_quality_score(row), self.product_sort_key(row), row))
+            for _score, _sort, row in sorted(candidates):
+                observation = str(row.get("obsid", "") or row.get("obs_id", "") or self.row_identity(row))
+                if observation in seen_observations:
+                    continue
+                chosen.append(row)
+                seen_observations.add(observation)
+                if len(chosen) >= max(1, int(per_channel)):
+                    break
+            result[channel] = chosen
+        return result
+
     def quality_badges(self, row):
         name = str(row.get("productFilename", "")).lower()
         badges = []

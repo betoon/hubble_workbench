@@ -322,8 +322,11 @@ class ProductBrowserMixin:
         if not picks:
             return
         rgb_set = {channel: row for channel, row in picks}
-        rows = [rgb_set[channel] for channel in ("blue", "green", "red")]
-        self.download_product_rows_async(rows, "RGB_set", rgb_set=rgb_set)
+        stack_rows = self.rgb_stack_download_rows(self.product_results, rgb_set, per_channel=3)
+        rows = self.unique_product_rows([
+            row for channel in ("blue", "green", "red") for row in stack_rows[channel]
+        ])
+        self.download_product_rows_async(rows, "RGB_set", rgb_set=rgb_set, stack_rows=stack_rows)
 
     @staticmethod
     def product_copy_details(row):

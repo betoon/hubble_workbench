@@ -6,7 +6,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from hubble_workbench_app.fits_io import wcs_align_fits_channels
+from hubble_workbench_app.fits_io import stack_fits_exposures, wcs_align_fits_channels
 
 
 class WcsAlignmentTests(unittest.TestCase):
@@ -44,6 +44,26 @@ class WcsAlignmentTests(unittest.TestCase):
             channels, _headers, metadata = wcs_align_fits_channels(paths, max_output_pixels=100)
             self.assertGreater(metadata["pixel_scale_factor"], 1)
             self.assertLessEqual(channels[0].size, 100)
+
+    def test_stacks_exposures_with_background_matching_and_artifact_rejection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            paths = [directory / f"exposure_{index}.fits" for index in range(3)]
+            self.write_fits(paths[0], 1, (10.0, 20.0))
+            self.write_fits(paths[1], 2, (10.0, 20.0))
+            self.write_fits(paths[2], 3, (10.0, 20.0))
+            with fits.open(paths[1], mode="update") as hdul:
+                hdul[0].data[5, 5] = 1000
+            output = directory / "stacked.fits"
+
+            output_path, metadata = stack_fits_exposures(paths, output, weights=[1, 2, 1])
+
+            self.assertTrue(output_path.exists())
+            self.assertGreater(metadata["rejected_samples"], 0)
+            with fits.open(output_path) as hdul:
+                self.assertEqual(hdul[0].header["NSTACK"], 3)
+                self.assertEqual(hdul[1].name, "COVERAGE")
+                self.assertLess(hdul[0].data[5, 5], 10)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import shutil
 import subprocess
 import math
+import warnings
 from copy import deepcopy
 from pathlib import Path
 
@@ -198,6 +199,77 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
         "overlap_pixels": overlap_pixels,
     }
     return aligned, headers, metadata
+
+
+def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_000_000, sigma=6.0):
+    """WCS-align and robustly combine repeated exposures from one filter."""
+    paths = list(paths or [])
+    if not paths:
+        raise RuntimeError("No FITS exposures were provided for stacking.")
+    if len(paths) == 1:
+        raise RuntimeError("At least two FITS exposures are required for stacking.")
+    aligned, headers, alignment = wcs_align_fits_channels(paths, max_output_pixels=max_output_pixels)
+    cube = np.stack(aligned).astype(np.float32)
+    medians = []
+    for layer in cube:
+        finite = layer[np.isfinite(layer)]
+        medians.append(float(np.nanmedian(finite)) if finite.size else 0.0)
+    reference_median = medians[0]
+    for index, median in enumerate(medians):
+        cube[index] += reference_median - median
+
+    if weights is None:
+        weights = np.ones(len(paths), dtype=np.float32)
+    weights = np.asarray(weights, dtype=np.float32)
+    if weights.size != len(paths):
+        raise RuntimeError("Exposure weights must match the number of FITS files.")
+    weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
+    weight_cube = weights[:, None, None]
+    valid = np.isfinite(cube)
+    keep = valid.copy()
+    if len(paths) >= 3:
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="All-NaN slice encountered", category=RuntimeWarning)
+            median_image = np.nanmedian(cube, axis=0)
+            mad = np.nanmedian(np.abs(cube - median_image), axis=0)
+        threshold = np.maximum(float(sigma) * 1.4826 * mad, np.finfo(np.float32).eps)
+        keep &= np.abs(cube - median_image) <= threshold
+    effective_weights = np.where(keep, weight_cube, 0.0)
+    numerator = np.nansum(np.where(keep, cube * weight_cube, 0.0), axis=0)
+    denominator = effective_weights.sum(axis=0)
+    stacked = np.divide(
+        numerator,
+        denominator,
+        out=np.full(numerator.shape, np.nan, dtype=np.float32),
+        where=denominator > 0,
+    ).astype(np.float32)
+    coverage = keep.sum(axis=0).astype(np.uint16)
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    header = FITS.Header()
+    for key, value in headers[0].items():
+        try:
+            header[key] = value
+        except Exception:
+            continue
+    header["NSTACK"] = (len(paths), "Number of WCS-aligned exposures")
+    header["STACKMTH"] = ("SIGCLIP", "Weighted sigma-clipped mean")
+    hdul = FITS.HDUList([
+        FITS.PrimaryHDU(stacked, header=header),
+        FITS.ImageHDU(coverage, name="COVERAGE"),
+    ])
+    hdul.writeto(output_path, overwrite=True)
+    metadata = dict(alignment)
+    metadata.update({
+        "output_path": str(output_path),
+        "exposure_count": len(paths),
+        "weights": [float(value) for value in weights],
+        "background_medians": medians,
+        "rejected_samples": int((valid & ~keep).sum()),
+        "max_coverage": int(coverage.max()) if coverage.size else 0,
+    })
+    return output_path, metadata
 
 
 def find_fits_liberator_cli():

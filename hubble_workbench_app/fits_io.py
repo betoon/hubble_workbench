@@ -58,7 +58,7 @@ def first_image_hdu(path):
     if FITS is None:
         raise RuntimeError("astropy is not installed.")
     with FITS.open(path, memmap=False) as hdul:
-        best_header = None
+        primary_header = hdul[0].header.copy() if len(hdul) else FITS.Header()
         for hdu in hdul:
             data = getattr(hdu, "data", None)
             if data is None:
@@ -67,8 +67,9 @@ def first_image_hdu(path):
             while arr.ndim > 2:
                 arr = arr[0]
             if arr.ndim == 2 and arr.size:
-                best_header = hdu.header
-                return arr.astype(np.float64), dict(best_header)
+                merged_header = primary_header.copy()
+                merged_header.extend(hdu.header, update=True, strip=False)
+                return arr.astype(np.float64), dict(merged_header)
     raise RuntimeError(f"No 2D image data found in {path}")
 
 

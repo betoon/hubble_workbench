@@ -6,11 +6,32 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from hubble_workbench_app.fits_io import stack_fits_exposures, wcs_align_fits_channels
+from hubble_workbench_app.fits_io import first_image_hdu, stack_fits_exposures, wcs_align_fits_channels
 from hubble_workbench_app.image_processing import estimate_neutral_rgb_gains
 
 
 class WcsAlignmentTests(unittest.TestCase):
+    def test_first_image_hdu_merges_primary_metadata_with_science_wcs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "jwst_style.fits"
+            primary = fits.PrimaryHDU()
+            primary.header["TELESCOP"] = "JWST"
+            primary.header["INSTRUME"] = "NIRCAM"
+            wcs = WCS(naxis=2)
+            wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+            wcs.wcs.crpix = [5.5, 5.5]
+            wcs.wcs.crval = [10.0, 20.0]
+            wcs.wcs.cdelt = [-0.001, 0.001]
+            science = fits.ImageHDU(np.ones((10, 10), dtype=np.float32), header=wcs.to_header(), name="SCI")
+            fits.HDUList([primary, science]).writeto(path)
+
+            data, header = first_image_hdu(path)
+
+            self.assertEqual(data.shape, (10, 10))
+            self.assertEqual(header["TELESCOP"], "JWST")
+            self.assertEqual(header["INSTRUME"], "NIRCAM")
+            self.assertEqual(header["CTYPE1"], "RA---TAN")
+
     def test_neutral_balance_ignores_black_border_and_reduces_color_cast(self):
         image = np.zeros((20, 20, 3), dtype=np.float32)
         image[3:17, 3:17] = (0.20, 0.10, 0.05)

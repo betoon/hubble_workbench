@@ -913,6 +913,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.prefer_drizzled_var = tk.BooleanVar(value=SETTINGS.get("prefer_drizzled_products", True))
         self.presentation_cleanup_var = tk.BooleanVar(value=SETTINGS.get("presentation_cleanup", True))
         self.use_fits_liberator_var = tk.BooleanVar(value=SETTINGS.get("use_fits_liberator_engine", True))
+        self.mosaic_coverage_mode_var = tk.StringVar(value="Full mosaic")
         ttk.Label(controls, text="Stretch").pack(side="left")
         ttk.Combobox(controls, textvariable=self.compose_stretch_var, values=["asinh", "pow", "sqrt", "log", "linear"], state="readonly", width=8).pack(side="left", padx=(6, 12))
         ttk.Checkbutton(controls, text="High quality 16-bit", variable=self.high_quality_var, command=self.on_quality_option_changed).pack(side="left", padx=(0, 8))
@@ -927,6 +928,19 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(controls, text="Open Latest Output", command=self.open_latest_output).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Save Project", command=self.save_project_file).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Open Project", command=self.open_project_file).pack(side="left", padx=(8, 0))
+
+        coverage_controls = ttk.Frame(compose_content)
+        coverage_controls.pack(fill="x", pady=(0, 8))
+        ttk.Label(coverage_controls, text="Mosaic coverage").pack(side="left")
+        ttk.Combobox(
+            coverage_controls,
+            textvariable=self.mosaic_coverage_mode_var,
+            values=["Full mosaic", "Shared exposure overlap"],
+            state="readonly",
+            width=25,
+        ).pack(side="left", padx=(8, 8))
+        ttk.Button(coverage_controls, text="Stack Coverage Report", command=self.show_stack_coverage_report).pack(side="left")
+        ttk.Label(coverage_controls, text="Shared mode can discard large low-overlap areas.").pack(side="left", padx=(10, 0))
 
         tuning = ttk.Frame(compose_content)
         tuning.pack(fill="x", pady=(0, 8))
@@ -1205,6 +1219,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def auto_balance_color(self):
         return super().auto_balance_color()
+
+    def show_stack_coverage_report(self):
+        return super().show_stack_coverage_report()
 
     def apply_image_tuning(self):
         return super().apply_image_tuning()

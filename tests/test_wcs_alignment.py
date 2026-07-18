@@ -96,6 +96,24 @@ class WcsAlignmentTests(unittest.TestCase):
                 row = hdul[0].data[5].copy()
                 self.assertLess(float(np.nanmax(row) - np.nanmin(row)), 0.3)
 
+    def test_shared_stack_coverage_mode_keeps_only_full_exposure_overlap(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            paths = [directory / f"shifted_{index}.fits" for index in range(2)]
+            self.write_fits(paths[0], 1, (10.000, 20.000), shape=(30, 30))
+            self.write_fits(paths[1], 1, (10.010, 20.000), shape=(30, 30))
+            stacked, _metadata = stack_fits_exposures(paths, directory / "stacked.fits")
+
+            full, _headers, full_metadata = wcs_align_fits_channels([stacked, stacked])
+            shared, _headers, shared_metadata = wcs_align_fits_channels(
+                [stacked, stacked], require_full_stack_coverage=True
+            )
+
+            self.assertEqual(full_metadata["stack_coverage_mode"], "full mosaic")
+            self.assertEqual(shared_metadata["stack_coverage_mode"], "shared exposure overlap")
+            self.assertLess(np.isfinite(shared[0]).sum(), np.isfinite(full[0]).sum())
+            self.assertTrue(np.array_equal(np.isfinite(shared[0]), np.isfinite(shared[1])))
+
 
 if __name__ == "__main__":
     unittest.main()

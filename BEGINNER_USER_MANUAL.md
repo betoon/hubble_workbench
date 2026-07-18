@@ -292,6 +292,10 @@ When checked, the app composes automatically after loading an RGB set.
 
 Builds the color image.
 
+### Mosaic Coverage
+
+Keep **Full mosaic** for the complete recorded field. Choose **Shared exposure overlap** only when you want a cleaner central presentation containing pixels covered by every exposure in each stack and all three RGB channels. Click **Stack Coverage Report** first—the shared area can be much smaller than the full mosaic.
+
 ### Save PNG/TIFF + Notes
 
 Saves:

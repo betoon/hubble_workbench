@@ -129,13 +129,29 @@ def _reproject_bilinear(data, source_wcs, output_wcs, shape, chunk_rows=256):
     return output
 
 
-def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
+def _apply_stack_coverage(path, data, require_full_stack_coverage=False):
+    if not require_full_stack_coverage or FITS is None:
+        return data
+    try:
+        with FITS.open(path, memmap=False) as hdul:
+            stack_count = int(hdul[0].header.get("NSTACK", 0) or 0)
+            coverage_hdu = next((hdu for hdu in hdul[1:] if str(getattr(hdu, "name", "")).upper() == "COVERAGE"), None)
+            coverage = np.asarray(coverage_hdu.data) if coverage_hdu is not None else None
+            if stack_count >= 2 and coverage is not None and coverage.shape == data.shape:
+                return np.where(coverage >= stack_count, data, np.nan)
+    except Exception:
+        pass
+    return data
+
+
+def wcs_align_fits_channels(paths, max_output_pixels=16_000_000, require_full_stack_coverage=False):
     """Place FITS channels on a shared union sky grid using their celestial WCS."""
     if FITS is None:
         raise RuntimeError("astropy is not installed.")
     sources = []
     for path in paths:
         data, header = first_image_hdu(path)
+        data = _apply_stack_coverage(path, data, require_full_stack_coverage=require_full_stack_coverage)
         finite = np.isfinite(data)
         if finite.any():
             zero_fraction = float(np.count_nonzero(finite & (data == 0)) / finite.sum())
@@ -185,6 +201,9 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
         _reproject_bilinear(source["data"], source["wcs"], output_wcs, shape)
         for source in sources
     ]
+    if require_full_stack_coverage:
+        common_coverage = np.logical_and.reduce([np.isfinite(channel) for channel in aligned])
+        aligned = [np.where(common_coverage, channel, np.nan).astype(np.float32) for channel in aligned]
     masks = [np.isfinite(channel) for channel in aligned]
     union = np.logical_or.reduce(masks)
     overlap = np.logical_and.reduce(masks)
@@ -202,6 +221,7 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
         "overlap_fraction": float(overlap_pixels / max(1, union_pixels)),
         "union_pixels": union_pixels,
         "overlap_pixels": overlap_pixels,
+        "stack_coverage_mode": "shared exposure overlap" if require_full_stack_coverage else "full mosaic",
     }
     return aligned, headers, metadata
 

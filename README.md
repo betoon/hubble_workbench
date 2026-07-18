@@ -60,4 +60,6 @@ Space telescope FITS processing can be tricky. Different filters and products ma
 
 Some Hubble detector products include black no-data gaps or a rotated detector footprint. In **Color Composer**, use **Presentation cleanup**, **Straighten**, and **Auto crop black border** to make cleaner PNG presentation exports. The cleanup improves the visible presentation image; it does not create real telescope data where the detector did not record any.
 
+For multi-exposure RGB sets, **Mosaic coverage** defaults to **Full mosaic** so recorded sky is not silently discarded. Use **Stack Coverage Report** before choosing **Shared exposure overlap**; shared mode can create a cleaner central image but may remove most of a low-overlap field.
+
 **Hydrogen Enhance** is a visual H-II/H-alpha proxy derived from RGB structure. It is intended for artistic enhancement and inspection, not calibrated narrowband measurement.

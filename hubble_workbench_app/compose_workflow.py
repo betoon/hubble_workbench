@@ -68,10 +68,19 @@ class ComposeWorkflowMixin:
         alignment_note = ""
         try:
             self.after(0, lambda: self.compose_status.set("Aligning RGB channels by sky coordinates..."))
-            aligned_data, headers, alignment = wcs_align_fits_channels(paths)
+            shared_coverage = (
+                getattr(self, "mosaic_coverage_mode_var", None) is not None
+                and self.mosaic_coverage_mode_var.get() == "Shared exposure overlap"
+            )
+            aligned_data, headers, alignment = wcs_align_fits_channels(
+                paths,
+                require_full_stack_coverage=shared_coverage,
+            )
             source_shapes = alignment["source_shapes"]
             overlap_percent = alignment["overlap_fraction"] * 100
             alignment_note = f" + WCS union alignment ({overlap_percent:.1f}% common overlap)"
+            if shared_coverage:
+                alignment_note += " + shared stacked-exposure coverage"
         except Exception as exc:
             self.after(0, lambda e=exc: self.compose_status.set(f"WCS alignment unavailable; using image-size alignment. {e}"))
         high_quality = bool(self.high_quality_var.get())
@@ -309,6 +318,31 @@ class ComposeWorkflowMixin:
         self.compose_status.set(
             f"Auto-balanced dim shared areas: red {gains[0]:.2f}, green {gains[1]:.2f}, blue {gains[2]:.2f}."
         )
+
+    def show_stack_coverage_report(self):
+        metadata = getattr(self, "last_rgb_stack_metadata", {}) or {}
+        if not metadata:
+            messagebox.showinfo("Stack Coverage", "No multi-exposure stack metadata is loaded. Download an RGB set with repeated exposures first.")
+            return
+        lines = ["RGB Stack Coverage", ""]
+        weakest = 1.0
+        for channel in ("red", "green", "blue"):
+            details = metadata.get(channel)
+            if not details:
+                lines.append(f"{channel.title()}: single exposure or no stack")
+                continue
+            if details.get("error"):
+                lines.append(f"{channel.title()}: stack failed — {details['error']}")
+                continue
+            overlap = float(details.get("overlap_fraction", 0.0))
+            weakest = min(weakest, overlap)
+            count = int(details.get("exposure_count", 0))
+            quality = "strong" if overlap >= 0.50 else "limited" if overlap >= 0.20 else "low"
+            lines.append(f"{channel.title()}: {count} exposures; {overlap * 100:.1f}% shared coverage ({quality})")
+        lines.extend(["", "Full mosaic preserves every recorded area.", "Shared exposure overlap keeps only pixels covered by every exposure in each stack."])
+        if weakest < 0.20:
+            lines.append("Recommendation: use Full mosaic for field coverage; use Shared exposure overlap only for a cleaner central presentation.")
+        messagebox.showinfo("Stack Coverage", "\n".join(lines))
 
     def apply_image_tuning(self):
         if not hasattr(self, "rgb_base_image"):

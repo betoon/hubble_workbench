@@ -7,6 +7,48 @@ from hubble_workbench_app.paths import PRODUCT_LOG_DIR
 
 
 class ProductBrowserMixin:
+    def product_scan_sensor_name(self, row):
+        """Return a stable sensor label for balancing an observation scan."""
+        classifier = getattr(self, "observatory_sensor_family", None)
+        if callable(classifier):
+            try:
+                return classifier(row)
+            except Exception:
+                pass
+        instrument = str(row.get("instrument_name", "") or row.get("Detector", "") or "").strip()
+        mission = str(row.get("obs_collection", "") or row.get("mission", "") or "Unknown").strip()
+        return instrument or f"Other {mission}"
+
+    def sensor_balanced_observation_rows(self, rows, limit=60):
+        """Round-robin observations by sensor so one archive block cannot fill the scan."""
+        rows = list(rows or [])
+        if limit <= 0 or len(rows) <= limit:
+            return rows[:max(0, limit)]
+        buckets = {}
+        for row in rows:
+            buckets.setdefault(self.product_scan_sensor_name(row), []).append(row)
+        selected = []
+        offset = 0
+        while len(selected) < limit:
+            added = False
+            for sensor_rows in buckets.values():
+                if offset < len(sensor_rows):
+                    selected.append(sensor_rows[offset])
+                    added = True
+                    if len(selected) >= limit:
+                        break
+            if not added:
+                break
+            offset += 1
+        return selected
+
+    def product_scan_sensor_counts(self, rows):
+        counts = {}
+        for row in rows:
+            name = self.product_scan_sensor_name(row)
+            counts[name] = counts.get(name, 0) + 1
+        return counts
+
     def product_matches_filters(self, row):
         text = self.product_filter_text(row)
         if self.direct_fits_only_var.get():
@@ -339,9 +381,15 @@ class ProductBrowserMixin:
         if not self.search_results:
             messagebox.showinfo("Get All Products", "Search MAST first so there are observations to scan.")
             return
-        rows_to_scan = self.search_results[:60]
+        rows_to_scan = self.sensor_balanced_observation_rows(self.search_results, limit=60)
+        self.last_product_scan_sensor_counts = self.product_scan_sensor_counts(rows_to_scan)
+        sensor_detail = ", ".join(
+            f"{name}: {count}" for name, count in self.last_product_scan_sensor_counts.items()
+        )
         self.browser_timeout_seconds = 1800
-        operation_id = self.start_browser_activity(f"Loading products from {len(rows_to_scan)} observations...")
+        operation_id = self.start_browser_activity(
+            f"Loading products from {len(rows_to_scan)} sensor-balanced observations ({sensor_detail})..."
+        )
         self.product_list.delete(0, "end")
         self.product_results = []
         self.visible_product_results = []
@@ -438,6 +486,7 @@ class ProductBrowserMixin:
                 "all_observations": bool(all_observations),
                 "product_count": len(rows),
                 "visible_count": len(self.visible_product_results),
+                "scanned_observations_by_sensor": getattr(self, "last_product_scan_sensor_counts", {}),
                 "products": rows[:5000],
             })
         self.stop_browser_activity(

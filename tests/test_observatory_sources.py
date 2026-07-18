@@ -1,5 +1,7 @@
 import unittest
 
+from hubble_workbench_app.product_browser import ProductBrowserMixin
+
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
     composition_readiness_lines,
@@ -21,6 +23,24 @@ class ObservatorySourceTests(unittest.TestCase):
         summary = {"by_mission": {"HST": 3, "JWST": 2, "Other": 1}}
         self.assertEqual(source_observation_count(summary, {"name": "Hubble", "code": "HST"}), 3)
         self.assertEqual(source_observation_count(summary, {"name": "James Webb", "code": "JWST"}), 2)
+
+    def test_product_scan_balances_sensors_instead_of_taking_first_sixty(self):
+        class Browser(ProductBrowserMixin):
+            @staticmethod
+            def observatory_sensor_family(row):
+                return row["sensor"]
+
+        rows = (
+            [{"sensor": "NIRCam", "id": index} for index in range(80)]
+            + [{"sensor": "ACS WFC", "id": index} for index in range(20)]
+            + [{"sensor": "WFC3 UVIS", "id": index} for index in range(20)]
+            + [{"sensor": "WFPC2", "id": index} for index in range(20)]
+        )
+        selected = Browser().sensor_balanced_observation_rows(rows, limit=60)
+        counts = Browser().product_scan_sensor_counts(selected)
+
+        self.assertEqual(len(selected), 60)
+        self.assertEqual(counts, {"NIRCam": 15, "ACS WFC": 15, "WFC3 UVIS": 15, "WFPC2": 15})
 
     def test_source_product_and_rgb_counts_match_known_codes(self):
         summary = {

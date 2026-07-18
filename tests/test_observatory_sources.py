@@ -542,6 +542,21 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
         self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "HST", "instrument_name": "ACS/WFC"}), "ACS WFC")
         self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "JWST", "instrument_name": "NIRCam"}), "NIRCam")
         self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "JWST", "instrument_name": "MIRI"}), "MIRI")
+        self.assertEqual(workflow.observatory_sensor_family({"obs_collection": "HST", "instrument_name": "NICMOS/NIC2"}), "NICMOS")
+
+    def test_sensor_search_filter_selects_requested_instrument_or_mission(self):
+        workflow = SensorWorkflowHarness()
+        rows = [
+            {"obs_collection": "HST", "instrument_name": "ACS/WFC"},
+            {"obs_collection": "HST", "instrument_name": "WFC3/UVIS"},
+            {"obs_collection": "HST", "instrument_name": "NICMOS/NIC2"},
+            {"obs_collection": "JWST", "instrument_name": "NIRCam"},
+            {"obs_collection": "JWST", "instrument_name": "NIRSpec/IFU"},
+        ]
+        self.assertEqual(len(workflow.observatory_filter_rows_for_sensor_search(rows, "Hubble only")), 3)
+        self.assertEqual(workflow.observatory_filter_rows_for_sensor_search(rows, "NICMOS"), [rows[2]])
+        self.assertEqual(workflow.observatory_filter_rows_for_sensor_search(rows, "NIRCam"), [rows[3]])
+        self.assertEqual(workflow.observatory_sensor_search_mission("MIRI"), "JWST")
 
     def test_sensor_summary_counts_observations_products_and_rgb_channels(self):
         workflow = SensorWorkflowHarness()

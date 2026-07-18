@@ -574,7 +574,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         sensor_secondary_row.pack(fill="x", pady=(4, 0))
         ttk.Label(sensor_filter_row, text="Sensor filter").pack(side="left")
         self.sensor_filter_var = tk.StringVar(value="All sensors")
-        sensor_names = ["All sensors", "WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NIRCam", "MIRI", "Other Hubble", "Other JWST", "Unknown sensor"]
+        sensor_names = ["All sensors", "Hubble only", "JWST only", "WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NICMOS", "NIRCam", "MIRI", "Other Hubble", "Other JWST", "Unknown sensor"]
         self.sensor_filter_combo = ttk.Combobox(
             sensor_filter_row,
             textvariable=self.sensor_filter_var,
@@ -583,7 +583,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             width=18,
         )
         self.sensor_filter_combo.pack(side="left", padx=(8, 0))
-        self.sensor_filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_draw_current_mosaic())
+        self.sensor_filter_combo.bind("<<ComboboxSelected>>", lambda _event: self.observatory_sensor_filter_changed())
+        ttk.Button(sensor_filter_row, text="Search Selected Sensor", command=self.search_selected_sensor_async, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(sensor_filter_row, text="Refresh Sensors", command=self.observatory_update_sensor_dashboard).pack(side="left", padx=(8, 0))
         ttk.Button(sensor_primary_row, text="Sensor Report", command=self.observatory_show_sensor_report, style="Accent.TButton").pack(side="left")
         ttk.Button(sensor_primary_row, text="Rank Sensors", command=self.observatory_show_sensor_readiness).pack(side="left", padx=(8, 0))
@@ -1081,6 +1082,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def search_async(self):
         return super().search_async()
+
+    def search_selected_sensor_async(self):
+        return super().search_selected_sensor_async()
 
     def easy_high_quality_async(self):
         return super().easy_high_quality_async()

@@ -39,6 +39,12 @@ SENSOR_FAMILIES = [
         "role": "Legacy Hubble imaging useful for older targets and historical coverage.",
     },
     {
+        "name": "NICMOS",
+        "tokens": ("NICMOS", "NIC1", "NIC2", "NIC3"),
+        "mission": "HST",
+        "role": "Legacy Hubble near-infrared imaging from the NICMOS cameras.",
+    },
+    {
         "name": "NIRCam",
         "tokens": ("NIRCAM",),
         "mission": "JWST",
@@ -407,7 +413,48 @@ class ObservatoryWorkflowMixin:
 
     def observatory_row_matches_sensor_filter(self, row):
         sensor_filter = self.observatory_sensor_filter_name()
-        return sensor_filter in ("", "All sensors") or self.observatory_sensor_family(row) == sensor_filter
+        mission = str(row.get("obs_collection", "") or row.get("mission", "")).upper()
+        if sensor_filter in ("", "All sensors"):
+            return True
+        if sensor_filter == "Hubble only":
+            return mission == "HST"
+        if sensor_filter == "JWST only":
+            return mission == "JWST"
+        return self.observatory_sensor_family(row) == sensor_filter
+
+    @staticmethod
+    def observatory_sensor_search_mission(sensor_name):
+        if sensor_name in ("Hubble only", "WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NICMOS", "Other Hubble"):
+            return "HST"
+        if sensor_name in ("JWST only", "NIRCam", "MIRI", "Other JWST"):
+            return "JWST"
+        return "BOTH"
+
+    def observatory_filter_rows_for_sensor_search(self, rows, sensor_name):
+        rows = list(rows or [])
+        if sensor_name in ("", "All sensors"):
+            return rows
+        mission = self.observatory_sensor_search_mission(sensor_name)
+        if sensor_name in ("Hubble only", "JWST only"):
+            return [row for row in rows if str(row.get("obs_collection", "") or row.get("mission", "")).upper() == mission]
+        return [row for row in rows if self.observatory_sensor_family(row) == sensor_name]
+
+    def observatory_sensor_filter_changed(self):
+        try:
+            self.refresh_product_list()
+        except Exception:
+            pass
+        try:
+            self.observatory_draw_current_mosaic()
+        except Exception:
+            pass
+        sensor = self.observatory_sensor_filter_name()
+        observations = len(self.observatory_filter_rows_for_sensor_search(getattr(self, "search_results", []), sensor))
+        products = len([row for row in list(getattr(self, "product_results", []) or []) if self.observatory_row_matches_sensor_filter(row)])
+        message = f"{sensor}: showing {observations} loaded observations and {products} loaded products. Use Search Selected Sensor to query this target again."
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+        return message
 
     def observatory_sensor_summary(self, obs_rows=None, product_rows=None):
         obs_rows = list(obs_rows if obs_rows is not None else getattr(self, "search_results", []) or [])
@@ -450,7 +497,7 @@ class ObservatoryWorkflowMixin:
 
     def observatory_sensor_rows(self):
         rows = []
-        always_show = {"WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NIRCam", "MIRI"}
+        always_show = {"WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NICMOS", "NIRCam", "MIRI"}
         for item in self.observatory_sensor_summary().values():
             if item["observations"] or item["products"] or item["name"] in always_show:
                 rows.append(item)

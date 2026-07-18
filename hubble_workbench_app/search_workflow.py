@@ -12,6 +12,57 @@ from hubble_workbench_app.settings import SETTINGS, save_settings
 
 
 class SearchWorkflowMixin:
+    def search_selected_sensor_async(self):
+        if not self.require_astroquery():
+            return False
+        target = self.target_var.get().strip()
+        radius = self.radius_var.get().strip() or "0.05 deg"
+        sensor_name = self.observatory_sensor_filter_name()
+        if not target:
+            messagebox.showinfo("Search Selected Sensor", "Enter a target name first.")
+            return False
+        if sensor_name in ("", "All sensors"):
+            self.search_async()
+            return True
+        telescope_code = self.observatory_sensor_search_mission(sensor_name)
+        operation_id = self.start_browser_activity(f"Searching MAST for {sensor_name} image observations...")
+        self.obs_list.delete(0, "end")
+        self.product_list.delete(0, "end")
+        self.product_results = []
+        self.visible_product_results = []
+
+        def worker():
+            try:
+                archive_rows = self.mast_image_observation_rows(target, radius, telescope_code)
+                rows = self.observatory_filter_rows_for_sensor_search(archive_rows, sensor_name)
+                result = (rows, None)
+            except Exception as exc:
+                result = ([], exc)
+            self.after(0, lambda: self.finish_selected_sensor_search(operation_id, sensor_name, result))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_selected_sensor_search(self, operation_id, sensor_name, result):
+        if operation_id != self.browser_operation_id:
+            return
+        rows, error = result
+        if error:
+            self.stop_browser_activity(f"{sensor_name} search failed: {error}")
+            if hasattr(self, "sensor_status_var"):
+                self.sensor_status_var.set(f"{sensor_name} search failed: {error}")
+            return
+        self.finish_search(operation_id, (rows, None))
+        message = (
+            f"{sensor_name}: found {len(rows)} image observations. "
+            "Choose Get All Products to scan these observations for usable FITS products."
+        )
+        self.stop_browser_activity(message)
+        if hasattr(self, "observatory_update_sensor_dashboard"):
+            self.observatory_update_sensor_dashboard()
+        if hasattr(self, "sensor_status_var"):
+            self.sensor_status_var.set(message)
+
     def search_async(self):
         if not self.require_astroquery():
             return

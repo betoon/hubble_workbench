@@ -51,6 +51,8 @@ class ProductBrowserMixin:
 
     def product_matches_filters(self, row):
         text = self.product_filter_text(row)
+        if hasattr(self, "observatory_row_matches_sensor_filter") and not self.observatory_row_matches_sensor_filter(row):
+            return False
         if self.direct_fits_only_var.get():
             if not self.product_is_direct_fits(row):
                 return False

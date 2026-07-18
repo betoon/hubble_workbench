@@ -940,6 +940,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.build_tuning_slider(tuning, "Red", self.red_balance_var, 0.5, 1.8, 4)
         self.build_tuning_slider(tuning, "Green", self.green_balance_var, 0.5, 1.8, 5)
         self.build_tuning_slider(tuning, "Blue", self.blue_balance_var, 0.5, 1.8, 6)
+        ttk.Button(tuning, text="Auto Balance Color", command=self.auto_balance_color).grid(
+            row=0, column=3, rowspan=7, sticky="ns", padx=(10, 0), pady=2
+        )
 
         presentation = ttk.Frame(compose_content)
         presentation.pack(fill="x", pady=(0, 8))
@@ -1195,6 +1198,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def reset_straighten(self):
         return super().reset_straighten()
+
+    def auto_balance_color(self):
+        return super().auto_balance_color()
 
     def apply_image_tuning(self):
         return super().apply_image_tuning()

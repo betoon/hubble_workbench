@@ -53,6 +53,29 @@ def normalize_float_channel(data, low_percent=0.2, high_percent=99.8, stretch="a
     return np.nan_to_num(np.clip(scaled, 0, 1), nan=0.0).astype(np.float32)
 
 
+def estimate_neutral_rgb_gains(image, minimum=0.5, maximum=1.8):
+    """Estimate conservative RGB gains from dim, commonly covered image areas."""
+    arr = np.asarray(image, dtype=np.float64)
+    if arr.ndim != 3 or arr.shape[2] != 3:
+        raise ValueError("RGB color balancing requires a three-channel image.")
+    finite = np.all(np.isfinite(arr), axis=2)
+    brightness = np.mean(arr, axis=2)
+    covered = finite & (np.max(arr, axis=2) > 0)
+    if covered.sum() < 30:
+        return (1.0, 1.0, 1.0)
+    low, high = np.percentile(brightness[covered], [10, 45])
+    sample = covered & (brightness >= low) & (brightness <= high)
+    if sample.sum() < 30:
+        sample = covered
+    medians = np.median(arr[sample], axis=0)
+    positive = medians[np.isfinite(medians) & (medians > 0)]
+    if positive.size != 3:
+        return (1.0, 1.0, 1.0)
+    target = float(np.exp(np.mean(np.log(positive))))
+    gains = np.clip(target / medians, float(minimum), float(maximum))
+    return tuple(float(value) for value in gains)
+
+
 
 
 def resize_to_match(channels, mode="smallest"):

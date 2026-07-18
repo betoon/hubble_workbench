@@ -7,9 +7,22 @@ from astropy.io import fits
 from astropy.wcs import WCS
 
 from hubble_workbench_app.fits_io import stack_fits_exposures, wcs_align_fits_channels
+from hubble_workbench_app.image_processing import estimate_neutral_rgb_gains
 
 
 class WcsAlignmentTests(unittest.TestCase):
+    def test_neutral_balance_ignores_black_border_and_reduces_color_cast(self):
+        image = np.zeros((20, 20, 3), dtype=np.float32)
+        image[3:17, 3:17] = (0.20, 0.10, 0.05)
+        image[8:12, 8:12] = (1.0, 0.8, 0.6)
+
+        red, green, blue = estimate_neutral_rgb_gains(image)
+
+        self.assertLess(red, green)
+        self.assertLess(green, blue)
+        self.assertGreaterEqual(red, 0.5)
+        self.assertLessEqual(blue, 1.8)
+
     def write_fits(self, path, value, crval):
         wcs = WCS(naxis=2)
         wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]

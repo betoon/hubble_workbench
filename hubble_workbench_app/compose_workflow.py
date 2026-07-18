@@ -13,6 +13,7 @@ from .image_processing import (
     downsample_image_for_preview,
     fill_internal_black_gaps,
     float_rgb_to_uint8,
+    estimate_neutral_rgb_gains,
     normalize_float_channel,
     normalize_image,
     presentation_transform,
@@ -292,6 +293,22 @@ class ComposeWorkflowMixin:
         if hasattr(self, "straighten_label"):
             self.straighten_label.configure(text="0.0 deg")
         self.apply_image_tuning()
+
+    def auto_balance_color(self):
+        if not hasattr(self, "rgb_base_image"):
+            messagebox.showinfo("Auto Balance Color", "Compose an RGB image first.")
+            return
+        source = getattr(self, "rgb_base_float", None)
+        if source is None:
+            source = np.asarray(self.rgb_base_image, dtype=np.float32)
+        gains = estimate_neutral_rgb_gains(source)
+        self.red_balance_var.set(gains[0])
+        self.green_balance_var.set(gains[1])
+        self.blue_balance_var.set(gains[2])
+        self.apply_image_tuning()
+        self.compose_status.set(
+            f"Auto-balanced dim shared areas: red {gains[0]:.2f}, green {gains[1]:.2f}, blue {gains[2]:.2f}."
+        )
 
     def apply_image_tuning(self):
         if not hasattr(self, "rgb_base_image"):

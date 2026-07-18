@@ -26,8 +26,15 @@ Use this when you want the app to do most of the work.
 6. Wait. This can take several minutes.
 7. When it finishes, the app moves to **Color Composer** and shows the image.
 8. Click **Save PNG/TIFF + Notes** when you like the result.
+9. Optional: open **Hydrogen Enhance**, click **Use Final Composite**, choose a color preset, and compare the original with the enhanced version.
 
 If Easy RGB fails, try a different target or use a smaller/larger radius.
+
+## Hydrogen Enhance Tab
+
+Use this after creating a final RGB image in **Color Composer**. Click **Use Final Composite**, then adjust glow strength, H-II region size, stretch, sky level, and color preset. The side-by-side view compares the source and enhanced image; **H-II Mask** shows exactly which structures drive the effect. Click the displayed image to choose a background color when border masking needs help.
+
+Choose **Save Enhanced PNG + TIFF** to save an 8-bit PNG, a 16-bit RGB TIFF, and the enhancement mask in `outputs/`. This is a visual hydrogen/H-II enhancement, not a calibrated scientific H-alpha measurement.
 
 ## Setup Tab
 

@@ -44,8 +44,9 @@ For testing the newer Observatory Explorer, sensor coverage, sky mosaic, and mix
 4. For the guided workflow, choose **Easy High Quality**. It searches for strong RGB-ready products, prefers drizzled/mosaic files, downloads extra useful products for later, composes in high-quality mode, and saves PNG/TIFF/notes.
 5. After the image opens in **Color Composer**, try the automatic look previews: Natural, Nebula, High Contrast, and Soft Stretch.
    The **Blue/Pink Nebula** preset is useful for dark dust clouds with red emission and cyan/blue highlight glow.
-6. For manual work, select an observation, choose **Get Products**, download selected products, then assign FITS files in **Color Composer**.
-7. Prefer science-ready products when available, especially Hubble `DRC`/`DRZ` or JWST `I2D`/`CAL` FITS files.
+6. To emphasize compact hydrogen-rich structures in the finished image, open **Hydrogen Enhance** and choose **Use Final Composite**. Review the H-II mask before saving.
+7. For manual work, select an observation, choose **Get Products**, download selected products, then assign FITS files in **Color Composer**.
+8. Prefer science-ready products when available, especially Hubble `DRC`/`DRZ` or JWST `I2D`/`CAL` FITS files.
 
 ## Folder layout
 
@@ -58,3 +59,5 @@ For testing the newer Observatory Explorer, sensor coverage, sky mosaic, and mix
 Space telescope FITS processing can be tricky. Different filters and products may have different image sizes, orientations, or artifacts. This workbench keeps the process simple and automatic: it stretches each channel, resizes channels to match, and combines them into RGB.
 
 Some Hubble detector products include black no-data gaps or a rotated detector footprint. In **Color Composer**, use **Presentation cleanup**, **Straighten**, and **Auto crop black border** to make cleaner PNG presentation exports. The cleanup improves the visible presentation image; it does not create real telescope data where the detector did not record any.
+
+**Hydrogen Enhance** is a visual H-II/H-alpha proxy derived from RGB structure. It is intended for artistic enhancement and inspection, not calibrated narrowband measurement.

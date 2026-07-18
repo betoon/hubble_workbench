@@ -23,7 +23,7 @@ def normalize_image(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
         scaled = np.log1p(30 * scaled) / np.log1p(30)
     else:
         scaled = np.arcsinh(10 * scaled) / np.arcsinh(10)
-    return np.clip(scaled * 255, 0, 255).astype(np.uint8)
+    return np.nan_to_num(np.clip(scaled * 255, 0, 255), nan=0.0).astype(np.uint8)
 
 
 def normalize_float_channel(data, low_percent=0.2, high_percent=99.8, stretch="asinh", gamma=1.0, asinh_strength=12.0):
@@ -50,7 +50,7 @@ def normalize_float_channel(data, low_percent=0.2, high_percent=99.8, stretch="a
     gamma = max(0.05, float(gamma))
     if stretch != "pow" and abs(gamma - 1.0) > 0.001:
         scaled = np.power(np.clip(scaled, 0, 1), 1.0 / gamma)
-    return np.clip(scaled, 0, 1).astype(np.float32)
+    return np.nan_to_num(np.clip(scaled, 0, 1), nan=0.0).astype(np.float32)
 
 
 

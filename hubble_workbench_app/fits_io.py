@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 from .paths import APP_DIR
 from .settings import SETTINGS
@@ -136,6 +136,11 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
     sources = []
     for path in paths:
         data, header = first_image_hdu(path)
+        finite = np.isfinite(data)
+        if finite.any():
+            zero_fraction = float(np.count_nonzero(finite & (data == 0)) / finite.sum())
+            if zero_fraction >= 0.02 and np.any(finite & (data != 0)):
+                data = np.where(data == 0, np.nan, data)
         sources.append({"path": str(path), "data": data, "header": header, "wcs": _celestial_wcs(header)})
     if len(sources) < 2:
         raise RuntimeError("At least two FITS channels are required for WCS alignment.")
@@ -201,7 +206,7 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
     return aligned, headers, metadata
 
 
-def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_000_000, sigma=6.0):
+def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_000_000, sigma=6.0, feather_pixels=12):
     """WCS-align and robustly combine repeated exposures from one filter."""
     paths = list(paths or [])
     if not paths:
@@ -215,8 +220,35 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
         finite = layer[np.isfinite(layer)]
         medians.append(float(np.nanmedian(finite)) if finite.size else 0.0)
     reference_median = medians[0]
-    for index, median in enumerate(medians):
-        cube[index] += reference_median - median
+    reference = cube[0]
+    background_offsets = [0.0]
+    photometric_gains = [1.0]
+    for index in range(1, len(cube)):
+        overlap = np.isfinite(reference) & np.isfinite(cube[index])
+        if overlap.sum() >= 100:
+            source_values = cube[index][overlap].astype(np.float64)
+            reference_values = reference[overlap].astype(np.float64)
+            source_low, source_high = np.nanpercentile(source_values, [5, 95])
+            reference_low, reference_high = np.nanpercentile(reference_values, [5, 95])
+            stable = (
+                (source_values >= source_low) & (source_values <= source_high)
+                & (reference_values >= reference_low) & (reference_values <= reference_high)
+            )
+            source_values = source_values[stable]
+            reference_values = reference_values[stable]
+            variance = float(np.var(source_values)) if source_values.size else 0.0
+            if source_values.size >= 100 and variance > np.finfo(float).eps:
+                covariance = float(np.mean((source_values - source_values.mean()) * (reference_values - reference_values.mean())))
+                gain = min(4.0, max(0.25, covariance / variance))
+            else:
+                gain = 1.0
+            offset = float(np.nanmedian(reference_values - gain * source_values)) if source_values.size else reference_median - gain * medians[index]
+        else:
+            gain = 1.0
+            offset = reference_median - gain * medians[index]
+        cube[index] = cube[index] * gain + offset
+        photometric_gains.append(gain)
+        background_offsets.append(offset)
 
     if weights is None:
         weights = np.ones(len(paths), dtype=np.float32)
@@ -224,8 +256,18 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
     if weights.size != len(paths):
         raise RuntimeError("Exposure weights must match the number of FITS files.")
     weights = np.where(np.isfinite(weights) & (weights > 0), weights, 1.0)
-    weight_cube = weights[:, None, None]
     valid = np.isfinite(cube)
+    feather_layers = []
+    for mask in valid:
+        if feather_pixels and feather_pixels > 0:
+            mask_image = Image.fromarray((mask.astype(np.uint8) * 255), mode="L")
+            feather = np.asarray(mask_image.filter(ImageFilter.GaussianBlur(radius=float(feather_pixels))), dtype=np.float32) / 255.0
+            feather *= mask
+            feather_layers.append(np.maximum(feather, np.where(mask, 0.02, 0.0)))
+        else:
+            feather_layers.append(mask.astype(np.float32))
+    feather_cube = np.stack(feather_layers)
+    weight_cube = weights[:, None, None] * feather_cube
     keep = valid.copy()
     if len(paths) >= 3:
         with warnings.catch_warnings():
@@ -266,8 +308,11 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
         "exposure_count": len(paths),
         "weights": [float(value) for value in weights],
         "background_medians": medians,
+        "background_offsets": background_offsets,
+        "photometric_gains": photometric_gains,
         "rejected_samples": int((valid & ~keep).sum()),
         "max_coverage": int(coverage.max()) if coverage.size else 0,
+        "feather_pixels": int(feather_pixels),
     })
     return output_path, metadata
 

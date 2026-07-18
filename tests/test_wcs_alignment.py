@@ -23,13 +23,13 @@ class WcsAlignmentTests(unittest.TestCase):
         self.assertGreaterEqual(red, 0.5)
         self.assertLessEqual(blue, 1.8)
 
-    def write_fits(self, path, value, crval):
+    def write_fits(self, path, value, crval, shape=(10, 10)):
         wcs = WCS(naxis=2)
         wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-        wcs.wcs.crpix = [5.5, 5.5]
+        wcs.wcs.crpix = [(shape[1] + 1) / 2, (shape[0] + 1) / 2]
         wcs.wcs.crval = list(crval)
         wcs.wcs.cdelt = [-0.001, 0.001]
-        fits.PrimaryHDU(np.full((10, 10), value, dtype=np.float32), header=wcs.to_header()).writeto(path)
+        fits.PrimaryHDU(np.full(shape, value, dtype=np.float32), header=wcs.to_header()).writeto(path)
 
     def test_aligns_shifted_channels_on_union_canvas_and_reports_overlap(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -77,6 +77,23 @@ class WcsAlignmentTests(unittest.TestCase):
                 self.assertEqual(hdul[0].header["NSTACK"], 3)
                 self.assertEqual(hdul[1].name, "COVERAGE")
                 self.assertLess(hdul[0].data[5, 5], 10)
+
+    def test_stack_matches_a_background_gradient_across_exposures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            first = directory / "first.fits"
+            second = directory / "second.fits"
+            self.write_fits(first, 10, (10.0, 20.0), shape=(30, 30))
+            self.write_fits(second, 10, (10.0, 20.0), shape=(30, 30))
+            with fits.open(second, mode="update") as hdul:
+                hdul[0].data += np.linspace(-2, 2, 30, dtype=np.float32)[None, :]
+
+            output_path, metadata = stack_fits_exposures([first, second], directory / "gradient.fits")
+
+            self.assertNotEqual(metadata["background_planes"][1][1], 0.0)
+            with fits.open(output_path) as hdul:
+                row = hdul[0].data[5].copy()
+                self.assertLess(float(np.nanmax(row) - np.nanmin(row)), 0.2)
 
 
 if __name__ == "__main__":

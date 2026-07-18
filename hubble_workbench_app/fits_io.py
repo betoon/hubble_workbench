@@ -206,6 +206,31 @@ def wcs_align_fits_channels(paths, max_output_pixels=16_000_000):
     return aligned, headers, metadata
 
 
+def _background_plane(reference, source, overlap, gain):
+    """Fit a conservative offset plane from source to reference in their overlap."""
+    yy, xx = np.where(overlap)
+    if xx.size < 20:
+        offset = float(np.nanmedian(reference[overlap] - gain * source[overlap])) if xx.size else 0.0
+        return (offset, 0.0, 0.0)
+    step = max(1, int(math.ceil(xx.size / 200_000)))
+    yy = yy[::step]
+    xx = xx[::step]
+    height, width = reference.shape
+    x_norm = (xx - (width - 1) / 2.0) / max(1.0, width / 2.0)
+    y_norm = (yy - (height - 1) / 2.0) / max(1.0, height / 2.0)
+    difference = reference[yy, xx].astype(np.float64) - gain * source[yy, xx].astype(np.float64)
+    design = np.column_stack([np.ones(xx.size), x_norm, y_norm])
+    coefficients, *_ = np.linalg.lstsq(design, difference, rcond=None)
+    residual = difference - design @ coefficients
+    median = float(np.median(residual))
+    mad = float(np.median(np.abs(residual - median)))
+    if mad > np.finfo(float).eps:
+        keep = np.abs(residual - median) <= 4.0 * 1.4826 * mad
+        if keep.sum() >= 20:
+            coefficients, *_ = np.linalg.lstsq(design[keep], difference[keep], rcond=None)
+    return tuple(float(value) for value in coefficients)
+
+
 def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_000_000, sigma=6.0, feather_pixels=12):
     """WCS-align and robustly combine repeated exposures from one filter."""
     paths = list(paths or [])
@@ -222,6 +247,7 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
     reference_median = medians[0]
     reference = cube[0]
     background_offsets = [0.0]
+    background_planes = [(0.0, 0.0, 0.0)]
     photometric_gains = [1.0]
     for index in range(1, len(cube)):
         overlap = np.isfinite(reference) & np.isfinite(cube[index])
@@ -242,13 +268,26 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
                 gain = min(4.0, max(0.25, covariance / variance))
             else:
                 gain = 1.0
-            offset = float(np.nanmedian(reference_values - gain * source_values)) if source_values.size else reference_median - gain * medians[index]
+            stable_overlap = overlap.copy()
+            overlap_y, overlap_x = np.where(overlap)
+            stable_overlap[overlap_y, overlap_x] = stable
+            plane = _background_plane(reference, cube[index], stable_overlap, gain)
+            offset = plane[0]
         else:
             gain = 1.0
             offset = reference_median - gain * medians[index]
-        cube[index] = cube[index] * gain + offset
+            plane = (offset, 0.0, 0.0)
+        if plane[1] or plane[2]:
+            height, width = cube[index].shape
+            y_norm = (np.arange(height, dtype=np.float32) - (height - 1) / 2.0) / max(1.0, height / 2.0)
+            x_norm = (np.arange(width, dtype=np.float32) - (width - 1) / 2.0) / max(1.0, width / 2.0)
+            correction = plane[0] + plane[1] * x_norm[None, :] + plane[2] * y_norm[:, None]
+            cube[index] = cube[index] * gain + correction
+        else:
+            cube[index] = cube[index] * gain + offset
         photometric_gains.append(gain)
         background_offsets.append(offset)
+        background_planes.append(plane)
 
     if weights is None:
         weights = np.ones(len(paths), dtype=np.float32)
@@ -309,6 +348,7 @@ def stack_fits_exposures(paths, output_path, weights=None, max_output_pixels=8_0
         "weights": [float(value) for value in weights],
         "background_medians": medians,
         "background_offsets": background_offsets,
+        "background_planes": [list(values) for values in background_planes],
         "photometric_gains": photometric_gains,
         "rejected_samples": int((valid & ~keep).sum()),
         "max_coverage": int(coverage.max()) if coverage.size else 0,

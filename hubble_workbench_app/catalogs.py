@@ -74,6 +74,10 @@ TARGET_GALLERY = [
     ("NGC 604 - Star-forming Region", "NGC 604", "0.08 deg"),
     ("HH 901 - Carina Pillar", "HH 901", "0.04 deg"),
     ("M101 - Pinwheel Galaxy", "M101", "0.20 deg"),
+    ("Jupiter", "Jupiter", "0.05 deg"),
+    ("Saturn", "Saturn", "0.05 deg"),
+    ("Uranus", "Uranus", "0.05 deg"),
+    ("Neptune", "Neptune", "0.05 deg"),
 ]
 TARGET_GALLERY.extend(load_messier_gallery_items(TARGET_GALLERY))
 

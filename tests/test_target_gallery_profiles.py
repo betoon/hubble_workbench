@@ -38,6 +38,10 @@ class TargetGalleryProfileTests(unittest.TestCase):
         self.assertEqual(recipe, TARGET_RECIPES["M16-PILLARS"])
         self.assertEqual(recipe["name"], "Pillars of Creation / Fingers of God")
 
+    def test_planets_are_available_to_combined_sensor_gallery(self):
+        targets = {target for _label, target, _radius in TARGET_GALLERY}
+        self.assertTrue({"Jupiter", "Saturn", "Uranus", "Neptune"}.issubset(targets))
+
 
 if __name__ == "__main__":
     unittest.main()

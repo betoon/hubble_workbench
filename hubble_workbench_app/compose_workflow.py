@@ -216,6 +216,7 @@ class ComposeWorkflowMixin:
             self.compose_status.set(f"RGB composite ready at {size_text}{engine_text}. Auto-saved {preview_path.name}.")
         else:
             self.compose_status.set(f"RGB composite ready at {size_text}{engine_text}.")
+        self.notebook.select(self.compose_tab)
 
     def finish_easy_rgb(self, operation_id, result, error, error_detail=None):
         if operation_id != self.browser_operation_id:

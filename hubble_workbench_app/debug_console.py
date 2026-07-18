@@ -6,6 +6,8 @@ from tkinter import ttk
 
 from hubble_workbench_app.paths import DEBUG_LOG_PATH, LOG_DIR
 
+DEBUG_SHOW_ON_ISSUE_DEFAULT = False
+
 
 class TkConsoleLogHandler(logging.Handler):
     def __init__(self, app):
@@ -27,7 +29,7 @@ class DebugConsoleMixin:
         header = ttk.Frame(debug_content)
         header.pack(fill="x", pady=(0, 8))
         ttk.Label(header, text="Debug Console", style="Title.TLabel").pack(side="left")
-        self.debug_console_show_on_issue_var = tk.BooleanVar(value=True)
+        self.debug_console_show_on_issue_var = tk.BooleanVar(value=DEBUG_SHOW_ON_ISSUE_DEFAULT)
         ttk.Checkbutton(header, text="Show on issue", variable=self.debug_console_show_on_issue_var).pack(side="left", padx=(12, 0))
         ttk.Button(header, text="Clear", command=self.clear_debug_console).pack(side="right")
         ttk.Button(header, text="Copy Console", command=self.copy_debug_console).pack(side="right", padx=(0, 8))

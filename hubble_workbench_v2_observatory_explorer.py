@@ -71,6 +71,7 @@ from hubble_workbench_app.search_workflow import SearchWorkflowMixin
 from hubble_workbench_app.hla_workflow import HlaWorkflowMixin
 from hubble_workbench_app.app_utilities import (
     AppUtilitiesMixin,
+    mousewheel_scroll_units,
     responsive_content_height,
     responsive_pane_orientation,
     responsive_tab_titles,
@@ -274,15 +275,26 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             update_scroll_region()
 
         def on_mousewheel(event):
+            units = mousewheel_scroll_units(getattr(event, "delta", 0))
+            if not units:
+                return
             if event.state & 0x0001:
-                canvas.xview_scroll(int(-1 * (event.delta / 120)), "units")
+                canvas.xview_scroll(units, "units")
             else:
-                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+                canvas.yview_scroll(units, "units")
+
+        def bind_scrollable_descendants(widget):
+            native_scroll_widgets = (tk.Canvas, tk.Listbox, tk.Text, ttk.Scale, ttk.Scrollbar)
+            for child in widget.winfo_children():
+                if not isinstance(child, native_scroll_widgets):
+                    child.bind("<MouseWheel>", on_mousewheel, add="+")
+                bind_scrollable_descendants(child)
 
         content.bind("<Configure>", update_scroll_region)
         canvas.bind("<Configure>", keep_minimum_width)
         canvas.bind("<MouseWheel>", on_mousewheel)
         content.bind("<MouseWheel>", on_mousewheel)
+        content.after_idle(lambda: bind_scrollable_descendants(content))
         return content
 
     def responsive_wrap_label(self, parent, minimum=220, margin=24, **options):

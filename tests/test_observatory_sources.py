@@ -2,6 +2,7 @@ import unittest
 
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
+from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -20,6 +21,17 @@ from hubble_workbench_app.observatory_sources import (
 
 
 class ObservatorySourceTests(unittest.TestCase):
+    def test_mosaic_view_bounds_zoom_around_center(self):
+        bounds = ObservatoryWorkflowMixin.observatory_mosaic_view_bounds((10.0, 14.0, 20.0, 22.0), {"zoom": 2.0})
+        self.assertEqual(bounds, (11.0, 13.0, 20.5, 21.5))
+
+    def test_mosaic_view_bounds_clamps_zoom(self):
+        bounds = ObservatoryWorkflowMixin.observatory_mosaic_view_bounds(
+            (0.0, 32.0, 0.0, 32.0),
+            {"zoom": 100.0, "center_ra": 8.0, "center_dec": 12.0},
+        )
+        self.assertEqual(bounds, (7.5, 8.5, 11.5, 12.5))
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

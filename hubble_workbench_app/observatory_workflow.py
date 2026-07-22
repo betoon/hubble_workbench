@@ -3225,6 +3225,118 @@ class ObservatoryWorkflowMixin:
         padding = max(span * fraction, 0.0005)
         return minimum - padding, maximum + padding
 
+    @staticmethod
+    def observatory_mosaic_view_bounds(base_bounds, view=None):
+        ra_min, ra_max, dec_min, dec_max = base_bounds
+        base_ra_span = max(ra_max - ra_min, 1e-9)
+        base_dec_span = max(dec_max - dec_min, 1e-9)
+        view = view or {}
+        zoom = min(32.0, max(1.0, float(view.get("zoom", 1.0) or 1.0)))
+        center_ra = float(view.get("center_ra", (ra_min + ra_max) / 2))
+        center_dec = float(view.get("center_dec", (dec_min + dec_max) / 2))
+        ra_span = base_ra_span / zoom
+        dec_span = base_dec_span / zoom
+        return (
+            center_ra - ra_span / 2,
+            center_ra + ra_span / 2,
+            center_dec - dec_span / 2,
+            center_dec + dec_span / 2,
+        )
+
+    def observatory_mosaic_reset_view(self):
+        self.mosaic_view_state = None
+        self.observatory_draw_current_mosaic()
+
+    def observatory_mosaic_zoom(self, factor, x=None, y=None):
+        render = getattr(self, "mosaic_render_state", None)
+        if not render:
+            return
+        current = dict(getattr(self, "mosaic_view_state", None) or {})
+        old_zoom = float(current.get("zoom", 1.0) or 1.0)
+        new_zoom = min(32.0, max(1.0, old_zoom * float(factor)))
+        if abs(new_zoom - old_zoom) < 1e-9:
+            return
+        ra_min, ra_max, dec_min, dec_max = render["bounds"]
+        plot_x0, plot_y0, plot_x1, plot_y1 = render["plot"]
+        x = (plot_x0 + plot_x1) / 2 if x is None else min(plot_x1, max(plot_x0, x))
+        y = (plot_y0 + plot_y1) / 2 if y is None else min(plot_y1, max(plot_y0, y))
+        x_fraction = (x - plot_x0) / max(plot_x1 - plot_x0, 1)
+        y_fraction = (plot_y1 - y) / max(plot_y1 - plot_y0, 1)
+        anchor_ra = ra_min + x_fraction * (ra_max - ra_min)
+        anchor_dec = dec_min + y_fraction * (dec_max - dec_min)
+        base_ra_min, base_ra_max, base_dec_min, base_dec_max = render["base_bounds"]
+        new_ra_span = (base_ra_max - base_ra_min) / new_zoom
+        new_dec_span = (base_dec_max - base_dec_min) / new_zoom
+        current.update({
+            "zoom": new_zoom,
+            "center_ra": anchor_ra - (x_fraction - 0.5) * new_ra_span,
+            "center_dec": anchor_dec - (y_fraction - 0.5) * new_dec_span,
+        })
+        self.mosaic_view_state = current
+        self.observatory_draw_current_mosaic()
+
+    def observatory_mosaic_wheel(self, event):
+        delta = getattr(event, "delta", 0)
+        factor = 1.25 if delta > 0 or getattr(event, "num", None) == 4 else 0.8
+        self.observatory_mosaic_zoom(factor, event.x, event.y)
+        return "break"
+
+    def observatory_mosaic_pan_start(self, event):
+        self.mosaic_pan_anchor = (event.x, event.y)
+        try:
+            self.mosaic_canvas.configure(cursor="fleur")
+        except Exception:
+            pass
+
+    def observatory_mosaic_pan_move(self, event):
+        anchor = getattr(self, "mosaic_pan_anchor", None)
+        render = getattr(self, "mosaic_render_state", None)
+        if not anchor or not render:
+            return
+        plot_x0, plot_y0, plot_x1, plot_y1 = render["plot"]
+        ra_min, ra_max, dec_min, dec_max = render["bounds"]
+        dx, dy = event.x - anchor[0], event.y - anchor[1]
+        view = dict(getattr(self, "mosaic_view_state", None) or {})
+        view["center_ra"] = float(view.get("center_ra", (ra_min + ra_max) / 2)) - dx * (ra_max - ra_min) / max(plot_x1 - plot_x0, 1)
+        view["center_dec"] = float(view.get("center_dec", (dec_min + dec_max) / 2)) + dy * (dec_max - dec_min) / max(plot_y1 - plot_y0, 1)
+        self.mosaic_view_state = view
+        self.mosaic_pan_anchor = (event.x, event.y)
+        self.observatory_draw_current_mosaic()
+
+    def observatory_mosaic_pan_end(self, _event=None):
+        self.mosaic_pan_anchor = None
+        try:
+            self.mosaic_canvas.configure(cursor="")
+        except Exception:
+            pass
+
+    def observatory_mosaic_hover(self, event):
+        hover_var = getattr(self, "mosaic_hover_var", None)
+        if hover_var is None:
+            return
+        nearest = None
+        nearest_distance = None
+        for marker in list(getattr(self, "mosaic_marker_points", []) or []):
+            distance = math.hypot(event.x - marker["x"], event.y - marker["y"])
+            if nearest is None or distance < nearest_distance:
+                nearest, nearest_distance = marker, distance
+        row = None
+        if nearest is not None and nearest_distance <= max(14, nearest.get("size", 4) + 8):
+            row = nearest["row"]
+        else:
+            footprint = self.observatory_mosaic_footprint_at(event.x, event.y)
+            if footprint is not None:
+                row = footprint["row"]
+        if row is None:
+            hover_var.set("Hover over a marker or footprint for details. Scroll to zoom; middle/right-drag to pan; left-click to select.")
+            return
+        mission = row.get("obs_collection", "") or "Unknown"
+        obs_id = row.get("obs_id", "") or row.get("obsid", "") or "unknown"
+        instrument = row.get("instrument_name", "") or "Unknown instrument"
+        filter_name = row.get("filters", "") or row.get("Spectral_Elt", "") or "no filter listed"
+        exposure = row.get("t_exptime", "") or "?"
+        hover_var.set(f"{mission} · {obs_id} · {instrument} · {filter_name} · {exposure} seconds — click to select")
+
     def observatory_draw_current_mosaic(self):
         canvas = getattr(self, "mosaic_canvas", None)
         if canvas is None:
@@ -3279,8 +3391,14 @@ class ObservatoryWorkflowMixin:
 
         ras = [p[0] for p in points]
         decs = [p[1] for p in points]
-        ra_min, ra_max = self.observatory_range_padding(min(ras), max(ras))
-        dec_min, dec_max = self.observatory_range_padding(min(decs), max(decs))
+        base_ra_min, base_ra_max = self.observatory_range_padding(min(ras), max(ras))
+        base_dec_min, base_dec_max = self.observatory_range_padding(min(decs), max(decs))
+        data_signature = tuple((round(ra, 8), round(dec, 8), str(row.get("obs_id", "") or row.get("obsid", ""))) for ra, dec, row in points)
+        if data_signature != getattr(self, "mosaic_view_signature", None):
+            self.mosaic_view_state = None
+            self.mosaic_view_signature = data_signature
+        base_bounds = (base_ra_min, base_ra_max, base_dec_min, base_dec_max)
+        ra_min, ra_max, dec_min, dec_max = self.observatory_mosaic_view_bounds(base_bounds, getattr(self, "mosaic_view_state", None))
         ra_mid = (ra_min + ra_max) / 2
         dec_mid = (dec_min + dec_max) / 2
         margin_left = 72
@@ -3293,6 +3411,11 @@ class ObservatoryWorkflowMixin:
         plot_y1 = height - margin_bottom
         plot_w = max(1, plot_x1 - plot_x0)
         plot_h = max(1, plot_y1 - plot_y0)
+        self.mosaic_render_state = {
+            "base_bounds": base_bounds,
+            "bounds": (ra_min, ra_max, dec_min, dec_max),
+            "plot": (plot_x0, plot_y0, plot_x1, plot_y1),
+        }
 
         def map_point(ra, dec):
             x = plot_x0 + (ra - ra_min) / (ra_max - ra_min) * plot_w
@@ -3313,7 +3436,8 @@ class ObservatoryWorkflowMixin:
         mid_x, mid_y = map_point(ra_mid, dec_mid)
         canvas.create_line(mid_x, plot_y0, mid_x, plot_y1, fill="#374151", dash=(3, 4))
         canvas.create_line(plot_x0, mid_y, plot_x1, mid_y, fill="#374151", dash=(3, 4))
-        guide_text = f"Marker size hints exposure time; color mode: {color_mode}."
+        zoom = float((getattr(self, "mosaic_view_state", None) or {}).get("zoom", 1.0))
+        guide_text = f"Marker size hints exposure time; color mode: {color_mode}; zoom: {zoom:.2f}x."
         if best_only:
             guide_text = "Showing the strongest observation candidates by coordinates, exposure, wavelength, and mission."
         canvas.create_text(plot_x0, 38, anchor="w", text=guide_text, fill="#d1d5db")

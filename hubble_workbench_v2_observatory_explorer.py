@@ -541,7 +541,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
     def build_observatory_tab(self):
         """Version 2.0 foundation: multi-observatory overview and sky mosaic coverage."""
         observatory_content = self.build_observatory_scroll_area()
-        ttk.Label(observatory_content, text="Observatory Explorer 2.0", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(observatory_content, text="Observatory Explorer 3.0", style="Title.TLabel").pack(anchor="w")
         ttk.Label(
             observatory_content,
             text=(
@@ -701,6 +701,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(10, 0))
         ttk.Button(mosaic_filter_row, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
+        ttk.Button(mosaic_filter_row, text="Zoom +", command=lambda: self.observatory_mosaic_zoom(1.25)).pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_filter_row, text="Zoom -", command=lambda: self.observatory_mosaic_zoom(0.8)).pack(side="left", padx=(4, 0))
+        ttk.Button(mosaic_filter_row, text="Reset View", command=self.observatory_mosaic_reset_view).pack(side="left", padx=(4, 0))
         ttk.Button(mosaic_rgb_row, text="Mosaic RGB Plan", command=self.observatory_show_mosaic_rgb_plan, style="Accent.TButton").pack(side="left")
         ttk.Button(mosaic_rgb_row, text="Next RGB Pick", command=self.observatory_select_next_mosaic_rgb_pick, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_rgb_row, text="Get RGB Pick Products", command=self.observatory_get_mosaic_rgb_pick_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
@@ -720,10 +723,20 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(mosaic_export_row, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
+        self.mosaic_hover_var = tk.StringVar(value="Hover over a marker or footprint for details. Scroll to zoom; middle/right-drag to pan; left-click to select.")
+        ttk.Label(right, textvariable=self.mosaic_hover_var, wraplength=720, style="Section.TLabel").pack(anchor="w", pady=(6, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")
         ttk.Label(right, textvariable=self.mosaic_status_var, wraplength=720).pack(anchor="w", pady=(6, 0))
         self.mosaic_canvas.bind("<Configure>", lambda _event: self.observatory_draw_current_mosaic())
         self.mosaic_canvas.bind("<Button-1>", self.observatory_mosaic_click)
+        self.mosaic_canvas.bind("<Motion>", self.observatory_mosaic_hover)
+        self.mosaic_canvas.bind("<MouseWheel>", self.observatory_mosaic_wheel)
+        self.mosaic_canvas.bind("<Button-4>", self.observatory_mosaic_wheel)
+        self.mosaic_canvas.bind("<Button-5>", self.observatory_mosaic_wheel)
+        for button in (2, 3):
+            self.mosaic_canvas.bind(f"<ButtonPress-{button}>", self.observatory_mosaic_pan_start)
+            self.mosaic_canvas.bind(f"<B{button}-Motion>", self.observatory_mosaic_pan_move)
+            self.mosaic_canvas.bind(f"<ButtonRelease-{button}>", self.observatory_mosaic_pan_end)
 
     def observatory_analyze_current(self):
         return super().observatory_analyze_current()
@@ -733,6 +746,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def observatory_mosaic_click(self, event):
         return super().observatory_mosaic_click(event)
+
+    def observatory_mosaic_reset_view(self):
+        return super().observatory_mosaic_reset_view()
 
     def observatory_get_marker_products(self):
         return super().observatory_get_marker_products()

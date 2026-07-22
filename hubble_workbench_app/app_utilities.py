@@ -1,6 +1,26 @@
 import os
 
 from PIL import Image, ImageTk
+
+
+def responsive_window_layout(screen_width, screen_height, preferred_width=1160, preferred_height=760):
+    """Return a conservative window and minimum size that fits the current display."""
+    screen_width = max(640, int(screen_width))
+    screen_height = max(480, int(screen_height))
+    available_width = max(640, screen_width - 40)
+    available_height = max(480, screen_height - 100)
+    width = min(int(preferred_width), available_width)
+    height = min(int(preferred_height), available_height)
+    minimum_width = min(940, max(640, available_width - 80))
+    minimum_height = min(620, max(480, available_height - 80))
+    return {
+        "width": width,
+        "height": height,
+        "minimum_width": min(minimum_width, width),
+        "minimum_height": min(minimum_height, height),
+        "x": max(0, (screen_width - width) // 2),
+        "y": max(0, (screen_height - height) // 2),
+    }
 from tkinter import messagebox
 
 from hubble_workbench_app.settings import SETTINGS, save_settings

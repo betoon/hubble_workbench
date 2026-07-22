@@ -2,6 +2,7 @@ import unittest
 
 from hubble_workbench_app.compose_workflow import ComposeWorkflowMixin
 from hubble_workbench_app.debug_console import DEBUG_SHOW_ON_ISSUE_DEFAULT
+from hubble_workbench_app.app_utilities import responsive_window_layout
 
 
 class _Value:
@@ -21,6 +22,18 @@ class _Notebook:
 
 
 class WorkflowNavigationTests(unittest.TestCase):
+    def test_responsive_window_layout_fits_small_monitor(self):
+        layout = responsive_window_layout(800, 600)
+        self.assertLessEqual(layout["width"] + layout["x"], 800)
+        self.assertLessEqual(layout["height"] + layout["y"], 600)
+        self.assertLessEqual(layout["minimum_width"], layout["width"])
+        self.assertLessEqual(layout["minimum_height"], layout["height"])
+
+    def test_responsive_window_layout_keeps_preferred_desktop_size(self):
+        layout = responsive_window_layout(1920, 1080)
+        self.assertEqual((layout["width"], layout["height"]), (1160, 760))
+        self.assertEqual((layout["minimum_width"], layout["minimum_height"]), (940, 620))
+
     def test_debug_console_auto_focus_is_opt_in(self):
         self.assertFalse(DEBUG_SHOW_ON_ISSUE_DEFAULT)
 

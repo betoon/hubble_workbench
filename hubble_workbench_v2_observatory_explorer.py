@@ -69,7 +69,7 @@ from hubble_workbench_app.better_sources import BetterSourcesMixin
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.search_workflow import SearchWorkflowMixin
 from hubble_workbench_app.hla_workflow import HlaWorkflowMixin
-from hubble_workbench_app.app_utilities import AppUtilitiesMixin
+from hubble_workbench_app.app_utilities import AppUtilitiesMixin, responsive_window_layout
 from hubble_workbench_app.quality_settings import QualitySettingsMixin
 from hubble_workbench_app.target_gallery import TargetGalleryMixin
 from hubble_workbench_app.dependency_status import DependencyStatusMixin
@@ -106,8 +106,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
         self.title("Space Telescope Workbench")
-        self.geometry(SETTINGS.get("geometry", "1160x760"))
-        self.minsize(940, 620)
+        startup_layout = responsive_window_layout(self.winfo_screenwidth(), self.winfo_screenheight())
+        self.geometry(
+            f"{startup_layout['width']}x{startup_layout['height']}+"
+            f"{startup_layout['x']}+{startup_layout['y']}"
+        )
+        self.minsize(startup_layout["minimum_width"], startup_layout["minimum_height"])
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.developer_mode_var = tk.BooleanVar(value=SETTINGS.get("developer_mode", True))
         self.verbose_mast_log_var = tk.BooleanVar(value=SETTINGS.get("verbose_mast_logging", True))
@@ -238,6 +242,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         container.columnconfigure(0, weight=1)
 
         content = ttk.Frame(canvas, padding=(0, 0, 4, 4))
+        content.viewport_canvas = canvas
         window_id = canvas.create_window((0, 0), window=content, anchor="nw")
 
         def update_scroll_region(_event=None):
@@ -259,6 +264,18 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         canvas.bind("<MouseWheel>", on_mousewheel)
         content.bind("<MouseWheel>", on_mousewheel)
         return content
+
+    def responsive_wrap_label(self, parent, minimum=220, margin=24, **options):
+        label = ttk.Label(parent, **options)
+        viewport = getattr(parent, "viewport_canvas", parent)
+
+        def update_wrap(event=None):
+            width = getattr(event, "width", 0) or viewport.winfo_width() or parent.winfo_width()
+            label.configure(wraplength=max(int(minimum), int(width) - int(margin)))
+
+        viewport.bind("<Configure>", update_wrap, add="+")
+        label.after_idle(update_wrap)
+        return label
 
     def build_browser_tab(self):
         browser_content = self.build_scrollable_tab_content(self.browser_tab)
@@ -322,7 +339,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.stop_browser_button.pack(side="left", padx=(8, 0))
 
         self.easy_all_sensors_status_var = tk.StringVar(value="Easy All Sensors: ready.")
-        ttk.Label(browser_content, textvariable=self.easy_all_sensors_status_var, wraplength=1040).pack(anchor="w", pady=(4, 0))
+        self.responsive_wrap_label(browser_content, textvariable=self.easy_all_sensors_status_var).pack(anchor="w", pady=(4, 0))
 
         source_tools = ttk.Frame(browser_content)
         source_tools.pack(fill="x", pady=(6, 0))
@@ -339,10 +356,11 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             command=self.completeness_check_async,
         )
         self.completeness_button.pack(side="left", padx=(8, 0))
-        ttk.Label(
+        self.responsive_wrap_label(
             source_tools,
             text="Looks for mosaics/drizzled products, wider-radius observations, HLA products, and JWST i2d products.",
-            wraplength=720,
+            minimum=180,
+            margin=12,
         ).pack(side="left", padx=(12, 0))
 
         panes = ttk.PanedWindow(browser_content, orient="horizontal")
@@ -542,13 +560,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         """Version 2.0 foundation: multi-observatory overview and sky mosaic coverage."""
         observatory_content = self.build_observatory_scroll_area()
         ttk.Label(observatory_content, text="Observatory Explorer 3.0", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(
+        self.responsive_wrap_label(
             observatory_content,
             text=(
                 "Explore the target across Hubble/JWST observations, check filter coverage, "
                 "and draw a first-pass sky mosaic map from MAST observation coordinates."
             ),
-            wraplength=1050,
         ).pack(anchor="w", pady=(4, 10))
 
         controls = ttk.Frame(observatory_content)
@@ -738,9 +755,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
         self.mosaic_hover_var = tk.StringVar(value="Hover over a marker or footprint for details. Scroll to zoom; Shift-drag a region; left-click to select.")
-        ttk.Label(right, textvariable=self.mosaic_hover_var, wraplength=720, style="Section.TLabel").pack(anchor="w", pady=(6, 0))
+        self.responsive_wrap_label(right, textvariable=self.mosaic_hover_var, minimum=180, style="Section.TLabel").pack(anchor="w", pady=(6, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")
-        ttk.Label(right, textvariable=self.mosaic_status_var, wraplength=720).pack(anchor="w", pady=(6, 0))
+        self.responsive_wrap_label(right, textvariable=self.mosaic_status_var, minimum=180).pack(anchor="w", pady=(6, 0))
         self.mosaic_canvas.bind("<Configure>", lambda _event: self.observatory_draw_current_mosaic())
         self.mosaic_canvas.bind("<Button-1>", self.observatory_mosaic_click)
         self.mosaic_canvas.bind("<Double-Button-1>", self.observatory_mosaic_double_click)
@@ -1103,7 +1120,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.compose_progress.pack(fill="x", pady=(6, 0))
         ttk.Label(compose_content, textvariable=self.compose_status).pack(anchor="w", pady=(6, 0))
         self.why_var = tk.StringVar(value="")
-        ttk.Label(compose_content, textvariable=self.why_var, wraplength=1080).pack(anchor="w", pady=(0, 4))
+        self.responsive_wrap_label(compose_content, textvariable=self.why_var).pack(anchor="w", pady=(0, 4))
 
     def build_tuning_slider(self, parent, label, variable, from_, to, column):
         frame = ttk.Frame(parent)
@@ -1355,13 +1372,10 @@ def center_and_raise_startup_window(app):
         info_log(f"Screen size: {screen_w}x{screen_h}")
         info_log(f"Current window geometry before visibility fix: {current_geometry}")
 
-        # Saved Tk geometry can sometimes put the app off-screen after monitor changes.
-        # Use a safe centered geometry every time during debug startup.
-        width = min(1160, max(940, screen_w - 120))
-        height = min(760, max(620, screen_h - 120))
-        x = max(0, (screen_w - width) // 2)
-        y = max(0, (screen_h - height) // 2)
-        safe_geometry = f"{width}x{height}+{x}+{y}"
+        # Keep the full window on-screen after monitor, resolution, or DPI changes.
+        layout = responsive_window_layout(screen_w, screen_h)
+        app.minsize(layout["minimum_width"], layout["minimum_height"])
+        safe_geometry = f"{layout['width']}x{layout['height']}+{layout['x']}+{layout['y']}"
         app.geometry(safe_geometry)
         info_log(f"Applied safe centered geometry: {safe_geometry}")
 

@@ -32,12 +32,14 @@ class HydrogenWorkflowMixin:
         control_canvas.configure(yscrollcommand=control_scrollbar.set)
         control_canvas.pack(side="left", fill="both", expand=True)
         control_scrollbar.pack(side="right", fill="y")
-        ttk.Label(controls, text="Hydrogen / H-II Enhancement", style="Title.TLabel", wraplength=290).pack(anchor="w")
-        ttk.Label(
+        heading_label = ttk.Label(controls, text="Hydrogen / H-II Enhancement", style="Title.TLabel", wraplength=290)
+        heading_label.pack(anchor="w")
+        description_label = ttk.Label(
             controls,
             text="Visually emphasizes compact hydrogen-rich structures in a finished RGB image. This is an enhancement proxy, not calibrated H-alpha data.",
             wraplength=290,
-        ).pack(anchor="w", pady=(4, 10))
+        )
+        description_label.pack(anchor="w", pady=(4, 10))
         buttons = ttk.Frame(controls)
         buttons.pack(fill="x")
         ttk.Button(buttons, text="Use Final Composite", command=self.hydrogen_use_composite, style="Accent.TButton").pack(side="left")
@@ -75,7 +77,8 @@ class HydrogenWorkflowMixin:
         ttk.Button(controls, text="Use Top-Left as Background", command=self.hydrogen_use_corner_background).pack(fill="x", pady=(8, 0))
         ttk.Button(controls, text="Save Enhanced PNG + TIFF", command=self.hydrogen_save_outputs).pack(fill="x", pady=(8, 0))
         self.hydrogen_status_var = tk.StringVar(value="Use the final composite or open an RGB image.")
-        ttk.Label(controls, textvariable=self.hydrogen_status_var, wraplength=290).pack(anchor="w", pady=(10, 0))
+        status_label = ttk.Label(controls, textvariable=self.hydrogen_status_var, wraplength=290)
+        status_label.pack(anchor="w", pady=(10, 0))
 
         viewer = ttk.Frame(content)
         viewer.pack(side="right", fill="both", expand=True)
@@ -89,6 +92,15 @@ class HydrogenWorkflowMixin:
         self.hydrogen_canvas.pack(fill="both", expand=True)
         self.hydrogen_canvas.bind("<Configure>", self.hydrogen_schedule_preview)
         self.hydrogen_canvas.bind("<Button-1>", self.hydrogen_select_background)
+
+        def resize_sidebar(event):
+            sidebar_width = max(240, min(330, int(event.width * 0.32)))
+            control_outer.configure(width=sidebar_width)
+            wraplength = max(180, sidebar_width - 40)
+            for label in (heading_label, description_label, status_label):
+                label.configure(wraplength=wraplength)
+
+        content.bind("<Configure>", resize_sidebar, add="+")
 
     def _hydrogen_scale(self, parent, label, variable, start, stop):
         frame = ttk.Frame(parent)

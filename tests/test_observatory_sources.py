@@ -206,6 +206,39 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Quality factors:", detail)
         self.assertIn("sky coordinates available", detail)
 
+    def test_footprint_coverage_estimate_reports_full_view(self):
+        explorer = ObservatoryWorkflowMixin()
+        footprints = [(
+            [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)],
+            "HST",
+        )]
+
+        estimate = explorer.observatory_estimate_footprint_coverage(
+            footprints,
+            (0.0, 10.0, 0.0, 10.0),
+            columns=20,
+            rows=20,
+        )
+
+        self.assertEqual(estimate["covered_percentage"], 100.0)
+        self.assertEqual(estimate["overlap_percentage"], 0.0)
+        self.assertEqual(estimate["hst_jwst_percentage"], 0.0)
+
+    def test_footprint_coverage_estimate_reports_cross_mission_overlap(self):
+        full_view = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+        explorer = ObservatoryWorkflowMixin()
+
+        estimate = explorer.observatory_estimate_footprint_coverage(
+            [(full_view, "HST"), (full_view, "JWST")],
+            (0.0, 10.0, 0.0, 10.0),
+            columns=20,
+            rows=20,
+        )
+
+        self.assertEqual(estimate["covered_percentage"], 100.0)
+        self.assertEqual(estimate["overlap_percentage"], 100.0)
+        self.assertEqual(estimate["hst_jwst_percentage"], 100.0)
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

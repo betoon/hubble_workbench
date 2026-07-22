@@ -3276,6 +3276,79 @@ class ObservatoryWorkflowMixin:
         self.observatory_draw_current_mosaic()
         return text
 
+    def observatory_estimate_footprint_coverage(self, footprints, bounds, columns=80, rows=50):
+        ra_min, ra_max, dec_min, dec_max = bounds
+        columns = max(1, int(columns))
+        rows = max(1, int(rows))
+        ra_span = ra_max - ra_min
+        dec_span = dec_max - dec_min
+        if ra_span <= 0 or dec_span <= 0:
+            return {
+                "samples": 0,
+                "covered_percentage": 0.0,
+                "overlap_percentage": 0.0,
+                "hst_jwst_percentage": 0.0,
+            }
+        prepared = []
+        for vertices, mission in footprints:
+            if len(vertices) < 3:
+                continue
+            polygon_ra = [point[0] for point in vertices]
+            polygon_dec = [point[1] for point in vertices]
+            polygon_bounds = (min(polygon_ra), max(polygon_ra), min(polygon_dec), max(polygon_dec))
+            if polygon_bounds[1] < ra_min or polygon_bounds[0] > ra_max:
+                continue
+            if polygon_bounds[3] < dec_min or polygon_bounds[2] > dec_max:
+                continue
+            prepared.append((vertices, str(mission or "Unknown").upper(), polygon_bounds))
+        total_samples = columns * rows
+        covered_samples = 0
+        overlap_samples = 0
+        hst_jwst_samples = 0
+        for row_index in range(rows):
+            dec = dec_min + (row_index + 0.5) / rows * dec_span
+            for column_index in range(columns):
+                ra = ra_min + (column_index + 0.5) / columns * ra_span
+                missions = set()
+                coverage_count = 0
+                for vertices, mission, polygon_bounds in prepared:
+                    if not (polygon_bounds[0] <= ra <= polygon_bounds[1] and polygon_bounds[2] <= dec <= polygon_bounds[3]):
+                        continue
+                    if self.observatory_point_in_polygon(ra, dec, vertices):
+                        coverage_count += 1
+                        missions.add(mission)
+                if coverage_count:
+                    covered_samples += 1
+                if coverage_count >= 2:
+                    overlap_samples += 1
+                if "HST" in missions and "JWST" in missions:
+                    hst_jwst_samples += 1
+        return {
+            "samples": total_samples,
+            "covered_percentage": covered_samples / total_samples * 100.0,
+            "overlap_percentage": overlap_samples / total_samples * 100.0,
+            "hst_jwst_percentage": hst_jwst_samples / total_samples * 100.0,
+        }
+
+    def observatory_mosaic_current_footprint_coverage(self):
+        render = getattr(self, "mosaic_render_state", None)
+        if not render:
+            return {
+                "footprints": 0,
+                "samples": 0,
+                "covered_percentage": 0.0,
+                "overlap_percentage": 0.0,
+                "hst_jwst_percentage": 0.0,
+            }
+        footprints = []
+        for row in self.observatory_current_mosaic_rows():
+            vertices = self.observatory_s_region_vertices(row)
+            if vertices:
+                footprints.append((vertices, row.get("obs_collection", "Unknown")))
+        estimate = self.observatory_estimate_footprint_coverage(footprints, render["bounds"])
+        estimate["footprints"] = len(footprints)
+        return estimate
+
     def observatory_mosaic_current_view_summary(self):
         render = getattr(self, "mosaic_render_state", None)
         rows = list(self.observatory_current_mosaic_rows())
@@ -3306,6 +3379,7 @@ class ObservatoryWorkflowMixin:
         total = len(coordinate_rows)
         visible = len(visible_rows)
         percentage = (visible / total * 100.0) if total else 0.0
+        footprint_coverage = self.observatory_mosaic_current_footprint_coverage()
         return {
             "visible_rows": visible_rows,
             "visible": visible,
@@ -3315,6 +3389,7 @@ class ObservatoryWorkflowMixin:
             "instruments": instrument_counts,
             "filters": filter_counts,
             "bounds": (ra_min, ra_max, dec_min, dec_max) if render else None,
+            "footprint_coverage": footprint_coverage,
         }
 
     def observatory_mosaic_current_view_text(self):
@@ -3330,6 +3405,15 @@ class ObservatoryWorkflowMixin:
                 f"Displayed bounds: RA {bounds[0]:.6f} to {bounds[1]:.6f}; "
                 f"Dec {bounds[2]:.6f} to {bounds[3]:.6f}"
             )
+        footprint_coverage = summary["footprint_coverage"]
+        lines.extend([
+            "",
+            f"Footprint-bearing observations: {footprint_coverage['footprints']}",
+            f"Estimated viewport area covered: {footprint_coverage['covered_percentage']:.1f}%",
+            f"Estimated area covered by multiple observations: {footprint_coverage['overlap_percentage']:.1f}%",
+            f"Estimated shared HST/JWST area: {footprint_coverage['hst_jwst_percentage']:.1f}%",
+            "Area percentages are grid-based estimates in the displayed RA/Dec view.",
+        ])
         if not summary["visible"]:
             lines.extend(["", "No observation centers are visible. Pan, zoom out, or use Fit All."])
             return "\n".join(lines)

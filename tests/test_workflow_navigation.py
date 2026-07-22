@@ -2,7 +2,7 @@ import unittest
 
 from hubble_workbench_app.compose_workflow import ComposeWorkflowMixin
 from hubble_workbench_app.debug_console import DEBUG_SHOW_ON_ISSUE_DEFAULT
-from hubble_workbench_app.app_utilities import responsive_window_layout
+from hubble_workbench_app.app_utilities import responsive_toolbar_positions, responsive_window_layout
 
 
 class _Value:
@@ -33,6 +33,14 @@ class WorkflowNavigationTests(unittest.TestCase):
         layout = responsive_window_layout(1920, 1080)
         self.assertEqual((layout["width"], layout["height"]), (1160, 760))
         self.assertEqual((layout["minimum_width"], layout["minimum_height"]), (940, 620))
+
+    def test_responsive_toolbar_positions_wrap_crowded_rows(self):
+        positions = responsive_toolbar_positions(300, [100, 100, 100, 80], gap=6)
+        self.assertEqual(positions, [(0, 0), (0, 1), (1, 0), (1, 1)])
+
+    def test_responsive_toolbar_positions_stay_single_row_when_wide(self):
+        positions = responsive_toolbar_positions(600, [100, 100, 100, 80], gap=6)
+        self.assertEqual(positions, [(0, 0), (0, 1), (0, 2), (0, 3)])
 
     def test_debug_console_auto_focus_is_opt_in(self):
         self.assertFalse(DEBUG_SHOW_ON_ISSUE_DEFAULT)

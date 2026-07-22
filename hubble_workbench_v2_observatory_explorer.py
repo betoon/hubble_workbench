@@ -69,7 +69,7 @@ from hubble_workbench_app.better_sources import BetterSourcesMixin
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.search_workflow import SearchWorkflowMixin
 from hubble_workbench_app.hla_workflow import HlaWorkflowMixin
-from hubble_workbench_app.app_utilities import AppUtilitiesMixin, responsive_window_layout
+from hubble_workbench_app.app_utilities import AppUtilitiesMixin, responsive_toolbar_positions, responsive_window_layout
 from hubble_workbench_app.quality_settings import QualitySettingsMixin
 from hubble_workbench_app.target_gallery import TargetGalleryMixin
 from hubble_workbench_app.dependency_status import DependencyStatusMixin
@@ -277,6 +277,47 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         label.after_idle(update_wrap)
         return label
 
+    def enable_responsive_toolbar(self, frame, gap=6):
+        ancestor = frame
+        viewport = None
+        while ancestor is not None:
+            viewport = getattr(ancestor, "viewport_canvas", None)
+            if viewport is not None:
+                break
+            ancestor = getattr(ancestor, "master", None)
+        viewport = viewport or frame
+        pending_job = {"id": None}
+
+        def arrange(_event=None):
+            pending_job["id"] = None
+            available = max(220, int(viewport.winfo_width() or frame.winfo_width() or 800) - 8)
+            widgets = list(frame.winfo_children())
+            if not widgets:
+                return
+            for widget in widgets:
+                if isinstance(widget, ttk.Label) and widget.winfo_reqwidth() > available:
+                    widget.configure(wraplength=max(180, available - 12))
+            frame.update_idletasks()
+            widths = [widget.winfo_reqwidth() for widget in widgets]
+            positions = responsive_toolbar_positions(available, widths, gap=gap)
+            for widget in widgets:
+                widget.pack_forget()
+                widget.grid_forget()
+            for widget, (row, column) in zip(widgets, positions):
+                widget.grid(row=row, column=column, sticky="w", padx=(0, gap), pady=(0, 4))
+
+        def schedule(event=None):
+            if pending_job["id"] is not None:
+                try:
+                    frame.after_cancel(pending_job["id"])
+                except Exception:
+                    pass
+            pending_job["id"] = frame.after_idle(lambda: arrange(event))
+
+        viewport.bind("<Configure>", schedule, add="+")
+        schedule()
+        return frame
+
     def build_browser_tab(self):
         browser_content = self.build_scrollable_tab_content(self.browser_tab)
         gallery = ttk.Frame(browser_content)
@@ -313,6 +354,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         top_action_row.pack(fill="x", pady=(4, 0))
         top_secondary_row = ttk.Frame(top)
         top_secondary_row.pack(fill="x", pady=(4, 0))
+        for toolbar in (gallery, top_target_row, top_action_row, top_secondary_row):
+            self.enable_responsive_toolbar(toolbar)
         ttk.Label(top_target_row, text="Target").pack(side="left")
         self.target_var = tk.StringVar(value=SETTINGS.get("last_target", "M51"))
         ttk.Entry(top_target_row, textvariable=self.target_var, width=28).pack(side="left", padx=(6, 8))
@@ -574,6 +617,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         controls_primary.pack(fill="x")
         controls_secondary = ttk.Frame(controls)
         controls_secondary.pack(fill="x", pady=(4, 0))
+        self.enable_responsive_toolbar(controls_primary)
+        self.enable_responsive_toolbar(controls_secondary)
         ttk.Button(controls_primary, text="Analyze Current Search", command=self.observatory_analyze_current, style="Accent.TButton").pack(side="left")
         ttk.Button(controls_primary, text="Build Sky Mosaic View", command=self.observatory_draw_current_mosaic).pack(side="left", padx=(8, 0))
         ttk.Button(controls_primary, text="Prepare Best RGB Layer", command=self.observatory_prepare_best_rgb_layer, style="Accent.TButton").pack(side="left", padx=(8, 0))
@@ -593,6 +638,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         sensor_primary_row.pack(fill="x", pady=(4, 0))
         sensor_secondary_row = ttk.Frame(sensor_tools)
         sensor_secondary_row.pack(fill="x", pady=(4, 0))
+        for toolbar in (sensor_filter_row, sensor_primary_row, sensor_secondary_row):
+            self.enable_responsive_toolbar(toolbar)
         ttk.Label(sensor_filter_row, text="Sensor filter").pack(side="left")
         self.sensor_filter_var = tk.StringVar(value="All sensors")
         sensor_names = ["All sensors", "Hubble only", "JWST only", "WFC3 UVIS", "WFC3 IR", "ACS WFC", "WFPC2", "NICMOS", "NIRCam", "MIRI", "Other Hubble", "Other JWST", "Unknown sensor"]
@@ -675,6 +722,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         mosaic_rgb_row.pack(fill="x", pady=(4, 0))
         mosaic_export_row = ttk.Frame(mosaic_tools)
         mosaic_export_row.pack(fill="x", pady=(4, 0))
+        for toolbar in (mosaic_filter_row, mosaic_view_row, mosaic_rgb_row, mosaic_export_row):
+            self.enable_responsive_toolbar(toolbar, gap=4)
         ttk.Label(mosaic_filter_row, text="Sky Mosaic / Coverage Map", style="Section.TLabel").pack(side="left")
         ttk.Label(mosaic_filter_row, text="Layer").pack(side="left", padx=(18, 6))
         self.mosaic_layer_var = tk.StringVar(value="All active sources")
@@ -968,6 +1017,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         controls = ttk.Frame(compose_content)
         controls.pack(fill="x", pady=(6, 8))
+        self.enable_responsive_toolbar(controls)
         self.compose_stretch_var = tk.StringVar(value="asinh")
         self.high_quality_var = tk.BooleanVar(value=SETTINGS.get("high_quality_processing", True))
         self.prefer_drizzled_var = tk.BooleanVar(value=SETTINGS.get("prefer_drizzled_products", True))
@@ -991,6 +1041,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         coverage_controls = ttk.Frame(compose_content)
         coverage_controls.pack(fill="x", pady=(0, 8))
+        self.enable_responsive_toolbar(coverage_controls)
         ttk.Label(coverage_controls, text="Mosaic coverage").pack(side="left")
         ttk.Combobox(
             coverage_controls,
@@ -1074,6 +1125,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         presets = ttk.Frame(compose_content)
         presets.pack(fill="x", pady=(0, 8))
+        self.enable_responsive_toolbar(presets)
         ttk.Label(presets, text="Presets").pack(side="left")
         for name in ("Natural", "High Contrast", "Nebula", "Blue/Pink Nebula", "Galaxy", "Soft Stretch"):
             ttk.Button(presets, text=name, command=lambda n=name: self.apply_processing_preset(n)).pack(side="left", padx=(8, 0))

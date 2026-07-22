@@ -21,6 +21,28 @@ def responsive_window_layout(screen_width, screen_height, preferred_width=1160, 
         "x": max(0, (screen_width - width) // 2),
         "y": max(0, (screen_height - height) // 2),
     }
+
+
+def responsive_toolbar_positions(available_width, item_widths, gap=6):
+    """Assign toolbar items to rows without exceeding the available viewport width."""
+    available_width = max(1, int(available_width))
+    gap = max(0, int(gap))
+    positions = []
+    row = 0
+    column = 0
+    used = 0
+    for width in item_widths:
+        width = max(1, min(int(width), available_width))
+        required = width if column == 0 else gap + width
+        if column and used + required > available_width:
+            row += 1
+            column = 0
+            used = 0
+            required = width
+        positions.append((row, column))
+        used += required
+        column += 1
+    return positions
 from tkinter import messagebox
 
 from hubble_workbench_app.settings import SETTINGS, save_settings

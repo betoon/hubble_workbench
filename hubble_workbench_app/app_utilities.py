@@ -43,6 +43,25 @@ def responsive_toolbar_positions(available_width, item_widths, gap=6):
         used += required
         column += 1
     return positions
+
+
+def responsive_tab_titles(available_width):
+    if int(available_width) < 1050:
+        return ("Setup", "MAST", "Explorer", "FITS", "Composer", "H-II", "Debug")
+    return (
+        "Setup",
+        "MAST Browser",
+        "Observatory Explorer",
+        "FITS Preview / Convert",
+        "Color Composer",
+        "Hydrogen Enhance",
+        "Debug Console",
+    )
+
+
+def responsive_content_height(viewport_height, reserved_height=260, minimum=280, maximum=520):
+    available = int(viewport_height) - int(reserved_height)
+    return max(int(minimum), min(int(maximum), available))
 from tkinter import messagebox
 
 from hubble_workbench_app.settings import SETTINGS, save_settings

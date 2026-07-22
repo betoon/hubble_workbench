@@ -69,7 +69,13 @@ from hubble_workbench_app.better_sources import BetterSourcesMixin
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.search_workflow import SearchWorkflowMixin
 from hubble_workbench_app.hla_workflow import HlaWorkflowMixin
-from hubble_workbench_app.app_utilities import AppUtilitiesMixin, responsive_toolbar_positions, responsive_window_layout
+from hubble_workbench_app.app_utilities import (
+    AppUtilitiesMixin,
+    responsive_content_height,
+    responsive_tab_titles,
+    responsive_toolbar_positions,
+    responsive_window_layout,
+)
 from hubble_workbench_app.quality_settings import QualitySettingsMixin
 from hubble_workbench_app.target_gallery import TargetGalleryMixin
 from hubble_workbench_app.dependency_status import DependencyStatusMixin
@@ -157,6 +163,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.option_add("*Listbox.Font", ("Segoe UI", 10))
         self.option_add("*Text.Font", ("Segoe UI", 10))
         style = ttk.Style(self)
+        self.app_style = style
         try:
             style.theme_use("vista")
         except Exception:
@@ -194,6 +201,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.notebook.add(self.hydrogen_tab, text="Hydrogen Enhance")
         self.notebook.add(self.debug_tab, text="Debug Console")
 
+        self.bind("<Configure>", self.update_responsive_notebook, add="+")
+
         self.build_setup_tab()
         self.build_browser_tab()
         self.build_observatory_tab()
@@ -201,6 +210,16 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.build_compose_tab()
         self.build_hydrogen_tab()
         self.build_debug_console_tab()
+
+    def update_responsive_notebook(self, event=None):
+        if event is not None and event.widget is not self:
+            return
+        width = int(getattr(event, "width", 0) or self.winfo_width() or 1160)
+        titles = responsive_tab_titles(width)
+        for tab, title in zip(self.notebook.tabs(), titles):
+            self.notebook.tab(tab, text=title)
+        padding = (8, 6) if width < 1050 else (16, 8)
+        self.app_style.configure("TNotebook.Tab", padding=padding, font=("Segoe UI", 10))
 
     def build_setup_tab(self):
         setup_content = self.build_scrollable_tab_content(self.setup_tab)
@@ -803,6 +822,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(mosaic_export_row, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
         self.mosaic_canvas = tk.Canvas(right, bg="#111827", highlightthickness=0, height=520)
         self.mosaic_canvas.pack(fill="both", expand=True, pady=(4, 0))
+        observatory_viewport = getattr(observatory_content, "viewport_canvas", None)
+        if observatory_viewport is not None:
+            observatory_viewport.bind(
+                "<Configure>",
+                lambda event: self.mosaic_canvas.configure(height=responsive_content_height(event.height)),
+                add="+",
+            )
         self.mosaic_hover_var = tk.StringVar(value="Hover over a marker or footprint for details. Scroll to zoom; Shift-drag a region; left-click to select.")
         self.responsive_wrap_label(right, textvariable=self.mosaic_hover_var, minimum=180, style="Section.TLabel").pack(anchor="w", pady=(6, 0))
         self.mosaic_status_var = tk.StringVar(value="Run a MAST search, then click Analyze Current Search or Build Sky Mosaic View.")

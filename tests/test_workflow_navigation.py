@@ -2,7 +2,12 @@ import unittest
 
 from hubble_workbench_app.compose_workflow import ComposeWorkflowMixin
 from hubble_workbench_app.debug_console import DEBUG_SHOW_ON_ISSUE_DEFAULT
-from hubble_workbench_app.app_utilities import responsive_toolbar_positions, responsive_window_layout
+from hubble_workbench_app.app_utilities import (
+    responsive_content_height,
+    responsive_tab_titles,
+    responsive_toolbar_positions,
+    responsive_window_layout,
+)
 
 
 class _Value:
@@ -41,6 +46,18 @@ class WorkflowNavigationTests(unittest.TestCase):
     def test_responsive_toolbar_positions_stay_single_row_when_wide(self):
         positions = responsive_toolbar_positions(600, [100, 100, 100, 80], gap=6)
         self.assertEqual(positions, [(0, 0), (0, 1), (0, 2), (0, 3)])
+
+    def test_responsive_tab_titles_compact_on_narrow_window(self):
+        self.assertEqual(
+            responsive_tab_titles(900),
+            ("Setup", "MAST", "Explorer", "FITS", "Composer", "H-II", "Debug"),
+        )
+        self.assertEqual(responsive_tab_titles(1200)[1], "MAST Browser")
+
+    def test_responsive_content_height_is_bounded(self):
+        self.assertEqual(responsive_content_height(600), 340)
+        self.assertEqual(responsive_content_height(400), 280)
+        self.assertEqual(responsive_content_height(1000), 520)
 
     def test_debug_console_auto_focus_is_opt_in(self):
         self.assertFalse(DEBUG_SHOW_ON_ISSUE_DEFAULT)

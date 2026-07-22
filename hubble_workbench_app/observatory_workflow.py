@@ -2316,11 +2316,58 @@ class ObservatoryWorkflowMixin:
     def observatory_current_mosaic_rows(self):
         rows = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
         rows = [row for row in rows if self.observatory_row_matches_sensor_filter(row)]
+        view_filter = getattr(self, "mosaic_view_filter_bounds", None)
+        if view_filter:
+            rows = self.observatory_rows_in_bounds(rows, view_filter)
         if self.observatory_mosaic_best_only():
             rows = self.observatory_best_observations(rows, limit=12)
         if self.observatory_mosaic_overlap_only():
             rows = self.observatory_rows_in_bounds(rows, self.observatory_hst_jwst_overlap_bounds())
         return rows
+
+    def observatory_apply_current_view_filter(self):
+        render = getattr(self, "mosaic_render_state", None)
+        if not render:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("Build the mosaic before filtering observations to the current view.")
+            return False
+        ra_min, ra_max, dec_min, dec_max = render["bounds"]
+        bounds = {
+            "ra_min": ra_min,
+            "ra_max": ra_max,
+            "dec_min": dec_min,
+            "dec_max": dec_max,
+        }
+        candidates = self.observatory_selected_mosaic_rows(list(getattr(self, "search_results", []) or []))
+        candidates = [row for row in candidates if self.observatory_row_matches_sensor_filter(row)]
+        selected = self.observatory_rows_in_bounds(candidates, bounds)
+        if not selected:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("No observation centers are inside the current view, so no filter was applied.")
+            return False
+        self.mosaic_view_filter_bounds = bounds
+        if hasattr(self, "mosaic_view_filter_var"):
+            self.mosaic_view_filter_var.set(f"View filter: {len(selected)} observation(s)")
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(
+                f"Filtered the mosaic to {len(selected)} observation(s) inside the selected view. "
+                "The original search results remain available."
+            )
+        return True
+
+    def observatory_clear_current_view_filter(self):
+        if not getattr(self, "mosaic_view_filter_bounds", None):
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("The current-view observation filter is already off.")
+            return False
+        self.mosaic_view_filter_bounds = None
+        if hasattr(self, "mosaic_view_filter_var"):
+            self.mosaic_view_filter_var.set("View filter: off")
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set("Cleared the current-view filter and restored all observations in the active layer.")
+        return True
 
     @staticmethod
     def observatory_mosaic_channel_for_bucket(bucket):
@@ -3880,6 +3927,8 @@ class ObservatoryWorkflowMixin:
         sensor_filter = self.observatory_sensor_filter_name()
         if sensor_filter not in ("", "All sensors"):
             layer_label = f"{layer_label} - {sensor_filter}"
+        if getattr(self, "mosaic_view_filter_bounds", None):
+            layer_label = f"{layer_label} - view subset"
         color_mode = self.observatory_mosaic_color_mode()
         color_indexes = {}
         color_counts = {}

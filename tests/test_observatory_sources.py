@@ -268,6 +268,34 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(len(cells), 2)
         self.assertTrue(all(cell["count"] == 1 for cell in cells))
 
+    def test_mosaic_current_rows_respect_persistent_view_filter(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.search_results = [
+            {"s_ra": 10.0, "s_dec": 20.0, "obs_collection": "HST", "instrument_name": "ACS/WFC"},
+            {"s_ra": 15.0, "s_dec": 25.0, "obs_collection": "HST", "instrument_name": "ACS/WFC"},
+        ]
+        explorer.mosaic_view_filter_bounds = {
+            "ra_min": 9.0,
+            "ra_max": 11.0,
+            "dec_min": 19.0,
+            "dec_max": 21.0,
+        }
+
+        rows = explorer.observatory_current_mosaic_rows()
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["s_ra"], 10.0)
+
+    def test_clear_current_view_filter_restores_unfiltered_state(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.mosaic_view_filter_bounds = {"ra_min": 1, "ra_max": 2, "dec_min": 3, "dec_max": 4}
+        explorer.observatory_draw_current_mosaic = lambda: None
+
+        cleared = explorer.observatory_clear_current_view_filter()
+
+        self.assertTrue(cleared)
+        self.assertIsNone(explorer.mosaic_view_filter_bounds)
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

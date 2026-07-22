@@ -3306,6 +3306,81 @@ class ObservatoryWorkflowMixin:
             self.observatory_mosaic_focus_selected()
         return "break"
 
+    @staticmethod
+    def observatory_mosaic_region_from_screen(render, x0, y0, x1, y1):
+        plot_x0, plot_y0, plot_x1, plot_y1 = render["plot"]
+        ra_min, ra_max, dec_min, dec_max = render["bounds"]
+        left = min(plot_x1, max(plot_x0, min(x0, x1)))
+        right = min(plot_x1, max(plot_x0, max(x0, x1)))
+        top = min(plot_y1, max(plot_y0, min(y0, y1)))
+        bottom = min(plot_y1, max(plot_y0, max(y0, y1)))
+        plot_width = max(plot_x1 - plot_x0, 1)
+        plot_height = max(plot_y1 - plot_y0, 1)
+        region_ra_min = ra_min + (left - plot_x0) / plot_width * (ra_max - ra_min)
+        region_ra_max = ra_min + (right - plot_x0) / plot_width * (ra_max - ra_min)
+        region_dec_max = dec_max - (top - plot_y0) / plot_height * (dec_max - dec_min)
+        region_dec_min = dec_max - (bottom - plot_y0) / plot_height * (dec_max - dec_min)
+        return region_ra_min, region_ra_max, region_dec_min, region_dec_max
+
+    def observatory_mosaic_region_start(self, event):
+        render = getattr(self, "mosaic_render_state", None)
+        if not render:
+            return "break"
+        plot_x0, plot_y0, plot_x1, plot_y1 = render["plot"]
+        x = min(plot_x1, max(plot_x0, event.x))
+        y = min(plot_y1, max(plot_y0, event.y))
+        self.mosaic_region_anchor = (x, y)
+        try:
+            self.mosaic_canvas.delete("mosaic_region_selection")
+            self.mosaic_canvas.create_rectangle(
+                x, y, x, y,
+                outline="#facc15",
+                width=2,
+                dash=(5, 3),
+                tags="mosaic_region_selection",
+            )
+            self.mosaic_canvas.configure(cursor="crosshair")
+        except Exception:
+            pass
+        return "break"
+
+    def observatory_mosaic_region_move(self, event):
+        anchor = getattr(self, "mosaic_region_anchor", None)
+        render = getattr(self, "mosaic_render_state", None)
+        if not anchor or not render:
+            return "break"
+        plot_x0, plot_y0, plot_x1, plot_y1 = render["plot"]
+        x = min(plot_x1, max(plot_x0, event.x))
+        y = min(plot_y1, max(plot_y0, event.y))
+        try:
+            self.mosaic_canvas.coords("mosaic_region_selection", anchor[0], anchor[1], x, y)
+        except Exception:
+            pass
+        return "break"
+
+    def observatory_mosaic_region_end(self, event):
+        anchor = getattr(self, "mosaic_region_anchor", None)
+        render = getattr(self, "mosaic_render_state", None)
+        self.mosaic_region_anchor = None
+        try:
+            self.mosaic_canvas.configure(cursor="")
+            self.mosaic_canvas.delete("mosaic_region_selection")
+        except Exception:
+            pass
+        if not anchor or not render:
+            return "break"
+        if abs(event.x - anchor[0]) < 8 or abs(event.y - anchor[1]) < 8:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("Shift-drag a larger rectangle inside the map to zoom into a region.")
+            return "break"
+        region = self.observatory_mosaic_region_from_screen(render, anchor[0], anchor[1], event.x, event.y)
+        self.mosaic_view_state = self.observatory_mosaic_view_for_region(render["base_bounds"], region, padding=0.04)
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            zoom = self.mosaic_view_state["zoom"]
+            self.mosaic_status_var.set(f"Focused on the selected sky region at {zoom:.2f}x. Use Fit All to restore full coverage.")
+        return "break"
+
     def observatory_mosaic_zoom(self, factor, x=None, y=None):
         render = getattr(self, "mosaic_render_state", None)
         if not render:
@@ -3387,14 +3462,14 @@ class ObservatoryWorkflowMixin:
             if footprint is not None:
                 row = footprint["row"]
         if row is None:
-            hover_var.set("Hover over a marker or footprint for details. Scroll to zoom; middle/right-drag to pan; left-click to select.")
+            hover_var.set("Hover over a marker or footprint for details. Scroll to zoom; Shift-drag a region; left-click to select.")
             return
         mission = row.get("obs_collection", "") or "Unknown"
         obs_id = row.get("obs_id", "") or row.get("obsid", "") or "unknown"
         instrument = row.get("instrument_name", "") or "Unknown instrument"
         filter_name = row.get("filters", "") or row.get("Spectral_Elt", "") or "no filter listed"
         exposure = row.get("t_exptime", "") or "?"
-        hover_var.set(f"{mission} · {obs_id} · {instrument} · {filter_name} · {exposure} seconds — click to select")
+        hover_var.set(f"{mission} | {obs_id} | {instrument} | {filter_name} | {exposure} seconds - click to select")
 
     def observatory_draw_current_mosaic(self):
         canvas = getattr(self, "mosaic_canvas", None)

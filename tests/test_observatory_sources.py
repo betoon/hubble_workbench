@@ -50,6 +50,26 @@ class ObservatorySourceTests(unittest.TestCase):
         )
         self.assertEqual(view, {"zoom": 32.0, "center_ra": 8.0, "center_dec": 12.0})
 
+    def test_mosaic_screen_rectangle_converts_to_sky_region(self):
+        render = {
+            "plot": (100.0, 50.0, 500.0, 250.0),
+            "bounds": (10.0, 20.0, 30.0, 40.0),
+        }
+        region = ObservatoryWorkflowMixin.observatory_mosaic_region_from_screen(
+            render, 200.0, 100.0, 400.0, 200.0
+        )
+        self.assertEqual(region, (12.5, 17.5, 32.5, 37.5))
+
+    def test_mosaic_screen_rectangle_clamps_to_plot(self):
+        render = {
+            "plot": (100.0, 50.0, 500.0, 250.0),
+            "bounds": (10.0, 20.0, 30.0, 40.0),
+        }
+        region = ObservatoryWorkflowMixin.observatory_mosaic_region_from_screen(
+            render, 0.0, 0.0, 900.0, 400.0
+        )
+        self.assertEqual(region, (10.0, 20.0, 30.0, 40.0))
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

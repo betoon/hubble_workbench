@@ -21,6 +21,49 @@ from hubble_workbench_app.observatory_sources import (
 
 
 class ObservatorySourceTests(unittest.TestCase):
+    def test_mosaic_hover_highlights_nearby_marker(self):
+        class Variable:
+            value = ""
+
+            def set(self, value):
+                self.value = value
+
+        class Canvas:
+            def __init__(self):
+                self.deleted = []
+                self.ovals = []
+
+            def delete(self, tag):
+                self.deleted.append(tag)
+
+            def create_oval(self, *coords, **options):
+                self.ovals.append((coords, options))
+
+        explorer = ObservatoryWorkflowMixin()
+        explorer.mosaic_hover_var = Variable()
+        explorer.mosaic_canvas = Canvas()
+        explorer.mosaic_marker_points = [{
+            "x": 100,
+            "y": 120,
+            "size": 5,
+            "row": {
+                "obs_collection": "HST",
+                "obs_id": "hst-1",
+                "instrument_name": "ACS/WFC",
+                "filters": "F606W",
+                "t_exptime": 900,
+            },
+        }]
+        explorer.mosaic_footprint_polygons = []
+        event = type("Event", (), {"x": 104, "y": 123})()
+
+        explorer.observatory_mosaic_hover(event)
+
+        self.assertEqual(explorer.mosaic_canvas.deleted, ["mosaic_hover_highlight"])
+        self.assertEqual(len(explorer.mosaic_canvas.ovals), 1)
+        self.assertEqual(explorer.mosaic_canvas.ovals[0][1]["outline"], "#fde047")
+        self.assertIn("hst-1", explorer.mosaic_hover_var.value)
+
     def test_mosaic_view_bounds_zoom_around_center(self):
         bounds = ObservatoryWorkflowMixin.observatory_mosaic_view_bounds((10.0, 14.0, 20.0, 22.0), {"zoom": 2.0})
         self.assertEqual(bounds, (11.0, 13.0, 20.5, 21.5))

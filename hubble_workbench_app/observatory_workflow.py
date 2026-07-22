@@ -3448,6 +3448,12 @@ class ObservatoryWorkflowMixin:
         hover_var = getattr(self, "mosaic_hover_var", None)
         if hover_var is None:
             return
+        canvas = getattr(self, "mosaic_canvas", None)
+        if canvas is not None:
+            try:
+                canvas.delete("mosaic_hover_highlight")
+            except Exception:
+                pass
         nearest = None
         nearest_distance = None
         for marker in list(getattr(self, "mosaic_marker_points", []) or []):
@@ -3455,6 +3461,7 @@ class ObservatoryWorkflowMixin:
             if nearest is None or distance < nearest_distance:
                 nearest, nearest_distance = marker, distance
         row = None
+        footprint = None
         if nearest is not None and nearest_distance <= max(14, nearest.get("size", 4) + 8):
             row = nearest["row"]
         else:
@@ -3464,6 +3471,30 @@ class ObservatoryWorkflowMixin:
         if row is None:
             hover_var.set("Hover over a marker or footprint for details. Scroll to zoom; Shift-drag a region; left-click to select.")
             return
+        if canvas is not None:
+            try:
+                if footprint is not None and footprint.get("points"):
+                    coords = [coordinate for point in footprint["points"] for coordinate in point]
+                    canvas.create_polygon(
+                        coords,
+                        outline="#fde047",
+                        fill="",
+                        width=3,
+                        tags="mosaic_hover_highlight",
+                    )
+                elif nearest is not None:
+                    ring = nearest.get("size", 4) + 7
+                    canvas.create_oval(
+                        nearest["x"] - ring,
+                        nearest["y"] - ring,
+                        nearest["x"] + ring,
+                        nearest["y"] + ring,
+                        outline="#fde047",
+                        width=2,
+                        tags="mosaic_hover_highlight",
+                    )
+            except Exception:
+                pass
         mission = row.get("obs_collection", "") or "Unknown"
         obs_id = row.get("obs_id", "") or row.get("obsid", "") or "unknown"
         instrument = row.get("instrument_name", "") or "Unknown instrument"
@@ -3611,6 +3642,8 @@ class ObservatoryWorkflowMixin:
                     canvas.create_polygon(coords, outline=fill, fill="", width=1, dash=(2, 3))
                     polygon_points = [(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)]
                     self.mosaic_footprint_polygons.append({"points": polygon_points, "row": row})
+                    if self.observatory_mosaic_row_matches(row, getattr(self, "selected_mosaic_row", {})):
+                        canvas.create_polygon(coords, outline="#facc15", fill="", width=3)
                     footprint_count += 1
 
         rgb_highlight_count = 0

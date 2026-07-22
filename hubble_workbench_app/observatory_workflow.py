@@ -3322,6 +3322,62 @@ class ObservatoryWorkflowMixin:
         region_dec_min = dec_max - (bottom - plot_y0) / plot_height * (dec_max - dec_min)
         return region_ra_min, region_ra_max, region_dec_min, region_dec_max
 
+    @staticmethod
+    def observatory_clip_polygon_to_rectangle(points, rectangle):
+        left, top, right, bottom = rectangle
+
+        def clip(vertices, inside, intersect):
+            if not vertices:
+                return []
+            output = []
+            previous = vertices[-1]
+            previous_inside = inside(previous)
+            for current in vertices:
+                current_inside = inside(current)
+                if current_inside:
+                    if not previous_inside:
+                        output.append(intersect(previous, current))
+                    output.append(current)
+                elif previous_inside:
+                    output.append(intersect(previous, current))
+                previous = current
+                previous_inside = current_inside
+            return output
+
+        vertices = list(points)
+        vertices = clip(
+            vertices,
+            lambda point: point[0] >= left,
+            lambda first, second: (
+                left,
+                first[1] + (second[1] - first[1]) * (left - first[0]) / ((second[0] - first[0]) or 1e-9),
+            ),
+        )
+        vertices = clip(
+            vertices,
+            lambda point: point[0] <= right,
+            lambda first, second: (
+                right,
+                first[1] + (second[1] - first[1]) * (right - first[0]) / ((second[0] - first[0]) or 1e-9),
+            ),
+        )
+        vertices = clip(
+            vertices,
+            lambda point: point[1] >= top,
+            lambda first, second: (
+                first[0] + (second[0] - first[0]) * (top - first[1]) / ((second[1] - first[1]) or 1e-9),
+                top,
+            ),
+        )
+        return clip(
+            vertices,
+            lambda point: point[1] <= bottom,
+            lambda first, second: (
+                first[0] + (second[0] - first[0]) * (bottom - first[1]) / ((second[1] - first[1]) or 1e-9),
+                bottom,
+            ),
+        )
+
     def observatory_mosaic_region_start(self, event):
         render = getattr(self, "mosaic_render_state", None)
         if not render:
@@ -3633,26 +3689,35 @@ class ObservatoryWorkflowMixin:
                 vertices = self.observatory_s_region_vertices(row)
                 if not vertices:
                     continue
-                coords = []
-                for vertex_ra, vertex_dec in vertices:
-                    x, y = map_point(vertex_ra, vertex_dec)
-                    coords.extend([x, y])
+                polygon_points = [map_point(vertex_ra, vertex_dec) for vertex_ra, vertex_dec in vertices]
+                polygon_points = self.observatory_clip_polygon_to_rectangle(
+                    polygon_points,
+                    (plot_x0, plot_y0, plot_x1, plot_y1),
+                )
+                coords = [coordinate for point in polygon_points for coordinate in point]
                 if len(coords) >= 6:
                     fill, outline, _group = self.observatory_marker_style(row, color_mode, color_indexes)
                     canvas.create_polygon(coords, outline=fill, fill="", width=1, dash=(2, 3))
-                    polygon_points = [(coords[i], coords[i + 1]) for i in range(0, len(coords), 2)]
                     self.mosaic_footprint_polygons.append({"points": polygon_points, "row": row})
                     if self.observatory_mosaic_row_matches(row, getattr(self, "selected_mosaic_row", {})):
                         canvas.create_polygon(coords, outline="#facc15", fill="", width=3)
                     footprint_count += 1
 
         rgb_highlight_count = 0
+        total_rgb_highlight_count = 0
         rgb_requested_highlight_count = 0
         active_rgb_set = getattr(self, "selected_mosaic_rgb_set", None)
         requested_rgb_channels = set(getattr(self, "product_requested_mosaic_rgb_channels", set()) or set())
         visible_rgb_channels = set()
+        visible_marker_count = 0
         for ra, dec, row in points[:1000]:
             x, y = map_point(ra, dec)
+            rgb_channel = self.observatory_mosaic_rgb_highlight_channel(row, active_rgb_set)
+            if rgb_channel:
+                total_rgb_highlight_count += 1
+            if not (plot_x0 <= x <= plot_x1 and plot_y0 <= y <= plot_y1):
+                continue
+            visible_marker_count += 1
             fill, outline, _group = self.observatory_marker_style(row, color_mode, color_indexes)
             size = 4
             try:
@@ -3661,7 +3726,6 @@ class ObservatoryWorkflowMixin:
             except Exception:
                 pass
             canvas.create_oval(x - size, y - size, x + size, y + size, fill=fill, outline=outline, width=1)
-            rgb_channel = self.observatory_mosaic_rgb_highlight_channel(row, active_rgb_set)
             if rgb_channel:
                 style = self.observatory_mosaic_rgb_highlight_style(rgb_channel)
                 visible_rgb_channels.add(rgb_channel)
@@ -3682,7 +3746,7 @@ class ObservatoryWorkflowMixin:
                 canvas.create_text(x, y - size - 12, text="selected", fill="#facc15", font=("Segoe UI", 8, "bold"))
             self.mosaic_marker_points.append({"x": x, "y": y, "size": size, "row": row})
 
-        if active_rgb_set and rgb_highlight_count == 0:
+        if active_rgb_set and total_rgb_highlight_count == 0:
             self.selected_mosaic_rgb_set = None
 
         legend_x = plot_x1 - 245
@@ -3714,7 +3778,7 @@ class ObservatoryWorkflowMixin:
             labels = "/".join(channel[0].upper() for channel in ("blue", "green", "red") if channel in visible_rgb_channels)
             rgb_note = f" Mosaic RGB Plan highlights: {labels}; products requested: {rgb_requested_highlight_count}/3."
         self.mosaic_status_var.set(
-            f"Plotted {len(points)} observation centers for {layer_label}. Color mode: {color_mode}. "
+            f"Showing {visible_marker_count} of {len(points)} observation centers for {layer_label}. Color mode: {color_mode}. "
             f"Missions: {mission_text}. Wavelength buckets: {bucket_text}. Footprints drawn: {footprint_count}."
             f"{selected_note}{rgb_note}"
         )

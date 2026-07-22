@@ -113,6 +113,22 @@ class ObservatorySourceTests(unittest.TestCase):
         )
         self.assertEqual(region, (10.0, 20.0, 30.0, 40.0))
 
+    def test_mosaic_polygon_clips_to_plot_rectangle(self):
+        polygon = [(-5.0, 2.0), (5.0, 2.0), (5.0, 8.0), (-5.0, 8.0)]
+        clipped = ObservatoryWorkflowMixin.observatory_clip_polygon_to_rectangle(
+            polygon,
+            (0.0, 0.0, 10.0, 10.0),
+        )
+        self.assertEqual(set(clipped), {(0.0, 2.0), (5.0, 2.0), (5.0, 8.0), (0.0, 8.0)})
+
+    def test_mosaic_polygon_outside_plot_clips_to_empty(self):
+        polygon = [(-5.0, 2.0), (-2.0, 2.0), (-2.0, 8.0), (-5.0, 8.0)]
+        clipped = ObservatoryWorkflowMixin.observatory_clip_polygon_to_rectangle(
+            polygon,
+            (0.0, 0.0, 10.0, 10.0),
+        )
+        self.assertEqual(clipped, [])
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

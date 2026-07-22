@@ -150,6 +150,28 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(summary["missions"], {"HST": 1})
         self.assertEqual(summary["instruments"], {"ACS/WFC": 1})
 
+    def test_mosaic_back_view_restores_previous_state(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.mosaic_view_state = {"zoom": 2.0, "center_ra": 10.0, "center_dec": 20.0}
+        explorer.mosaic_view_history = [None, {"zoom": 1.5, "center_ra": 9.0, "center_dec": 19.0}]
+        explorer.observatory_draw_current_mosaic = lambda: None
+
+        restored = explorer.observatory_mosaic_back_view()
+
+        self.assertTrue(restored)
+        self.assertEqual(explorer.mosaic_view_state, {"zoom": 1.5, "center_ra": 9.0, "center_dec": 19.0})
+        self.assertEqual(explorer.mosaic_view_history, [None])
+
+    def test_mosaic_view_history_is_bounded(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.mosaic_view_history = []
+        for index in range(40):
+            explorer.mosaic_view_state = {"zoom": float(index + 1), "center_ra": float(index), "center_dec": 0.0}
+            explorer.observatory_mosaic_remember_view()
+
+        self.assertEqual(len(explorer.mosaic_view_history), 30)
+        self.assertEqual(explorer.mosaic_view_history[0]["zoom"], 11.0)
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

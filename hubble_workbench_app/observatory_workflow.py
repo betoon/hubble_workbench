@@ -3328,8 +3328,33 @@ class ObservatoryWorkflowMixin:
         )
 
     def observatory_mosaic_reset_view(self):
+        if getattr(self, "mosaic_view_state", None) is not None:
+            self.observatory_mosaic_remember_view()
         self.mosaic_view_state = None
         self.observatory_draw_current_mosaic()
+
+    def observatory_mosaic_remember_view(self):
+        state = getattr(self, "mosaic_view_state", None)
+        snapshot = dict(state) if state is not None else None
+        history = list(getattr(self, "mosaic_view_history", []) or [])
+        if not history or history[-1] != snapshot:
+            history.append(snapshot)
+        self.mosaic_view_history = history[-30:]
+
+    def observatory_mosaic_back_view(self):
+        history = list(getattr(self, "mosaic_view_history", []) or [])
+        if not history:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("No earlier mosaic view is available yet.")
+            return False
+        previous = history.pop()
+        self.mosaic_view_history = history
+        self.mosaic_view_state = dict(previous) if previous is not None else None
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            zoom = float((self.mosaic_view_state or {}).get("zoom", 1.0))
+            self.mosaic_status_var.set(f"Returned to the previous mosaic view at {zoom:.2f}x.")
+        return True
 
     @staticmethod
     def observatory_mosaic_view_for_region(base_bounds, region_bounds, padding=0.18):
@@ -3372,6 +3397,7 @@ class ObservatoryWorkflowMixin:
             half_ra = max((base_ra_max - base_ra_min) / 16.0, 0.00025)
             half_dec = max((base_dec_max - base_dec_min) / 16.0, 0.00025)
             region_bounds = (ra - half_ra, ra + half_ra, dec - half_dec, dec + half_dec)
+        self.observatory_mosaic_remember_view()
         self.mosaic_view_state = self.observatory_mosaic_view_for_region(render["base_bounds"], region_bounds)
         self.observatory_draw_current_mosaic()
         if hasattr(self, "mosaic_status_var"):
@@ -3510,6 +3536,7 @@ class ObservatoryWorkflowMixin:
                 self.mosaic_status_var.set("Shift-drag a larger rectangle inside the map to zoom into a region.")
             return "break"
         region = self.observatory_mosaic_region_from_screen(render, anchor[0], anchor[1], event.x, event.y)
+        self.observatory_mosaic_remember_view()
         self.mosaic_view_state = self.observatory_mosaic_view_for_region(render["base_bounds"], region, padding=0.04)
         self.observatory_draw_current_mosaic()
         if hasattr(self, "mosaic_status_var"):
@@ -3526,6 +3553,7 @@ class ObservatoryWorkflowMixin:
         new_zoom = min(32.0, max(1.0, old_zoom * float(factor)))
         if abs(new_zoom - old_zoom) < 1e-9:
             return
+        self.observatory_mosaic_remember_view()
         ra_min, ra_max, dec_min, dec_max = render["bounds"]
         plot_x0, plot_y0, plot_x1, plot_y1 = render["plot"]
         x = (plot_x0 + plot_x1) / 2 if x is None else min(plot_x1, max(plot_x0, x))
@@ -3552,6 +3580,7 @@ class ObservatoryWorkflowMixin:
         return "break"
 
     def observatory_mosaic_pan_start(self, event):
+        self.observatory_mosaic_remember_view()
         self.mosaic_pan_anchor = (event.x, event.y)
         try:
             self.mosaic_canvas.configure(cursor="fleur")
@@ -3697,6 +3726,7 @@ class ObservatoryWorkflowMixin:
         data_signature = tuple((round(ra, 8), round(dec, 8), str(row.get("obs_id", "") or row.get("obsid", ""))) for ra, dec, row in points)
         if data_signature != getattr(self, "mosaic_view_signature", None):
             self.mosaic_view_state = None
+            self.mosaic_view_history = []
             self.mosaic_view_signature = data_signature
         base_bounds = (base_ra_min, base_ra_max, base_dec_min, base_dec_max)
         ra_min, ra_max, dec_min, dec_max = self.observatory_mosaic_view_bounds(base_bounds, getattr(self, "mosaic_view_state", None))

@@ -166,6 +166,8 @@ class DownloadWorkflowMixin:
             return
         manifest, download_path, error, rgb_set, stacked_paths, stack_metadata = result
         if error:
+            if hasattr(self, "observatory_continue_marker_preview_after_download"):
+                self.observatory_continue_marker_preview_after_download(manifest, download_path, error)
             if hasattr(self, "set_easy_all_sensors_status") and getattr(self, "easy_all_sensors_pending_stage", None) == "download":
                 self.set_easy_all_sensors_status("stopped", "Download failed before the RGB set could be loaded.")
                 self.save_easy_all_sensors_status_snapshot()
@@ -186,6 +188,10 @@ class DownloadWorkflowMixin:
         if rgb_set:
             self.load_downloaded_rgb_set(manifest, download_path, rgb_set, stacked_paths=stacked_paths, stack_metadata=stack_metadata)
             return
+        if hasattr(self, "observatory_continue_marker_preview_after_download"):
+            if self.observatory_continue_marker_preview_after_download(manifest, download_path):
+                self.stop_browser_activity(f"Downloaded marker preview to {download_path}")
+                return
         self.stop_browser_activity(f"Downloaded products to {download_path}")
 
     def load_downloaded_rgb_set(self, manifest, download_path, rgb_set, stacked_paths=None, stack_metadata=None):

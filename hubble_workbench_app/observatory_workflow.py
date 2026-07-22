@@ -3224,6 +3224,81 @@ class ObservatoryWorkflowMixin:
         self.products_async()
         return True
 
+    def observatory_preview_marker(self):
+        row = getattr(self, "selected_mosaic_row", None)
+        if row is None:
+            message = "Click a mosaic marker first, then use Preview Marker."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        if not self.observatory_select_observation_row(row):
+            message = "The selected mosaic marker is not available in the current observation list."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        self.observatory_marker_preview_stage = "products"
+        self.observatory_marker_preview_row = row
+        if hasattr(self, "mosaic_status_var"):
+            label = row.get("obs_id") or row.get("obsid") or "selected observation"
+            self.mosaic_status_var.set(f"Finding the best preview product for {label}...")
+        self.products_async()
+        return True
+
+    def observatory_continue_marker_preview_after_products(self, rows, error=None):
+        if getattr(self, "observatory_marker_preview_stage", None) != "products":
+            return False
+        if error:
+            self.observatory_marker_preview_stage = None
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(f"Marker preview product lookup failed: {error}")
+            return False
+        candidates = [
+            row for row in (rows or [])
+            if str(row.get("productFilename", "")).lower().endswith((".fits", ".fits.gz"))
+            and not (hasattr(self, "product_is_spectrum") and self.product_is_spectrum(row))
+        ]
+        if not candidates:
+            self.observatory_marker_preview_stage = None
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("No image FITS product is available for the selected observation.")
+            return False
+        sort_key = getattr(self, "product_sort_key", lambda item: str(item.get("productFilename", "")))
+        product = min(candidates, key=sort_key)
+        self.observatory_marker_preview_stage = "download"
+        self.observatory_marker_preview_product = product
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"Downloading preview product {product.get('productFilename', '')}...")
+        self.download_product_rows_async([product], folder_label="marker_preview")
+        return True
+
+    def observatory_continue_marker_preview_after_download(self, manifest, download_path, error=None):
+        if getattr(self, "observatory_marker_preview_stage", None) != "download":
+            return False
+        self.observatory_marker_preview_stage = None
+        if error:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(f"Marker preview download failed: {error}")
+            return False
+        downloaded = self.extract_downloaded_paths(manifest, download_path)
+        expected = str(getattr(self, "observatory_marker_preview_product", {}).get("productFilename", "")).lower()
+        path = next(
+            (item for item in downloaded if item.name.lower() == expected or item.name.lower().endswith(expected)),
+            downloaded[0] if downloaded else None,
+        )
+        if path is None:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set("The marker preview downloaded, but its FITS file could not be located.")
+            return False
+        self.convert_path_var.set(str(path))
+        try:
+            self.notebook.select(self.convert_tab)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"Opening marker preview {path.name}...")
+        self.preview_fits_async()
+        return True
+
     @staticmethod
     def observatory_mosaic_bounds_for_points(points):
         bounds = {}

@@ -861,6 +861,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(mosaic_export_row, text="Copy Overlap", command=self.observatory_copy_overlap_candidates).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_export_row, text="Export Overlap", command=self.observatory_export_overlap_candidates_csv).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_export_row, text="Get Marker Products", command=self.observatory_get_marker_products, style="Accent.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(mosaic_export_row, text="Preview Marker", command=self.observatory_preview_marker, style="Accent.TButton").pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_export_row, text="Copy Marker Details", command=self.observatory_copy_marker_details).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_export_row, text="Copy Mosaic Rows", command=self.observatory_copy_mosaic_rows).pack(side="left", padx=(8, 0))
         ttk.Button(mosaic_export_row, text="Export Mosaic CSV", command=self.observatory_export_mosaic_csv).pack(side="left", padx=(8, 0))
@@ -921,6 +922,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def observatory_get_marker_products(self):
         return super().observatory_get_marker_products()
+
+    def observatory_preview_marker(self):
+        return super().observatory_preview_marker()
 
     def observatory_show_mosaic_coverage(self):
         return super().observatory_show_mosaic_coverage()

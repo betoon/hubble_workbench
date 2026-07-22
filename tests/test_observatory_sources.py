@@ -553,6 +553,79 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertFalse(app.observatory_get_marker_products())
         self.assertIn("Click a mosaic marker first", app.mosaic_status_var.value)
 
+    def test_preview_marker_starts_product_lookup_for_selected_observation(self):
+        class Status:
+            value = ""
+
+            def set(self, value):
+                self.value = value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            def observatory_select_observation_row(self, row):
+                self.selected_observation = row
+                return True
+
+            def products_async(self):
+                self.product_lookups = getattr(self, "product_lookups", 0) + 1
+
+        app = Dummy()
+        app.selected_mosaic_row = {"obs_id": "hst-1"}
+        app.mosaic_status_var = Status()
+        self.assertTrue(app.observatory_preview_marker())
+        self.assertEqual(app.observatory_marker_preview_stage, "products")
+        self.assertEqual(app.product_lookups, 1)
+        self.assertIn("hst-1", app.mosaic_status_var.value)
+
+    def test_marker_preview_chooses_best_image_product(self):
+        class Dummy(ObservatoryWorkflowMixin, ProductBrowserMixin):
+            def product_is_spectrum(self, row):
+                return bool(row.get("spectrum"))
+
+            def download_product_rows_async(self, rows, folder_label=None):
+                self.downloaded_rows = rows
+                self.download_folder_label = folder_label
+
+        app = Dummy()
+        app.observatory_marker_preview_stage = "products"
+        rows = [
+            {"productFilename": "visit_raw.fits"},
+            {"productFilename": "visit_drz.fits"},
+            {"productFilename": "spectrum_i2d.fits", "spectrum": True},
+        ]
+        self.assertTrue(app.observatory_continue_marker_preview_after_products(rows))
+        self.assertEqual(app.downloaded_rows[0]["productFilename"], "visit_drz.fits")
+        self.assertEqual(app.download_folder_label, "marker_preview")
+        self.assertEqual(app.observatory_marker_preview_stage, "download")
+
+    def test_marker_preview_opens_downloaded_fits_in_preview_tab(self):
+        from pathlib import Path
+
+        class Variable:
+            def set(self, value):
+                self.value = value
+
+        class Notebook:
+            def select(self, tab):
+                self.selected = tab
+
+        class Dummy(ObservatoryWorkflowMixin):
+            def extract_downloaded_paths(self, manifest, download_path):
+                return [Path(download_path) / "visit_drz.fits"]
+
+            def preview_fits_async(self):
+                self.preview_started = True
+
+        app = Dummy()
+        app.observatory_marker_preview_stage = "download"
+        app.observatory_marker_preview_product = {"productFilename": "visit_drz.fits"}
+        app.convert_path_var = Variable()
+        app.notebook = Notebook()
+        app.convert_tab = "convert"
+        self.assertTrue(app.observatory_continue_marker_preview_after_download([], Path("downloads")))
+        self.assertTrue(app.preview_started)
+        self.assertEqual(app.notebook.selected, "convert")
+        self.assertTrue(app.convert_path_var.value.endswith("visit_drz.fits"))
+
     def test_mosaic_marker_detail_includes_observation_fields(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 

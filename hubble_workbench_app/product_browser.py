@@ -474,6 +474,8 @@ class ProductBrowserMixin:
             return
         rows, error = result
         if error:
+            if hasattr(self, "observatory_continue_marker_preview_after_products"):
+                self.observatory_continue_marker_preview_after_products([], error)
             if getattr(self, "easy_all_sensors_pending_stage", None) == "products":
                 self.easy_all_sensors_pending_stage = None
             self.stop_browser_activity(f"Product lookup failed: {error}")
@@ -497,6 +499,8 @@ class ProductBrowserMixin:
         self.stop_browser_activity(
             f"Found {len(rows)} FITS products{' across observations' if all_observations else ''}. Showing {len(self.visible_product_results)} with the current filters."
         )
+        if not all_observations and hasattr(self, "observatory_continue_marker_preview_after_products"):
+            self.observatory_continue_marker_preview_after_products(rows)
         if hasattr(self, "observatory_continue_easy_all_sensors_after_products"):
             try:
                 self.after(250, lambda: self.observatory_continue_easy_all_sensors_after_products(all_observations))

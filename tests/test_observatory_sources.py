@@ -32,6 +32,24 @@ class ObservatorySourceTests(unittest.TestCase):
         )
         self.assertEqual(bounds, (7.5, 8.5, 11.5, 12.5))
 
+    def test_mosaic_view_for_region_centers_and_fits_footprint(self):
+        view = ObservatoryWorkflowMixin.observatory_mosaic_view_for_region(
+            (10.0, 20.0, 30.0, 40.0),
+            (13.0, 15.0, 34.0, 35.0),
+            padding=0.0,
+        )
+        self.assertEqual(view["center_ra"], 14.0)
+        self.assertEqual(view["center_dec"], 34.5)
+        self.assertEqual(view["zoom"], 5.0)
+
+    def test_mosaic_view_for_point_sized_region_respects_zoom_limit(self):
+        view = ObservatoryWorkflowMixin.observatory_mosaic_view_for_region(
+            (0.0, 32.0, 0.0, 32.0),
+            (8.0, 8.0, 12.0, 12.0),
+            padding=0.0,
+        )
+        self.assertEqual(view, {"zoom": 32.0, "center_ra": 8.0, "center_dec": 12.0})
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

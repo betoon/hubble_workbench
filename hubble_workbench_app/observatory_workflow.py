@@ -3055,6 +3055,10 @@ class ObservatoryWorkflowMixin:
         return row
 
     def observatory_mosaic_click(self, event):
+        try:
+            self.mosaic_canvas.focus_set()
+        except Exception:
+            pass
         markers = list(getattr(self, "mosaic_marker_points", []) or [])
         footprints = list(getattr(self, "mosaic_footprint_polygons", []) or [])
         if not markers and not footprints:
@@ -3246,6 +3250,61 @@ class ObservatoryWorkflowMixin:
     def observatory_mosaic_reset_view(self):
         self.mosaic_view_state = None
         self.observatory_draw_current_mosaic()
+
+    @staticmethod
+    def observatory_mosaic_view_for_region(base_bounds, region_bounds, padding=0.18):
+        base_ra_min, base_ra_max, base_dec_min, base_dec_max = base_bounds
+        ra_min, ra_max, dec_min, dec_max = region_bounds
+        base_ra_span = max(base_ra_max - base_ra_min, 1e-9)
+        base_dec_span = max(base_dec_max - base_dec_min, 1e-9)
+        region_ra_span = max(ra_max - ra_min, base_ra_span / 32.0)
+        region_dec_span = max(dec_max - dec_min, base_dec_span / 32.0)
+        padded_ra_span = region_ra_span * (1.0 + max(0.0, padding) * 2.0)
+        padded_dec_span = region_dec_span * (1.0 + max(0.0, padding) * 2.0)
+        zoom = min(base_ra_span / padded_ra_span, base_dec_span / padded_dec_span)
+        return {
+            "zoom": min(32.0, max(1.0, zoom)),
+            "center_ra": (ra_min + ra_max) / 2.0,
+            "center_dec": (dec_min + dec_max) / 2.0,
+        }
+
+    def observatory_mosaic_focus_selected(self):
+        row = getattr(self, "selected_mosaic_row", None)
+        render = getattr(self, "mosaic_render_state", None)
+        if row is None or not render:
+            message = "Select a mosaic marker or footprint before focusing the view."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        vertices = list(self.observatory_s_region_vertices(row) or [])
+        if vertices:
+            ras = [vertex[0] for vertex in vertices]
+            decs = [vertex[1] for vertex in vertices]
+            region_bounds = (min(ras), max(ras), min(decs), max(decs))
+        else:
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is None or dec is None:
+                if hasattr(self, "mosaic_status_var"):
+                    self.mosaic_status_var.set("The selected observation has no coordinates to focus on.")
+                return False
+            base_ra_min, base_ra_max, base_dec_min, base_dec_max = render["base_bounds"]
+            half_ra = max((base_ra_max - base_ra_min) / 16.0, 0.00025)
+            half_dec = max((base_dec_max - base_dec_min) / 16.0, 0.00025)
+            region_bounds = (ra - half_ra, ra + half_ra, dec - half_dec, dec + half_dec)
+        self.mosaic_view_state = self.observatory_mosaic_view_for_region(render["base_bounds"], region_bounds)
+        self.observatory_draw_current_mosaic()
+        if hasattr(self, "mosaic_status_var"):
+            obs_id = row.get("obs_id", "") or row.get("obsid", "") or "selected observation"
+            zoom = self.mosaic_view_state["zoom"]
+            self.mosaic_status_var.set(f"Focused on {obs_id} at {zoom:.2f}x. Single-click selection and product workflows remain active.")
+        return True
+
+    def observatory_mosaic_double_click(self, event):
+        row = self.observatory_mosaic_click(event)
+        if row is not None:
+            self.observatory_mosaic_focus_selected()
+        return "break"
 
     def observatory_mosaic_zoom(self, factor, x=None, y=None):
         render = getattr(self, "mosaic_render_state", None)

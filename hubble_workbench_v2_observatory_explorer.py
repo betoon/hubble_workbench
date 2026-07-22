@@ -702,6 +702,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             variable=self.mosaic_footprints_var,
             command=self.observatory_draw_current_mosaic,
         ).pack(side="left", padx=(10, 0))
+        self.mosaic_heatmap_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            mosaic_filter_row,
+            text="Heat Map",
+            variable=self.mosaic_heatmap_var,
+            command=self.observatory_draw_current_mosaic,
+        ).pack(side="left", padx=(10, 0))
         ttk.Button(mosaic_filter_row, text="Coverage Summary", command=self.observatory_show_mosaic_coverage).pack(side="left", padx=(14, 0))
         ttk.Label(mosaic_view_row, text="Map Navigation", style="Section.TLabel").pack(side="left")
         ttk.Button(mosaic_view_row, text="Zoom +", command=lambda: self.observatory_mosaic_zoom(1.25)).pack(side="left", padx=(12, 0))

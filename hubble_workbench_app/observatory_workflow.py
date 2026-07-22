@@ -2152,6 +2152,12 @@ class ObservatoryWorkflowMixin:
         except Exception:
             return False
 
+    def observatory_mosaic_show_heatmap(self):
+        try:
+            return bool(self.mosaic_heatmap_var.get())
+        except Exception:
+            return False
+
     @staticmethod
     def observatory_palette_color(label, index=0):
         fixed = {
@@ -3330,6 +3336,50 @@ class ObservatoryWorkflowMixin:
             "hst_jwst_percentage": hst_jwst_samples / total_samples * 100.0,
         }
 
+    def observatory_mosaic_heatmap_cells(self, footprints, bounds, columns=32, rows=20):
+        ra_min, ra_max, dec_min, dec_max = bounds
+        columns = max(1, int(columns))
+        rows = max(1, int(rows))
+        ra_step = (ra_max - ra_min) / columns
+        dec_step = (dec_max - dec_min) / rows
+        if ra_step <= 0 or dec_step <= 0:
+            return []
+        prepared = []
+        for vertices, mission in footprints:
+            if len(vertices) < 3:
+                continue
+            polygon_ra = [point[0] for point in vertices]
+            polygon_dec = [point[1] for point in vertices]
+            prepared.append((
+                vertices,
+                str(mission or "Unknown").upper(),
+                (min(polygon_ra), max(polygon_ra), min(polygon_dec), max(polygon_dec)),
+            ))
+        cells = []
+        for row_index in range(rows):
+            cell_dec_min = dec_min + row_index * dec_step
+            cell_dec_max = cell_dec_min + dec_step
+            sample_dec = (cell_dec_min + cell_dec_max) / 2.0
+            for column_index in range(columns):
+                cell_ra_min = ra_min + column_index * ra_step
+                cell_ra_max = cell_ra_min + ra_step
+                sample_ra = (cell_ra_min + cell_ra_max) / 2.0
+                missions = set()
+                coverage_count = 0
+                for vertices, mission, polygon_bounds in prepared:
+                    if not (polygon_bounds[0] <= sample_ra <= polygon_bounds[1] and polygon_bounds[2] <= sample_dec <= polygon_bounds[3]):
+                        continue
+                    if self.observatory_point_in_polygon(sample_ra, sample_dec, vertices):
+                        coverage_count += 1
+                        missions.add(mission)
+                if coverage_count:
+                    cells.append({
+                        "bounds": (cell_ra_min, cell_ra_max, cell_dec_min, cell_dec_max),
+                        "count": coverage_count,
+                        "hst_jwst": "HST" in missions and "JWST" in missions,
+                    })
+        return cells
+
     def observatory_mosaic_current_footprint_coverage(self):
         render = getattr(self, "mosaic_render_state", None)
         if not render:
@@ -3917,6 +3967,48 @@ class ObservatoryWorkflowMixin:
             guide_text = "Showing the strongest observation candidates by coordinates, exposure, wavelength, and mission."
         canvas.create_text(plot_x0, 38, anchor="w", text=guide_text, fill="#d1d5db")
 
+        heatmap_cell_count = 0
+        if self.observatory_mosaic_show_heatmap():
+            heatmap_footprints = []
+            for _ra, _dec, row in points[:300]:
+                vertices = self.observatory_s_region_vertices(row)
+                if vertices:
+                    heatmap_footprints.append((vertices, row.get("obs_collection", "Unknown")))
+            heatmap_cells = self.observatory_mosaic_heatmap_cells(
+                heatmap_footprints,
+                (ra_min, ra_max, dec_min, dec_max),
+            )
+            for cell in heatmap_cells:
+                cell_ra_min, cell_ra_max, cell_dec_min, cell_dec_max = cell["bounds"]
+                x0, y_bottom = map_point(cell_ra_min, cell_dec_min)
+                x1, y_top = map_point(cell_ra_max, cell_dec_max)
+                if cell["hst_jwst"]:
+                    fill = "#f59e0b"
+                elif cell["count"] >= 4:
+                    fill = "#dc2626"
+                elif cell["count"] >= 2:
+                    fill = "#7c3aed"
+                else:
+                    fill = "#2563eb"
+                canvas.create_rectangle(
+                    x0,
+                    y_top,
+                    x1,
+                    y_bottom,
+                    fill=fill,
+                    outline="",
+                    stipple="gray50",
+                )
+            heatmap_cell_count = len(heatmap_cells)
+            canvas.create_text(
+                plot_x0 + 8,
+                plot_y0 + 10,
+                anchor="w",
+                text="Heat map: blue=1, purple=2-3, red=4+, amber=HST/JWST",
+                fill="#f9fafb",
+                font=("Segoe UI", 8, "bold"),
+            )
+
         mission_box_colors = {"HST": "#93c5fd", "JWST": "#67e8f9"}
         for mission, bounds in self.observatory_mosaic_bounds_for_points(points).items():
             if bounds["count"] < 2:
@@ -4034,6 +4126,7 @@ class ObservatoryWorkflowMixin:
         self.mosaic_status_var.set(
             f"Showing {visible_marker_count} of {len(points)} observation centers for {layer_label}. Color mode: {color_mode}. "
             f"Missions: {mission_text}. Wavelength buckets: {bucket_text}. Footprints drawn: {footprint_count}."
+            f" Heat-map cells: {heatmap_cell_count if self.observatory_mosaic_show_heatmap() else 'off'}."
             f"{selected_note}{rgb_note}"
         )
         self.observatory_update_sensor_dashboard()

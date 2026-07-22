@@ -239,6 +239,35 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(estimate["overlap_percentage"], 100.0)
         self.assertEqual(estimate["hst_jwst_percentage"], 100.0)
 
+    def test_mosaic_heatmap_cells_count_overlap_and_missions(self):
+        explorer = ObservatoryWorkflowMixin()
+        full_view = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+
+        cells = explorer.observatory_mosaic_heatmap_cells(
+            [(full_view, "HST"), (full_view, "JWST")],
+            (0.0, 10.0, 0.0, 10.0),
+            columns=2,
+            rows=2,
+        )
+
+        self.assertEqual(len(cells), 4)
+        self.assertTrue(all(cell["count"] == 2 for cell in cells))
+        self.assertTrue(all(cell["hst_jwst"] for cell in cells))
+
+    def test_mosaic_heatmap_omits_uncovered_cells(self):
+        explorer = ObservatoryWorkflowMixin()
+        left_half = [(0.0, 0.0), (5.0, 0.0), (5.0, 10.0), (0.0, 10.0)]
+
+        cells = explorer.observatory_mosaic_heatmap_cells(
+            [(left_half, "HST")],
+            (0.0, 10.0, 0.0, 10.0),
+            columns=2,
+            rows=2,
+        )
+
+        self.assertEqual(len(cells), 2)
+        self.assertTrue(all(cell["count"] == 1 for cell in cells))
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

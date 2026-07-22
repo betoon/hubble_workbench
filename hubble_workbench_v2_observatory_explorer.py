@@ -675,7 +675,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.mosaic_color_mode_combo = ttk.Combobox(
             mosaic_filter_row,
             textvariable=self.mosaic_color_mode_var,
-            values=["Wavelength", "Mission", "Instrument", "Exposure"],
+            values=["Wavelength", "Mission", "Instrument", "Exposure", "Quality"],
             state="readonly",
             width=12,
         )

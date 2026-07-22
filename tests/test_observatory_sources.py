@@ -172,6 +172,40 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(len(explorer.mosaic_view_history), 30)
         self.assertEqual(explorer.mosaic_view_history[0]["zoom"], 11.0)
 
+    def test_mosaic_quality_tier_uses_existing_observation_score(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.observatory_hst_jwst_overlap_bounds = lambda: None
+        excellent = {
+            "s_ra": 10.0,
+            "s_dec": 20.0,
+            "t_exptime": 1800,
+            "filters": "F606W",
+            "obs_collection": "HST",
+            "s_region": "POLYGON 9.9 19.9 10.1 19.9 10.1 20.1 9.9 20.1",
+        }
+        limited = {"obs_collection": "OTHER"}
+
+        self.assertEqual(explorer.observatory_mosaic_quality_tier(excellent), "Excellent quality")
+        self.assertEqual(explorer.observatory_mosaic_quality_tier(limited), "Limited quality")
+
+    def test_mosaic_marker_detail_explains_quality_score(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.observatory_hst_jwst_overlap_bounds = lambda: None
+        row = {
+            "s_ra": 10.0,
+            "s_dec": 20.0,
+            "t_exptime": 900,
+            "filters": "F606W",
+            "obs_collection": "HST",
+            "obs_id": "hst-quality-test",
+        }
+
+        detail = explorer.observatory_mosaic_marker_detail(row)
+
+        self.assertIn("Quality:", detail)
+        self.assertIn("Quality factors:", detail)
+        self.assertIn("sky coordinates available", detail)
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

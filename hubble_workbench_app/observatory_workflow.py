@@ -2164,6 +2164,10 @@ class ObservatoryWorkflowMixin:
             "Medium exposure": "#fde68a",
             "Long exposure": "#fca5a5",
             "Unknown exposure": "#d1d5db",
+            "Excellent quality": "#22c55e",
+            "Strong quality": "#84cc16",
+            "Usable quality": "#facc15",
+            "Limited quality": "#f87171",
         }
         if label in fixed:
             return fixed[label]
@@ -2191,6 +2195,8 @@ class ObservatoryWorkflowMixin:
             if exposure < 1200:
                 return "Medium exposure"
             return "Long exposure"
+        if mode == "Quality":
+            return self.observatory_mosaic_quality_tier(row)
         return self.observation_filter_bucket(row)
 
     def observatory_marker_style(self, row, mode=None, color_indexes=None):
@@ -2229,6 +2235,8 @@ class ObservatoryWorkflowMixin:
                 names = ["HST", "JWST"]
             elif color_mode == "Exposure":
                 names = ["Short exposure", "Medium exposure", "Long exposure"]
+            elif color_mode == "Quality":
+                names = ["Excellent quality", "Strong quality", "Usable quality", "Limited quality"]
             else:
                 names = []
         else:
@@ -2338,6 +2346,48 @@ class ObservatoryWorkflowMixin:
         if bounds and self.observatory_rows_in_bounds([row], bounds):
             score += 10
         return score
+
+    def observatory_mosaic_quality_tier(self, row):
+        score = self.observatory_mosaic_observation_score(row)
+        if score >= 65:
+            return "Excellent quality"
+        if score >= 48:
+            return "Strong quality"
+        if score >= 30:
+            return "Usable quality"
+        return "Limited quality"
+
+    def observatory_mosaic_quality_reasons(self, row):
+        reasons = []
+        ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+        dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+        if ra is not None and dec is not None:
+            reasons.append("sky coordinates available")
+        try:
+            exposure = float(row.get("t_exptime", 0) or 0)
+        except Exception:
+            exposure = 0.0
+        if exposure >= 1200:
+            reasons.append("long exposure")
+        elif exposure >= 300:
+            reasons.append("moderate exposure")
+        elif exposure > 0:
+            reasons.append("short exposure")
+        else:
+            reasons.append("exposure not listed")
+        if self.observation_filter_bucket(row) != "Unknown/other":
+            reasons.append("usable wavelength classification")
+        else:
+            reasons.append("unclassified wavelength")
+        mission = str(row.get("obs_collection", "") or "").upper()
+        if mission in ("HST", "JWST"):
+            reasons.append(f"supported {mission} mission")
+        if self.observatory_s_region_vertices(row):
+            reasons.append("true footprint available")
+        bounds = self.observatory_hst_jwst_overlap_bounds()
+        if bounds and self.observatory_rows_in_bounds([row], bounds):
+            reasons.append("inside HST/JWST overlap")
+        return reasons
 
     def observatory_mosaic_rgb_candidates(self):
         candidates = {"blue": [], "green": [], "red": []}
@@ -2987,6 +3037,9 @@ class ObservatoryWorkflowMixin:
         dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
         ra_text = f"{ra:.6f}" if ra is not None else "not listed"
         dec_text = f"{dec:.6f}" if dec is not None else "not listed"
+        quality_score = self.observatory_mosaic_observation_score(row)
+        quality_tier = self.observatory_mosaic_quality_tier(row)
+        quality_reasons = ", ".join(self.observatory_mosaic_quality_reasons(row))
         return "\n".join([
             "Selected Mosaic Observation:",
             f"- Mission: {row.get('obs_collection', '') or 'Unknown'}",
@@ -2996,6 +3049,8 @@ class ObservatoryWorkflowMixin:
             f"- Exposure: {row.get('t_exptime', '') or '?'} seconds",
             f"- RA/Dec: {ra_text}, {dec_text}",
             f"- Wavelength bucket: {self.observation_filter_bucket(row)}",
+            f"- Quality: {quality_score} ({quality_tier})",
+            f"- Quality factors: {quality_reasons}",
         ])
 
     def observatory_mosaic_row_matches(self, left, right):
@@ -3665,7 +3720,12 @@ class ObservatoryWorkflowMixin:
         instrument = row.get("instrument_name", "") or "Unknown instrument"
         filter_name = row.get("filters", "") or row.get("Spectral_Elt", "") or "no filter listed"
         exposure = row.get("t_exptime", "") or "?"
-        hover_var.set(f"{mission} | {obs_id} | {instrument} | {filter_name} | {exposure} seconds - click to select")
+        quality_score = self.observatory_mosaic_observation_score(row)
+        quality_tier = self.observatory_mosaic_quality_tier(row).replace(" quality", "")
+        hover_var.set(
+            f"{mission} | {obs_id} | {instrument} | {filter_name} | {exposure} seconds | "
+            f"Quality {quality_score} ({quality_tier}) - click to select"
+        )
 
     def observatory_draw_current_mosaic(self):
         canvas = getattr(self, "mosaic_canvas", None)

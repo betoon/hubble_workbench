@@ -3221,6 +3221,86 @@ class ObservatoryWorkflowMixin:
         self.observatory_draw_current_mosaic()
         return text
 
+    def observatory_mosaic_current_view_summary(self):
+        render = getattr(self, "mosaic_render_state", None)
+        rows = list(self.observatory_current_mosaic_rows())
+        coordinate_rows = []
+        visible_rows = []
+        mission_counts = {}
+        instrument_counts = {}
+        filter_counts = {}
+        if render:
+            ra_min, ra_max, dec_min, dec_max = render["bounds"]
+        else:
+            ra_min = ra_max = dec_min = dec_max = None
+        for row in rows:
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is None or dec is None:
+                continue
+            coordinate_rows.append(row)
+            if render and not (ra_min <= ra <= ra_max and dec_min <= dec <= dec_max):
+                continue
+            visible_rows.append(row)
+            mission = str(row.get("obs_collection", "Unknown") or "Unknown")
+            instrument = str(row.get("instrument_name", "Unknown") or "Unknown")
+            filter_name = str(row.get("filters", "") or row.get("Spectral_Elt", "") or "Not listed")
+            mission_counts[mission] = mission_counts.get(mission, 0) + 1
+            instrument_counts[instrument] = instrument_counts.get(instrument, 0) + 1
+            filter_counts[filter_name] = filter_counts.get(filter_name, 0) + 1
+        total = len(coordinate_rows)
+        visible = len(visible_rows)
+        percentage = (visible / total * 100.0) if total else 0.0
+        return {
+            "visible_rows": visible_rows,
+            "visible": visible,
+            "total": total,
+            "percentage": percentage,
+            "missions": mission_counts,
+            "instruments": instrument_counts,
+            "filters": filter_counts,
+            "bounds": (ra_min, ra_max, dec_min, dec_max) if render else None,
+        }
+
+    def observatory_mosaic_current_view_text(self):
+        summary = self.observatory_mosaic_current_view_summary()
+        lines = ["Current Mosaic View Summary", ""]
+        lines.append(
+            f"Visible observation centers: {summary['visible']} of {summary['total']} "
+            f"({summary['percentage']:.1f}%)"
+        )
+        bounds = summary["bounds"]
+        if bounds:
+            lines.append(
+                f"Displayed bounds: RA {bounds[0]:.6f} to {bounds[1]:.6f}; "
+                f"Dec {bounds[2]:.6f} to {bounds[3]:.6f}"
+            )
+        if not summary["visible"]:
+            lines.extend(["", "No observation centers are visible. Pan, zoom out, or use Fit All."])
+            return "\n".join(lines)
+        lines.extend([
+            "",
+            f"Missions: {self.observatory_top_counts(summary['missions'], limit=8)}",
+            f"Instruments: {self.observatory_top_counts(summary['instruments'], limit=8)}",
+            f"Filters: {self.observatory_top_counts(summary['filters'], limit=10)}",
+        ])
+        return "\n".join(lines)
+
+    def observatory_show_mosaic_current_view(self):
+        text = self.observatory_mosaic_current_view_text()
+        try:
+            self.observatory_report_text.delete("1.0", "end")
+            self.observatory_report_text.insert("end", text)
+        except Exception:
+            pass
+        if hasattr(self, "mosaic_status_var"):
+            summary = self.observatory_mosaic_current_view_summary()
+            self.mosaic_status_var.set(
+                f"Current view contains {summary['visible']} of {summary['total']} coordinate-bearing observations "
+                f"({summary['percentage']:.1f}%)."
+            )
+        return text
+
     @staticmethod
     def observatory_range_padding(minimum, maximum, fraction=0.08):
         span = maximum - minimum

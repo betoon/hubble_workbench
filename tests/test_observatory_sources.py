@@ -129,6 +129,27 @@ class ObservatorySourceTests(unittest.TestCase):
         )
         self.assertEqual(clipped, [])
 
+    def test_mosaic_current_view_summary_counts_visible_observations(self):
+        explorer = ObservatoryWorkflowMixin()
+        explorer.mosaic_render_state = {
+            "bounds": (10.0, 12.0, 20.0, 22.0),
+            "plot": (0, 0, 100, 100),
+            "base_bounds": (9.0, 15.0, 19.0, 25.0),
+        }
+        explorer.observatory_current_mosaic_rows = lambda: [
+            {"s_ra": 11.0, "s_dec": 21.0, "obs_collection": "HST", "instrument_name": "ACS/WFC", "filters": "F606W"},
+            {"s_ra": 14.0, "s_dec": 24.0, "obs_collection": "JWST", "instrument_name": "NIRCam", "filters": "F200W"},
+            {"s_ra": None, "s_dec": None, "obs_collection": "HST"},
+        ]
+
+        summary = explorer.observatory_mosaic_current_view_summary()
+
+        self.assertEqual(summary["visible"], 1)
+        self.assertEqual(summary["total"], 2)
+        self.assertEqual(summary["percentage"], 50.0)
+        self.assertEqual(summary["missions"], {"HST": 1})
+        self.assertEqual(summary["instruments"], {"ACS/WFC": 1})
+
     def test_jupiter_scoring_strongly_penalizes_numeric_jwst_subarrays(self):
         class Scoring(ProductScoringMixin):
             target_var = type("Var", (), {"get": lambda self: "Jupiter"})()

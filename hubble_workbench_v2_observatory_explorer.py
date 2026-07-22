@@ -708,6 +708,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(mosaic_view_row, text="Zoom -", command=lambda: self.observatory_mosaic_zoom(0.8)).pack(side="left", padx=(4, 0))
         ttk.Button(mosaic_view_row, text="Focus Selected", command=self.observatory_mosaic_focus_selected).pack(side="left", padx=(4, 0))
         ttk.Button(mosaic_view_row, text="Fit All", command=self.observatory_mosaic_reset_view).pack(side="left", padx=(4, 0))
+        ttk.Button(mosaic_view_row, text="View Summary", command=self.observatory_show_mosaic_current_view).pack(side="left", padx=(4, 0))
         ttk.Label(mosaic_view_row, text="Scroll: zoom | Shift-drag: region | middle/right-drag: pan | double-click: focus").pack(side="left", padx=(12, 0))
         ttk.Button(mosaic_rgb_row, text="Mosaic RGB Plan", command=self.observatory_show_mosaic_rgb_plan, style="Accent.TButton").pack(side="left")
         ttk.Button(mosaic_rgb_row, text="Next RGB Pick", command=self.observatory_select_next_mosaic_rgb_pick, style="Accent.TButton").pack(side="left", padx=(8, 0))
@@ -761,6 +762,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def observatory_mosaic_focus_selected(self):
         return super().observatory_mosaic_focus_selected()
+
+    def observatory_show_mosaic_current_view(self):
+        return super().observatory_show_mosaic_current_view()
 
     def observatory_get_marker_products(self):
         return super().observatory_get_marker_products()

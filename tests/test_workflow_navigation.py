@@ -4,6 +4,7 @@ from hubble_workbench_app.compose_workflow import ComposeWorkflowMixin
 from hubble_workbench_app.debug_console import DEBUG_SHOW_ON_ISSUE_DEFAULT
 from hubble_workbench_app.app_utilities import (
     responsive_content_height,
+    responsive_pane_orientation,
     responsive_tab_titles,
     responsive_toolbar_positions,
     responsive_window_layout,
@@ -58,6 +59,10 @@ class WorkflowNavigationTests(unittest.TestCase):
         self.assertEqual(responsive_content_height(600), 340)
         self.assertEqual(responsive_content_height(400), 280)
         self.assertEqual(responsive_content_height(1000), 520)
+
+    def test_responsive_pane_orientation_stacks_narrow_views(self):
+        self.assertEqual(responsive_pane_orientation(900), "vertical")
+        self.assertEqual(responsive_pane_orientation(1200), "horizontal")
 
     def test_debug_console_auto_focus_is_opt_in(self):
         self.assertFalse(DEBUG_SHOW_ON_ISSUE_DEFAULT)

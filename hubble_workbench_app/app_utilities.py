@@ -62,6 +62,10 @@ def responsive_tab_titles(available_width):
 def responsive_content_height(viewport_height, reserved_height=260, minimum=280, maximum=520):
     available = int(viewport_height) - int(reserved_height)
     return max(int(minimum), min(int(maximum), available))
+
+
+def responsive_pane_orientation(available_width, breakpoint=980):
+    return "vertical" if int(available_width) < int(breakpoint) else "horizontal"
 from tkinter import messagebox
 
 from hubble_workbench_app.settings import SETTINGS, save_settings

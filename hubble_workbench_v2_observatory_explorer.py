@@ -72,6 +72,7 @@ from hubble_workbench_app.hla_workflow import HlaWorkflowMixin
 from hubble_workbench_app.app_utilities import (
     AppUtilitiesMixin,
     responsive_content_height,
+    responsive_pane_orientation,
     responsive_tab_titles,
     responsive_toolbar_positions,
     responsive_window_layout,
@@ -337,6 +338,31 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         schedule()
         return frame
 
+    def enable_responsive_split_pane(self, panes, parent, breakpoint=980):
+        ancestor = parent
+        viewport = None
+        while ancestor is not None:
+            viewport = getattr(ancestor, "viewport_canvas", None)
+            if viewport is not None:
+                break
+            ancestor = getattr(ancestor, "master", None)
+        viewport = viewport or parent
+
+        def update_orientation(event=None):
+            width = int(getattr(event, "width", 0) or viewport.winfo_width() or parent.winfo_width() or 1160)
+            orientation = responsive_pane_orientation(width, breakpoint=breakpoint)
+            if str(panes.cget("orient")) != orientation:
+                panes.configure(orient=orientation)
+
+        def update_from_root(event):
+            if event.widget is self:
+                update_orientation(event)
+
+        viewport.bind("<Configure>", update_orientation, add="+")
+        self.bind("<Configure>", update_from_root, add="+")
+        panes.after_idle(update_orientation)
+        return panes
+
     def build_browser_tab(self):
         browser_content = self.build_scrollable_tab_content(self.browser_tab)
         gallery = ttk.Frame(browser_content)
@@ -425,13 +451,14 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             margin=12,
         ).pack(side="left", padx=(12, 0))
 
-        panes = ttk.PanedWindow(browser_content, orient="horizontal")
+        panes = tk.PanedWindow(browser_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
         panes.pack(fill="both", expand=True, pady=(8, 0))
 
         left = ttk.Frame(panes)
         right = ttk.Frame(panes)
-        panes.add(left, weight=1)
-        panes.add(right, weight=1)
+        panes.add(left, stretch="always", minsize=240)
+        panes.add(right, stretch="always", minsize=240)
+        self.enable_responsive_split_pane(panes, browser_content)
 
         ttk.Label(left, text="Observations", style="Section.TLabel").pack(anchor="w")
         self.obs_list = tk.Listbox(
@@ -704,12 +731,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.sensor_summary_list.bind("<Double-Button-1>", lambda _event: self.observatory_use_selected_sensor())
         self.observatory_update_sensor_dashboard()
 
-        body = ttk.PanedWindow(observatory_content, orient="horizontal")
+        body = tk.PanedWindow(observatory_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
         body.pack(fill="both", expand=True)
         left = ttk.Frame(body)
         right = ttk.Frame(body)
-        body.add(left, weight=1)
-        body.add(right, weight=2)
+        body.add(left, stretch="always", minsize=260)
+        body.add(right, stretch="always", minsize=320)
+        self.enable_responsive_split_pane(body, observatory_content)
 
         report_tools = ttk.Frame(left)
         report_tools.pack(fill="x")
@@ -1010,12 +1038,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(top, text="Preview", command=self.preview_fits_async).pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Save PNG/TIFF", command=self.save_preview_outputs).pack(side="left", padx=(8, 0))
 
-        body = ttk.PanedWindow(convert_content, orient="horizontal")
+        body = tk.PanedWindow(convert_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
         body.pack(fill="both", expand=True, pady=(8, 0))
         image_panel = ttk.Frame(body)
         info_panel = ttk.Frame(body)
-        body.add(image_panel, weight=2)
-        body.add(info_panel, weight=1)
+        body.add(image_panel, stretch="always", minsize=280)
+        body.add(info_panel, stretch="always", minsize=240)
+        self.enable_responsive_split_pane(body, convert_content)
 
         self.preview_canvas = tk.Canvas(image_panel, bg="#111827", highlightthickness=0)
         self.preview_canvas.pack(fill="both", expand=True)

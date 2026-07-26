@@ -1063,6 +1063,15 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Combobox(top, textvariable=self.stretch_var, values=["asinh", "pow", "sqrt", "log", "linear"], state="readonly", width=8).pack(side="left")
         ttk.Button(top, text="Preview", command=self.preview_fits_async).pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Save PNG/TIFF", command=self.save_preview_outputs).pack(side="left", padx=(8, 0))
+        self.preview_export_bit_depth_var = tk.StringVar(value=str(SETTINGS.get("fits_preview_export_bit_depth", 8)))
+        ttk.Combobox(
+            top,
+            textvariable=self.preview_export_bit_depth_var,
+            values=["8", "16"],
+            state="readonly",
+            width=3,
+        ).pack(side="left", padx=(6, 0))
+        ttk.Label(top, text="bit").pack(side="left", padx=(3, 0))
         self.preview_crosshair_var = tk.BooleanVar(value=SETTINGS.get("fits_preview_crosshair", False))
         ttk.Checkbutton(top, text="Crosshair", variable=self.preview_crosshair_var).pack(side="left", padx=(8, 0))
         self.preview_flip_vertical_var = tk.BooleanVar(value=SETTINGS.get("fits_preview_flip_vertical", False))

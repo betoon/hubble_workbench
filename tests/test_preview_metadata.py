@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from hubble_workbench_app.preview_workflow import PreviewWorkflowMixin
-from hubble_workbench_app.image_processing import normalize_image
+from hubble_workbench_app.image_processing import normalize_image, normalize_image_uint16
 
 
 class PreviewMetadataTests(unittest.TestCase):
@@ -13,6 +13,14 @@ class PreviewMetadataTests(unittest.TestCase):
         asinh = normalize_image(data, low_percent=0, high_percent=100, stretch="asinh")
         self.assertEqual(int(linear[0, 1]), 127)
         self.assertNotEqual(int(linear[0, 1]), int(asinh[0, 1]))
+
+    def test_uint16_preview_normalization_preserves_more_levels(self):
+        data = np.linspace(0, 1, 1024).reshape(1, -1)
+        eight_bit = normalize_image(data, low_percent=0, high_percent=100, stretch="linear")
+        sixteen_bit = normalize_image_uint16(data, low_percent=0, high_percent=100, stretch="linear")
+        self.assertEqual(sixteen_bit.dtype, np.uint16)
+        self.assertGreater(len(np.unique(sixteen_bit)), len(np.unique(eight_bit)))
+        self.assertEqual(int(sixteen_bit[0, -1]), 65535)
 
     def test_image_statistics_ignore_nonfinite_values(self):
         stats = PreviewWorkflowMixin.preview_image_statistics(np.array([[1.0, 2.0], [np.nan, 5.0]]))
@@ -135,6 +143,7 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(payload["fits_preview_white_percent"], 99.75)
         self.assertTrue(payload["fits_preview_crosshair"])
         self.assertFalse(payload["fits_preview_flip_vertical"])
+        self.assertEqual(payload["fits_preview_export_bit_depth"], 8)
 
     def test_histogram_x_clamps_values_to_plot(self):
         position = PreviewWorkflowMixin.preview_histogram_x(5, 0, 10, 40, 240)

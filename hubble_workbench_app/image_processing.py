@@ -4,7 +4,7 @@ from PIL import Image, ImageFilter
 from .paths import RGB_WORKING_PREVIEW_MAX_PIXELS, CHANNEL_THUMBNAIL_MAX_PIXELS
 
 
-def normalize_image(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
+def normalize_image_unit(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
     arr = np.asarray(data, dtype=np.float64)
     arr = np.where(np.isfinite(arr), arr, np.nan)
     if np.all(np.isnan(arr)):
@@ -13,7 +13,7 @@ def normalize_image(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
     if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
         lo, hi = np.nanmin(arr), np.nanmax(arr)
     if hi <= lo:
-        return np.zeros(arr.shape, dtype=np.uint8)
+        return np.zeros(arr.shape, dtype=np.float64)
     scaled = np.clip((arr - lo) / (hi - lo), 0, 1)
     if stretch == "sqrt":
         scaled = np.sqrt(scaled)
@@ -23,7 +23,17 @@ def normalize_image(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
         scaled = np.log1p(30 * scaled) / np.log1p(30)
     elif stretch == "asinh":
         scaled = np.arcsinh(10 * scaled) / np.arcsinh(10)
-    return np.nan_to_num(np.clip(scaled * 255, 0, 255), nan=0.0).astype(np.uint8)
+    return np.nan_to_num(np.clip(scaled, 0, 1), nan=0.0)
+
+
+def normalize_image(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
+    scaled = normalize_image_unit(data, low_percent=low_percent, high_percent=high_percent, stretch=stretch)
+    return np.clip(scaled * 255, 0, 255).astype(np.uint8)
+
+
+def normalize_image_uint16(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
+    scaled = normalize_image_unit(data, low_percent=low_percent, high_percent=high_percent, stretch=stretch)
+    return np.clip(scaled * 65535, 0, 65535).astype(np.uint16)
 
 
 def normalize_float_channel(data, low_percent=0.2, high_percent=99.8, stretch="asinh", gamma=1.0, asinh_strength=12.0):

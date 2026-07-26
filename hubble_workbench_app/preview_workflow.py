@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageOps
 
 from .fits_io import FITS, _celestial_wcs, first_image_hdu, first_image_hdu_details
-from .image_processing import downsample_array_for_preview, normalize_image
+from .image_processing import downsample_array_for_preview, normalize_image, normalize_image_uint16
 from .paths import DOWNLOAD_DIR, OUTPUT_DIR
 from .settings import SETTINGS, save_settings
 
@@ -79,17 +79,21 @@ class PreviewWorkflowMixin:
         return black, white
 
     @classmethod
-    def preview_stretch_settings_payload(cls, stretch, black, white, crosshair=False, flip_vertical=False):
+    def preview_stretch_settings_payload(cls, stretch, black, white, crosshair=False, flip_vertical=False, bit_depth=8):
         black, white = cls.preview_stretch_percentiles(black, white)
         stretch = str(stretch or "").lower()
         if stretch not in {"asinh", "pow", "sqrt", "log", "linear"}:
             raise ValueError(f"Unsupported preview stretch: {stretch or 'empty'}")
+        bit_depth = int(bit_depth)
+        if bit_depth not in (8, 16):
+            raise ValueError("FITS preview export depth must be 8 or 16 bits.")
         return {
             "fits_preview_stretch": stretch,
             "fits_preview_black_percent": black,
             "fits_preview_white_percent": white,
             "fits_preview_crosshair": bool(crosshair),
             "fits_preview_flip_vertical": bool(flip_vertical),
+            "fits_preview_export_bit_depth": bit_depth,
         }
 
     @staticmethod
@@ -292,6 +296,7 @@ class PreviewWorkflowMixin:
                 self.preview_white_percent_var.get(),
                 self.preview_crosshair_var.get(),
                 self.preview_flip_vertical_var.get(),
+                self.preview_export_bit_depth_var.get(),
             )
         except ValueError as exc:
             self.convert_status.set(f"Preview settings were not saved: {exc}")
@@ -309,6 +314,7 @@ class PreviewWorkflowMixin:
                 SETTINGS.get("fits_preview_white_percent", 99.5),
                 SETTINGS.get("fits_preview_crosshair", False),
                 SETTINGS.get("fits_preview_flip_vertical", False),
+                SETTINGS.get("fits_preview_export_bit_depth", 8),
             )
         except ValueError as exc:
             self.convert_status.set(f"Saved preview settings are invalid: {exc}")
@@ -318,6 +324,7 @@ class PreviewWorkflowMixin:
         self.preview_white_percent_var.set(f"{payload['fits_preview_white_percent']:g}")
         self.preview_crosshair_var.set(payload["fits_preview_crosshair"])
         self.preview_flip_vertical_var.set(payload["fits_preview_flip_vertical"])
+        self.preview_export_bit_depth_var.set(str(payload["fits_preview_export_bit_depth"]))
         self.redraw_fits_preview()
         self.convert_status.set("Applied saved FITS preview settings. Select Apply Stretch to reload the image.")
         return True
@@ -531,12 +538,61 @@ class PreviewWorkflowMixin:
         if not hasattr(self, "preview_image"):
             messagebox.showinfo("Save", "Preview a FITS file first.")
             return
+        try:
+            bit_depth = int(self.preview_export_bit_depth_var.get())
+            if bit_depth not in (8, 16):
+                raise ValueError
+        except (TypeError, ValueError):
+            self.convert_status.set("Choose either 8-bit or 16-bit preview export.")
+            return
         base = OUTPUT_DIR / f"{self.output_prefix()}_preview_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         png_path = base.with_suffix(".png")
         tif_path = base.with_suffix(".tif")
-        self.preview_image.save(png_path)
-        self.preview_image.save(tif_path)
-        self.convert_status.set(f"Saved {png_path.name} and {tif_path.name}")
+        if bit_depth == 8:
+            self.preview_image.save(png_path)
+            self.preview_image.save(tif_path)
+            self.convert_status.set(f"Saved 8-bit {png_path.name} and {tif_path.name}")
+            return
+        path = self.convert_path_var.get().strip()
+        if not path:
+            self.convert_status.set("The original FITS path is required for a true 16-bit export.")
+            return
+        try:
+            black_percent, white_percent = self.preview_stretch_percentiles(
+                self.preview_black_percent_var.get(),
+                self.preview_white_percent_var.get(),
+            )
+        except ValueError as exc:
+            self.convert_status.set(f"16-bit export settings need attention: {exc}")
+            return
+        stretch = self.stretch_var.get()
+        self.convert_status.set("Creating true 16-bit PNG and TIFF from FITS data...")
+
+        def worker():
+            try:
+                data, _header = first_image_hdu(path)
+                normalized = normalize_image_uint16(
+                    data,
+                    low_percent=black_percent,
+                    high_percent=white_percent,
+                    stretch=stretch,
+                )
+                image = Image.fromarray(normalized, mode="I;16")
+                image.save(png_path)
+                image.save(tif_path)
+                result = (png_path, tif_path, None)
+            except Exception as exc:
+                result = (png_path, tif_path, exc)
+            self.after(0, lambda: self.finish_save_preview_outputs(result, bit_depth))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def finish_save_preview_outputs(self, result, bit_depth):
+        png_path, tif_path, error = result
+        if error:
+            self.convert_status.set(f"{bit_depth}-bit preview export failed: {error}")
+            return
+        self.convert_status.set(f"Saved {bit_depth}-bit {png_path.name} and {tif_path.name}")
 
     def choose_channel(self, var):
         path = filedialog.askopenfilename(

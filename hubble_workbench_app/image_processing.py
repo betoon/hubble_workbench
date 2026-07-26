@@ -21,7 +21,7 @@ def normalize_image(data, low_percent=0.5, high_percent=99.5, stretch="asinh"):
         scaled = np.power(scaled, 0.5)
     elif stretch == "log":
         scaled = np.log1p(30 * scaled) / np.log1p(30)
-    else:
+    elif stretch == "asinh":
         scaled = np.arcsinh(10 * scaled) / np.arcsinh(10)
     return np.nan_to_num(np.clip(scaled * 255, 0, 255), nan=0.0).astype(np.uint8)
 

@@ -41,7 +41,7 @@ class PreviewWorkflowMixin:
         }
 
     @staticmethod
-    def preview_histogram(data, bins=192, sample_limit=1_000_000):
+    def preview_histogram(data, bins=192, sample_limit=1_000_000, black_percent=0.5, white_percent=99.5):
         values = np.asarray(data).reshape(-1)
         if values.size > sample_limit:
             step = max(1, values.size // sample_limit)
@@ -49,7 +49,7 @@ class PreviewWorkflowMixin:
         finite = values[np.isfinite(values)]
         if not finite.size:
             return {}
-        black, white = np.percentile(finite, (0.5, 99.5))
+        black, white = np.percentile(finite, (black_percent, white_percent))
         lower, upper = np.percentile(finite, (0.1, 99.9))
         if not np.isfinite(lower) or not np.isfinite(upper) or upper <= lower:
             lower, upper = float(np.min(finite)), float(np.max(finite))
@@ -63,6 +63,19 @@ class PreviewWorkflowMixin:
             "white": float(white),
             "sampled": int(finite.size),
         }
+
+    @staticmethod
+    def preview_stretch_percentiles(black, white):
+        try:
+            black = float(black)
+            white = float(white)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Black and white points must be numeric percentiles.") from exc
+        if not 0 <= black < white <= 100:
+            raise ValueError("Use percentiles from 0 to 100, with the black point below the white point.")
+        if white - black < 0.01:
+            raise ValueError("Black and white percentiles must be at least 0.01 apart.")
+        return black, white
 
     @staticmethod
     def preview_pixel_scale_arcsec(header):
@@ -209,20 +222,43 @@ class PreviewWorkflowMixin:
         if not path:
             messagebox.showinfo("Preview FITS", "Choose a FITS file first.")
             return
+        try:
+            black_percent, white_percent = self.preview_stretch_percentiles(
+                self.preview_black_percent_var.get(),
+                self.preview_white_percent_var.get(),
+            )
+        except ValueError as exc:
+            self.convert_status.set(f"Preview settings need attention: {exc}")
+            return
+        stretch = self.stretch_var.get()
         self.convert_status.set("Reading FITS image...")
 
         def worker():
             try:
                 data, header, cards, inventory = first_image_hdu_details(path)
                 statistics = self.preview_image_statistics(data)
-                histogram = self.preview_histogram(data)
-                normalized = normalize_image(data, stretch=self.stretch_var.get())
+                histogram = self.preview_histogram(
+                    data,
+                    black_percent=black_percent,
+                    white_percent=white_percent,
+                )
+                normalized = normalize_image(
+                    data,
+                    low_percent=black_percent,
+                    high_percent=white_percent,
+                    stretch=stretch,
+                )
                 result = (normalized, header, statistics, histogram, cards, inventory, path, None)
             except Exception as exc:
                 result = (None, {}, {}, {}, [], [], path, exc)
             self.after(0, lambda: self.finish_preview(result))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def reset_preview_stretch(self):
+        self.preview_black_percent_var.set("0.5")
+        self.preview_white_percent_var.set("99.5")
+        self.convert_status.set("Restored automatic black and white points. Select Apply Stretch to refresh the preview.")
 
     def finish_preview(self, result):
         if len(result) == 3:

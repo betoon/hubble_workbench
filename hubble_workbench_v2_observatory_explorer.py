@@ -1066,6 +1066,32 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_crosshair_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="Crosshair", variable=self.preview_crosshair_var).pack(side="left", padx=(8, 0))
         self.enable_responsive_toolbar(top)
+        stretch_controls = ttk.Frame(convert_content)
+        stretch_controls.pack(fill="x", pady=(6, 0))
+        ttk.Label(stretch_controls, text="Black percentile").pack(side="left")
+        self.preview_black_percent_var = tk.StringVar(value="0.5")
+        ttk.Spinbox(
+            stretch_controls,
+            from_=0.0,
+            to=99.98,
+            increment=0.1,
+            textvariable=self.preview_black_percent_var,
+            width=7,
+        ).pack(side="left", padx=(6, 12))
+        ttk.Label(stretch_controls, text="White percentile").pack(side="left")
+        self.preview_white_percent_var = tk.StringVar(value="99.5")
+        ttk.Spinbox(
+            stretch_controls,
+            from_=0.01,
+            to=100.0,
+            increment=0.1,
+            textvariable=self.preview_white_percent_var,
+            width=7,
+        ).pack(side="left", padx=(6, 12))
+        ttk.Button(stretch_controls, text="Apply Stretch", command=self.preview_fits_async, style="Accent.TButton").pack(side="left")
+        ttk.Button(stretch_controls, text="Auto Points", command=self.reset_preview_stretch).pack(side="left", padx=(8, 0))
+        ttk.Label(stretch_controls, text="Lower white percentiles reveal faint detail but clip bright cores sooner.").pack(side="left", padx=(12, 0))
+        self.enable_responsive_toolbar(stretch_controls)
 
         body = tk.PanedWindow(convert_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
         body.pack(fill="both", expand=True, pady=(8, 0))
@@ -1132,6 +1158,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def draw_preview_histogram(self, event=None):
         return super().draw_preview_histogram(event)
+
+    def reset_preview_stretch(self):
+        return super().reset_preview_stretch()
 
     def build_compose_tab(self):
         compose_content = self.build_scrollable_tab_content(self.compose_tab)

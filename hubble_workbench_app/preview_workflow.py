@@ -302,6 +302,7 @@ class PreviewWorkflowMixin:
         self.refresh_preview_header_search()
         self.preview_hdu_text.delete("1.0", "end")
         self.preview_hdu_text.insert("1.0", self.preview_hdu_inventory_text(inventory))
+        self.clear_preview_probe(update_status=False)
         self.convert_status.set(f"Preview loaded at {self.preview_image.width} x {self.preview_image.height}px. Display is scaled to fit the canvas.")
 
     @staticmethod
@@ -390,6 +391,7 @@ class PreviewWorkflowMixin:
             except Exception:
                 pass
         self.preview_cursor_var.set(details)
+        self.preview_last_cursor_text = details
         if self.preview_crosshair_var.get():
             canvas_width = self.preview_canvas.winfo_width()
             canvas_height = self.preview_canvas.winfo_height()
@@ -402,7 +404,50 @@ class PreviewWorkflowMixin:
             screen_y = top + (display_y + 0.5) * rendered_height / self.preview_image.height
             self.preview_canvas.create_line(left, screen_y, left + rendered_width, screen_y, fill="#22c55e", tags="preview_cursor")
             self.preview_canvas.create_line(screen_x, top, screen_x, top + rendered_height, fill="#22c55e", tags="preview_cursor")
+        return x, y
+
+    @staticmethod
+    def preview_frozen_probe_text(details, captured_at=""):
+        details = str(details or "").strip()
+        if not details:
+            return "Click a point in the FITS preview to freeze its pixel and sky-coordinate data."
+        lines = ["FROZEN PIXEL PROBE", "=" * 44]
+        if captured_at:
+            lines.append(f"Captured: {captured_at}")
+        lines.extend(("", details))
+        return "\n".join(lines)
+
+    def freeze_preview_probe(self, event):
+        point = self.preview_canvas_motion(event)
+        details = getattr(self, "preview_last_cursor_text", "") if point is not None else ""
+        if not details:
+            return None
+        text = self.preview_frozen_probe_text(
+            details,
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        )
+        self.preview_probe_text.delete("1.0", "end")
+        self.preview_probe_text.insert("1.0", text)
+        try:
+            self.preview_metadata_tabs.select(self.preview_probe_panel)
+        except Exception:
+            pass
+        self.convert_status.set(f"Frozen pixel probe at X {point[0]:,}, Y {point[1]:,}.")
         return point
+
+    def copy_preview_probe(self):
+        text = self.preview_probe_text.get("1.0", "end-1c")
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.convert_status.set("Copied frozen pixel probe data.")
+
+    def clear_preview_probe(self, update_status=True):
+        if not hasattr(self, "preview_probe_text"):
+            return
+        self.preview_probe_text.delete("1.0", "end")
+        self.preview_probe_text.insert("1.0", self.preview_frozen_probe_text(""))
+        if update_status:
+            self.convert_status.set("Cleared frozen pixel probe data.")
 
     def preview_canvas_leave(self, _event=None):
         if hasattr(self, "preview_canvas"):

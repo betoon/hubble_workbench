@@ -1116,16 +1116,21 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_histogram_canvas.pack(fill="x", pady=(5, 0))
         self.preview_histogram_canvas.bind("<Configure>", self.draw_preview_histogram)
         self.preview_canvas.bind("<Motion>", self.preview_canvas_motion)
+        self.preview_canvas.bind("<Button-1>", self.freeze_preview_probe)
         self.preview_canvas.bind("<Leave>", self.preview_canvas_leave)
         self.preview_canvas.bind("<Configure>", self.redraw_fits_preview)
         metadata_tabs = ttk.Notebook(info_panel)
+        self.preview_metadata_tabs = metadata_tabs
         metadata_tabs.pack(fill="both", expand=True)
         summary_panel = ttk.Frame(metadata_tabs)
         header_panel = ttk.Frame(metadata_tabs)
         hdu_panel = ttk.Frame(metadata_tabs)
+        probe_panel = ttk.Frame(metadata_tabs)
+        self.preview_probe_panel = probe_panel
         metadata_tabs.add(summary_panel, text="Science Summary")
         metadata_tabs.add(header_panel, text="Full Header")
         metadata_tabs.add(hdu_panel, text="HDU List")
+        metadata_tabs.add(probe_panel, text="Pixel Probe")
         summary_tools = ttk.Frame(summary_panel)
         summary_tools.pack(fill="x", pady=(0, 4))
         ttk.Button(summary_tools, text="Copy Summary", command=self.copy_preview_metadata).pack(side="right")
@@ -1144,6 +1149,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_hdu_text = tk.Text(hdu_panel, wrap="none", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.preview_hdu_text.pack(fill="both", expand=True)
         self.preview_hdu_text.insert("1.0", "HDU information appears after a FITS preview is loaded.")
+        probe_tools = ttk.Frame(probe_panel)
+        probe_tools.pack(fill="x", pady=(0, 4))
+        ttk.Button(probe_tools, text="Copy Probe", command=self.copy_preview_probe).pack(side="right")
+        ttk.Button(probe_tools, text="Clear", command=self.clear_preview_probe).pack(side="right", padx=(0, 6))
+        self.preview_probe_text = tk.Text(probe_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
+        self.preview_probe_text.pack(fill="both", expand=True)
+        self.preview_probe_text.insert("1.0", "Click a point in the FITS preview to freeze its pixel and sky-coordinate data.")
         self.preview_header_search_var.trace_add("write", self.refresh_preview_header_search)
         self.convert_status = tk.StringVar(value="")
         ttk.Label(convert_content, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
@@ -1168,6 +1180,15 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def reset_preview_stretch(self):
         return super().reset_preview_stretch()
+
+    def freeze_preview_probe(self, event):
+        return super().freeze_preview_probe(event)
+
+    def copy_preview_probe(self):
+        return super().copy_preview_probe()
+
+    def clear_preview_probe(self, update_status=True):
+        return super().clear_preview_probe(update_status=update_status)
 
     def build_compose_tab(self):
         compose_content = self.build_scrollable_tab_content(self.compose_tab)

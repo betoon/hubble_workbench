@@ -84,6 +84,15 @@ class PreviewMetadataTests(unittest.TestCase):
             (12, 46),
         )
 
+    def test_frozen_probe_text_includes_capture_and_readout(self):
+        text = PreviewWorkflowMixin.preview_frozen_probe_text(
+            "Pixel X 12, Y 34\nRA 10.0 degrees",
+            "2026-07-26 12:00:00",
+        )
+        self.assertIn("FROZEN PIXEL PROBE", text)
+        self.assertIn("2026-07-26 12:00:00", text)
+        self.assertIn("Pixel X 12, Y 34", text)
+
     def test_sky_position_formats_degrees_and_sexagesimal(self):
         text = PreviewWorkflowMixin.preview_format_sky_position(83.633, -5.391)
         self.assertIn("83.633000", text)

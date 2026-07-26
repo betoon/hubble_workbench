@@ -753,12 +753,18 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         report_tools = ttk.Frame(left)
         report_tools.pack(fill="x")
-        ttk.Label(report_tools, text="Explorer Report", style="Section.TLabel").pack(side="left")
-        ttk.Button(report_tools, text="Copy Report", command=self.observatory_copy_report).pack(side="right")
-        ttk.Button(report_tools, text="Save Report", command=self.observatory_save_report).pack(side="right", padx=(0, 8))
-        ttk.Button(report_tools, text="Copy Project Plan", command=self.observatory_copy_project_plan).pack(side="right", padx=(0, 8))
-        ttk.Button(report_tools, text="Save Project Plan", command=self.observatory_save_project_plan).pack(side="right", padx=(0, 8))
-        ttk.Button(report_tools, text="Load Project Plan", command=self.observatory_load_project_plan).pack(side="right", padx=(0, 8))
+        report_primary_row = ttk.Frame(report_tools)
+        report_primary_row.pack(fill="x")
+        report_project_row = ttk.Frame(report_tools)
+        report_project_row.pack(fill="x", pady=(4, 0))
+        self.enable_responsive_toolbar(report_primary_row)
+        self.enable_responsive_toolbar(report_project_row)
+        ttk.Label(report_primary_row, text="Explorer Report", style="Section.TLabel").pack(side="left")
+        ttk.Button(report_primary_row, text="Copy Report", command=self.observatory_copy_report).pack(side="left", padx=(12, 0))
+        ttk.Button(report_primary_row, text="Save Report", command=self.observatory_save_report).pack(side="left", padx=(8, 0))
+        ttk.Button(report_project_row, text="Load Project Plan", command=self.observatory_load_project_plan).pack(side="left")
+        ttk.Button(report_project_row, text="Save Project Plan", command=self.observatory_save_project_plan).pack(side="left", padx=(8, 0))
+        ttk.Button(report_project_row, text="Copy Project Plan", command=self.observatory_copy_project_plan).pack(side="left", padx=(8, 0))
         self.observatory_report_text = tk.Text(
             left,
             height=24,

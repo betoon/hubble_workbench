@@ -1059,13 +1059,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.convert_path_var = tk.StringVar(value="")
         ttk.Button(top, text="Choose FITS", command=self.choose_convert_file).pack(side="left")
         ttk.Entry(top, textvariable=self.convert_path_var).pack(side="left", fill="x", expand=True, padx=(8, 8))
-        self.stretch_var = tk.StringVar(value="asinh")
+        self.stretch_var = tk.StringVar(value=SETTINGS.get("fits_preview_stretch", "asinh"))
         ttk.Combobox(top, textvariable=self.stretch_var, values=["asinh", "pow", "sqrt", "log", "linear"], state="readonly", width=8).pack(side="left")
         ttk.Button(top, text="Preview", command=self.preview_fits_async).pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Save PNG/TIFF", command=self.save_preview_outputs).pack(side="left", padx=(8, 0))
-        self.preview_crosshair_var = tk.BooleanVar(value=False)
+        self.preview_crosshair_var = tk.BooleanVar(value=SETTINGS.get("fits_preview_crosshair", False))
         ttk.Checkbutton(top, text="Crosshair", variable=self.preview_crosshair_var).pack(side="left", padx=(8, 0))
-        self.preview_flip_vertical_var = tk.BooleanVar(value=False)
+        self.preview_flip_vertical_var = tk.BooleanVar(value=SETTINGS.get("fits_preview_flip_vertical", False))
         ttk.Checkbutton(
             top,
             text="Flip Vertical",
@@ -1076,7 +1076,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         stretch_controls = ttk.Frame(convert_content)
         stretch_controls.pack(fill="x", pady=(6, 0))
         ttk.Label(stretch_controls, text="Black percentile").pack(side="left")
-        self.preview_black_percent_var = tk.StringVar(value="0.5")
+        self.preview_black_percent_var = tk.StringVar(value=str(SETTINGS.get("fits_preview_black_percent", 0.5)))
         ttk.Spinbox(
             stretch_controls,
             from_=0.0,
@@ -1086,7 +1086,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             width=7,
         ).pack(side="left", padx=(6, 12))
         ttk.Label(stretch_controls, text="White percentile").pack(side="left")
-        self.preview_white_percent_var = tk.StringVar(value="99.5")
+        self.preview_white_percent_var = tk.StringVar(value=str(SETTINGS.get("fits_preview_white_percent", 99.5)))
         ttk.Spinbox(
             stretch_controls,
             from_=0.01,
@@ -1097,6 +1097,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ).pack(side="left", padx=(6, 12))
         ttk.Button(stretch_controls, text="Apply Stretch", command=self.preview_fits_async, style="Accent.TButton").pack(side="left")
         ttk.Button(stretch_controls, text="Auto Points", command=self.reset_preview_stretch).pack(side="left", padx=(8, 0))
+        ttk.Button(stretch_controls, text="Save Settings", command=self.save_preview_stretch_settings).pack(side="left", padx=(8, 0))
+        ttk.Button(stretch_controls, text="Restore Saved", command=self.apply_saved_preview_stretch_settings).pack(side="left", padx=(8, 0))
         ttk.Label(stretch_controls, text="Lower white percentiles reveal faint detail but clip bright cores sooner.").pack(side="left", padx=(12, 0))
         self.enable_responsive_toolbar(stretch_controls)
 
@@ -1180,6 +1182,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def reset_preview_stretch(self):
         return super().reset_preview_stretch()
+
+    def save_preview_stretch_settings(self):
+        return super().save_preview_stretch_settings()
+
+    def apply_saved_preview_stretch_settings(self):
+        return super().apply_saved_preview_stretch_settings()
 
     def freeze_preview_probe(self, event):
         return super().freeze_preview_probe(event)

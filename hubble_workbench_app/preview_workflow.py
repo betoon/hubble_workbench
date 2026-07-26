@@ -9,6 +9,7 @@ from PIL import Image, ImageOps
 from .fits_io import FITS, _celestial_wcs, first_image_hdu, first_image_hdu_details
 from .image_processing import downsample_array_for_preview, normalize_image
 from .paths import DOWNLOAD_DIR, OUTPUT_DIR
+from .settings import SETTINGS, save_settings
 
 
 class PreviewWorkflowMixin:
@@ -76,6 +77,20 @@ class PreviewWorkflowMixin:
         if white - black < 0.01:
             raise ValueError("Black and white percentiles must be at least 0.01 apart.")
         return black, white
+
+    @classmethod
+    def preview_stretch_settings_payload(cls, stretch, black, white, crosshair=False, flip_vertical=False):
+        black, white = cls.preview_stretch_percentiles(black, white)
+        stretch = str(stretch or "").lower()
+        if stretch not in {"asinh", "pow", "sqrt", "log", "linear"}:
+            raise ValueError(f"Unsupported preview stretch: {stretch or 'empty'}")
+        return {
+            "fits_preview_stretch": stretch,
+            "fits_preview_black_percent": black,
+            "fits_preview_white_percent": white,
+            "fits_preview_crosshair": bool(crosshair),
+            "fits_preview_flip_vertical": bool(flip_vertical),
+        }
 
     @staticmethod
     def preview_pixel_scale_arcsec(header):
@@ -268,6 +283,44 @@ class PreviewWorkflowMixin:
         self.preview_black_percent_var.set("0.5")
         self.preview_white_percent_var.set("99.5")
         self.convert_status.set("Restored automatic black and white points. Select Apply Stretch to refresh the preview.")
+
+    def save_preview_stretch_settings(self):
+        try:
+            payload = self.preview_stretch_settings_payload(
+                self.stretch_var.get(),
+                self.preview_black_percent_var.get(),
+                self.preview_white_percent_var.get(),
+                self.preview_crosshair_var.get(),
+                self.preview_flip_vertical_var.get(),
+            )
+        except ValueError as exc:
+            self.convert_status.set(f"Preview settings were not saved: {exc}")
+            return False
+        SETTINGS.update(payload)
+        save_settings(SETTINGS)
+        self.convert_status.set("Saved FITS preview stretch and display settings.")
+        return True
+
+    def apply_saved_preview_stretch_settings(self):
+        try:
+            payload = self.preview_stretch_settings_payload(
+                SETTINGS.get("fits_preview_stretch", "asinh"),
+                SETTINGS.get("fits_preview_black_percent", 0.5),
+                SETTINGS.get("fits_preview_white_percent", 99.5),
+                SETTINGS.get("fits_preview_crosshair", False),
+                SETTINGS.get("fits_preview_flip_vertical", False),
+            )
+        except ValueError as exc:
+            self.convert_status.set(f"Saved preview settings are invalid: {exc}")
+            return False
+        self.stretch_var.set(payload["fits_preview_stretch"])
+        self.preview_black_percent_var.set(f"{payload['fits_preview_black_percent']:g}")
+        self.preview_white_percent_var.set(f"{payload['fits_preview_white_percent']:g}")
+        self.preview_crosshair_var.set(payload["fits_preview_crosshair"])
+        self.preview_flip_vertical_var.set(payload["fits_preview_flip_vertical"])
+        self.redraw_fits_preview()
+        self.convert_status.set("Applied saved FITS preview settings. Select Apply Stretch to reload the image.")
+        return True
 
     def finish_preview(self, result):
         if len(result) == 3:

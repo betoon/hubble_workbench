@@ -122,6 +122,20 @@ class PreviewMetadataTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             PreviewWorkflowMixin.preview_stretch_percentiles(-1, 99)
 
+    def test_stretch_settings_payload_normalizes_persisted_values(self):
+        payload = PreviewWorkflowMixin.preview_stretch_settings_payload(
+            "ASINH",
+            "0.25",
+            "99.75",
+            crosshair=1,
+            flip_vertical=0,
+        )
+        self.assertEqual(payload["fits_preview_stretch"], "asinh")
+        self.assertEqual(payload["fits_preview_black_percent"], 0.25)
+        self.assertEqual(payload["fits_preview_white_percent"], 99.75)
+        self.assertTrue(payload["fits_preview_crosshair"])
+        self.assertFalse(payload["fits_preview_flip_vertical"])
+
     def test_histogram_x_clamps_values_to_plot(self):
         position = PreviewWorkflowMixin.preview_histogram_x(5, 0, 10, 40, 240)
         self.assertEqual(position, 140)

@@ -1074,10 +1074,36 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         self.preview_canvas = tk.Canvas(image_panel, bg="#111827", highlightthickness=0)
         self.preview_canvas.pack(fill="both", expand=True)
-        self.header_text = tk.Text(info_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
+        metadata_tabs = ttk.Notebook(info_panel)
+        metadata_tabs.pack(fill="both", expand=True)
+        summary_panel = ttk.Frame(metadata_tabs)
+        header_panel = ttk.Frame(metadata_tabs)
+        metadata_tabs.add(summary_panel, text="Science Summary")
+        metadata_tabs.add(header_panel, text="Full Header")
+        summary_tools = ttk.Frame(summary_panel)
+        summary_tools.pack(fill="x", pady=(0, 4))
+        ttk.Button(summary_tools, text="Copy Summary", command=self.copy_preview_metadata).pack(side="right")
+        self.preview_summary_text = tk.Text(summary_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
+        self.preview_summary_text.pack(fill="both", expand=True)
+        header_tools = ttk.Frame(header_panel)
+        header_tools.pack(fill="x", pady=(0, 4))
+        ttk.Label(header_tools, text="Search header").pack(side="left")
+        self.preview_header_search_var = tk.StringVar(value="")
+        header_search = ttk.Entry(header_tools, textvariable=self.preview_header_search_var)
+        header_search.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        ttk.Button(header_tools, text="Clear", command=lambda: self.preview_header_search_var.set("")).pack(side="left")
+        ttk.Button(header_tools, text="Copy", command=lambda: self.copy_preview_metadata(full_header=True)).pack(side="left", padx=(6, 0))
+        self.header_text = tk.Text(header_panel, wrap="none", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.header_text.pack(fill="both", expand=True)
+        self.preview_header_search_var.trace_add("write", self.refresh_preview_header_search)
         self.convert_status = tk.StringVar(value="")
         ttk.Label(convert_content, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
+
+    def refresh_preview_header_search(self, *_args):
+        return super().refresh_preview_header_search(*_args)
+
+    def copy_preview_metadata(self, full_header=False):
+        return super().copy_preview_metadata(full_header=full_header)
 
     def build_compose_tab(self):
         compose_content = self.build_scrollable_tab_content(self.compose_tab)

@@ -57,6 +57,19 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertIn("05h", text)
         self.assertIn("-05°", text)
 
+    def test_histogram_tracks_black_and_white_percentiles(self):
+        histogram = PreviewWorkflowMixin.preview_histogram(np.arange(1000, dtype=float), bins=50)
+        self.assertEqual(len(histogram["counts"]), 50)
+        self.assertEqual(len(histogram["edges"]), 51)
+        self.assertLess(histogram["black"], histogram["white"])
+        self.assertEqual(histogram["sampled"], 1000)
+
+    def test_histogram_x_clamps_values_to_plot(self):
+        position = PreviewWorkflowMixin.preview_histogram_x(5, 0, 10, 40, 240)
+        self.assertEqual(position, 140)
+        self.assertEqual(PreviewWorkflowMixin.preview_histogram_x(-5, 0, 10, 40, 240), 40)
+        self.assertEqual(PreviewWorkflowMixin.preview_histogram_x(15, 0, 10, 40, 240), 240)
+
 
 if __name__ == "__main__":
     unittest.main()

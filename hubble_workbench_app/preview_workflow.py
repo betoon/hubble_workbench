@@ -41,6 +41,30 @@ class PreviewWorkflowMixin:
         }
 
     @staticmethod
+    def preview_histogram(data, bins=192, sample_limit=1_000_000):
+        values = np.asarray(data).reshape(-1)
+        if values.size > sample_limit:
+            step = max(1, values.size // sample_limit)
+            values = values[::step]
+        finite = values[np.isfinite(values)]
+        if not finite.size:
+            return {}
+        black, white = np.percentile(finite, (0.5, 99.5))
+        lower, upper = np.percentile(finite, (0.1, 99.9))
+        if not np.isfinite(lower) or not np.isfinite(upper) or upper <= lower:
+            lower, upper = float(np.min(finite)), float(np.max(finite))
+        if upper <= lower:
+            upper = lower + 1.0
+        counts, edges = np.histogram(finite, bins=max(16, int(bins)), range=(lower, upper))
+        return {
+            "counts": counts.astype(int).tolist(),
+            "edges": edges.astype(float).tolist(),
+            "black": float(black),
+            "white": float(white),
+            "sampled": int(finite.size),
+        }
+
+    @staticmethod
     def preview_pixel_scale_arcsec(header):
         try:
             cd11 = float(header.get("CD1_1", header.get("CDELT1", 0)) or 0)
@@ -157,10 +181,11 @@ class PreviewWorkflowMixin:
             try:
                 data, header = first_image_hdu(path)
                 statistics = self.preview_image_statistics(data)
+                histogram = self.preview_histogram(data)
                 normalized = normalize_image(data, stretch=self.stretch_var.get())
-                result = (normalized, header, statistics, path, None)
+                result = (normalized, header, statistics, histogram, path, None)
             except Exception as exc:
-                result = (None, {}, {}, path, exc)
+                result = (None, {}, {}, {}, path, exc)
             self.after(0, lambda: self.finish_preview(result))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -168,25 +193,75 @@ class PreviewWorkflowMixin:
     def finish_preview(self, result):
         if len(result) == 3:
             image, header, error = result
-            statistics, path = {}, self.convert_path_var.get().strip()
-        else:
+            statistics, histogram, path = {}, {}, self.convert_path_var.get().strip()
+        elif len(result) == 5:
             image, header, statistics, path, error = result
+            histogram = {}
+        else:
+            image, header, statistics, histogram, path, error = result
         if error:
             self.convert_status.set(f"Preview failed: {error}")
             return
         self.preview_image = Image.fromarray(image, mode="L")
         self.preview_header = dict(header)
         self.preview_statistics = dict(statistics)
+        self.preview_histogram_data = dict(histogram)
         try:
             self.preview_wcs = _celestial_wcs(header)
         except Exception:
             self.preview_wcs = None
         self.show_image_on_canvas(self.preview_canvas, self.preview_image, "preview_photo")
+        self.draw_preview_histogram()
         summary = self.preview_metadata_summary(header, self.preview_image.size[::-1], statistics, path)
         self.preview_summary_text.delete("1.0", "end")
         self.preview_summary_text.insert("1.0", summary)
         self.refresh_preview_header_search()
         self.convert_status.set(f"Preview loaded at {self.preview_image.width} x {self.preview_image.height}px. Display is scaled to fit the canvas.")
+
+    @staticmethod
+    def preview_histogram_x(value, lower, upper, left, right):
+        if upper <= lower:
+            return float(left)
+        fraction = min(1.0, max(0.0, (float(value) - lower) / (upper - lower)))
+        return float(left) + fraction * (float(right) - float(left))
+
+    def draw_preview_histogram(self, _event=None):
+        if not hasattr(self, "preview_histogram_canvas"):
+            return
+        canvas = self.preview_histogram_canvas
+        canvas.delete("all")
+        histogram = getattr(self, "preview_histogram_data", {}) or {}
+        counts = histogram.get("counts", [])
+        edges = histogram.get("edges", [])
+        if not counts or len(edges) != len(counts) + 1:
+            canvas.create_text(10, 10, text="Histogram appears after a FITS preview is loaded.", anchor="nw", fill="#6b7280")
+            return
+        width = max(320, canvas.winfo_width())
+        height = max(110, canvas.winfo_height())
+        left, right, top, bottom = 48, width - 12, 12, height - 28
+        canvas.create_rectangle(left, top, right, bottom, fill="#f8fafc", outline="#9ca3af")
+        log_counts = np.log10(np.asarray(counts, dtype=float) + 1.0)
+        peak = max(1.0, float(np.max(log_counts)))
+        points = []
+        for index, value in enumerate(log_counts):
+            x = left + index * (right - left) / max(1, len(log_counts) - 1)
+            y = bottom - float(value) * (bottom - top) / peak
+            points.extend((x, y))
+        if len(points) >= 4:
+            polygon = [left, bottom, *points, right, bottom]
+            canvas.create_polygon(polygon, fill="#cbd5e1", outline="#64748b")
+        lower, upper = float(edges[0]), float(edges[-1])
+        for value, color, label in (
+            (histogram.get("black", lower), "#2563eb", "Black"),
+            (histogram.get("white", upper), "#16a34a", "White"),
+        ):
+            x = self.preview_histogram_x(value, lower, upper, left, right)
+            canvas.create_line(x, top, x, bottom, fill=color, width=2)
+            anchor = "nw" if x < (left + right) / 2 else "ne"
+            canvas.create_text(x + (4 if anchor == "nw" else -4), top + 2, text=f"{label}\n{value:.4g}", anchor=anchor, fill=color)
+        canvas.create_text(left, bottom + 6, text=f"{lower:.4g}", anchor="nw", fill="#374151")
+        canvas.create_text(right, bottom + 6, text=f"{upper:.4g}", anchor="ne", fill="#374151")
+        canvas.create_text((left + right) / 2, bottom + 6, text=f"Input intensity • log count • {histogram.get('sampled', 0):,} sampled pixels", anchor="n", fill="#374151")
 
     def redraw_fits_preview(self, _event=None):
         if hasattr(self, "preview_image"):

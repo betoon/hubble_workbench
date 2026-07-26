@@ -1079,6 +1079,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_canvas.pack(fill="both", expand=True)
         self.preview_cursor_var = tk.StringVar(value="Move over the image to inspect pixel and sky coordinates.")
         self.responsive_wrap_label(image_panel, textvariable=self.preview_cursor_var, minimum=220).pack(fill="x", pady=(5, 0))
+        self.preview_histogram_canvas = tk.Canvas(image_panel, height=130, bg="#f8fafc", highlightthickness=0)
+        self.preview_histogram_canvas.pack(fill="x", pady=(5, 0))
+        self.preview_histogram_canvas.bind("<Configure>", self.draw_preview_histogram)
         self.preview_canvas.bind("<Motion>", self.preview_canvas_motion)
         self.preview_canvas.bind("<Leave>", self.preview_canvas_leave)
         self.preview_canvas.bind("<Configure>", self.redraw_fits_preview)
@@ -1121,6 +1124,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def preview_canvas_leave(self, event=None):
         return super().preview_canvas_leave(event)
+
+    def draw_preview_histogram(self, event=None):
+        return super().draw_preview_histogram(event)
 
     def build_compose_tab(self):
         compose_content = self.build_scrollable_tab_content(self.compose_tab)

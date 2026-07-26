@@ -20,6 +20,50 @@ class PreviewWorkflowMixin:
     )
 
     @staticmethod
+    def discover_recent_fits_files(folder, limit=100):
+        folder = Path(folder)
+        if not folder.exists():
+            return []
+        files = [
+            path for path in folder.rglob("*")
+            if path.is_file() and path.name.lower().endswith((".fits", ".fits.gz", ".fit"))
+        ]
+        files.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        return files[:max(0, int(limit))]
+
+    def refresh_recent_fits_files(self):
+        paths = self.discover_recent_fits_files(DOWNLOAD_DIR)
+        self.preview_recent_fits_paths = paths
+        labels = [str(path.relative_to(DOWNLOAD_DIR)) for path in paths]
+        self.preview_recent_fits_combo.configure(values=labels)
+        current_path = self.convert_path_var.get().strip()
+        if current_path:
+            try:
+                relative = str(Path(current_path).relative_to(DOWNLOAD_DIR))
+                if relative in labels:
+                    self.preview_recent_fits_var.set(relative)
+            except (ValueError, OSError):
+                pass
+        if hasattr(self, "convert_status"):
+            self.convert_status.set(
+                f"Found {len(paths)} recent FITS file(s) under {DOWNLOAD_DIR}."
+                if paths else f"No FITS files were found under {DOWNLOAD_DIR}."
+            )
+        return paths
+
+    def select_recent_fits_file(self, _event=None):
+        selected = self.preview_recent_fits_var.get()
+        if not selected:
+            return None
+        path = DOWNLOAD_DIR / selected
+        if not path.is_file():
+            self.convert_status.set("The selected recent FITS file is no longer available. Refresh the list.")
+            return None
+        self.convert_path_var.set(str(path))
+        self.convert_status.set(f"Selected recent FITS file: {path.name}")
+        return path
+
+    @staticmethod
     def preview_image_statistics(data, sample_limit=1_000_000):
         values = np.asarray(data).reshape(-1)
         if values.size > sample_limit:

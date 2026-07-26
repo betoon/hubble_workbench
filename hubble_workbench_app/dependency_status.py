@@ -1,9 +1,14 @@
+import sys
 from tkinter import messagebox
 
 from hubble_workbench_app.fits_io import FITS, OBSERVATIONS, MISSING_DEPS
 
 
 class DependencyStatusMixin:
+    @staticmethod
+    def dependency_interpreter_detail():
+        return f"Python interpreter:\n{sys.executable}"
+
     def refresh_dependency_status(self):
         self.dep_text.delete("1.0", "end")
         if MISSING_DEPS:
@@ -26,12 +31,22 @@ class DependencyStatusMixin:
 
     def require_astroquery(self):
         if OBSERVATIONS is None:
-            messagebox.showinfo("Dependencies", "astroquery is not installed. Run install_dependencies.bat, then restart.")
+            messagebox.showinfo(
+                "Dependencies",
+                "Astroquery is unavailable in the Python installation running this app.\n\n"
+                f"{self.dependency_interpreter_detail()}\n\n"
+                "Close the app and use launch_hubble_workbench.bat. If needed, run install_dependencies.bat first.",
+            )
             return False
         return True
 
     def require_astropy(self):
         if FITS is None:
-            messagebox.showinfo("Dependencies", "astropy is not installed. Run install_dependencies.bat, then restart.")
+            messagebox.showinfo(
+                "Dependencies",
+                "Astropy is unavailable in the Python installation running this app.\n\n"
+                f"{self.dependency_interpreter_detail()}\n\n"
+                "Close the app and use launch_hubble_workbench.bat. If needed, run install_dependencies.bat first.",
+            )
             return False
         return True

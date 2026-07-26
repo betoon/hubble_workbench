@@ -1088,6 +1088,20 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             command=self.redraw_fits_preview,
         ).pack(side="left", padx=(8, 0))
         self.enable_responsive_toolbar(top)
+        recent_files_row = ttk.Frame(convert_content)
+        recent_files_row.pack(fill="x", pady=(6, 0))
+        ttk.Label(recent_files_row, text="Recent FITS").pack(side="left")
+        self.preview_recent_fits_var = tk.StringVar(value="")
+        self.preview_recent_fits_combo = ttk.Combobox(
+            recent_files_row,
+            textvariable=self.preview_recent_fits_var,
+            state="readonly",
+            width=54,
+        )
+        self.preview_recent_fits_combo.pack(side="left", fill="x", expand=True, padx=(6, 6))
+        self.preview_recent_fits_combo.bind("<<ComboboxSelected>>", self.select_recent_fits_file)
+        ttk.Button(recent_files_row, text="Refresh Files", command=self.refresh_recent_fits_files).pack(side="left")
+        self.enable_responsive_toolbar(recent_files_row)
         stretch_controls = ttk.Frame(convert_content)
         stretch_controls.pack(fill="x", pady=(6, 0))
         ttk.Label(stretch_controls, text="Black percentile").pack(side="left")
@@ -1176,6 +1190,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_header_search_var.trace_add("write", self.refresh_preview_header_search)
         self.convert_status = tk.StringVar(value="")
         ttk.Label(convert_content, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
+        self.refresh_recent_fits_files()
 
     def refresh_preview_header_search(self, *_args):
         return super().refresh_preview_header_search(*_args)
@@ -1203,6 +1218,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def apply_saved_preview_stretch_settings(self):
         return super().apply_saved_preview_stretch_settings()
+
+    def refresh_recent_fits_files(self):
+        return super().refresh_recent_fits_files()
+
+    def select_recent_fits_file(self, event=None):
+        return super().select_recent_fits_file(event)
 
     def freeze_preview_probe(self, event):
         return super().freeze_preview_probe(event)

@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox
 import numpy as np
 from PIL import Image
 
-from .fits_io import FITS, first_image_hdu
+from .fits_io import FITS, _celestial_wcs, first_image_hdu
 from .image_processing import downsample_array_for_preview, normalize_image
 from .paths import DOWNLOAD_DIR, OUTPUT_DIR
 
@@ -91,6 +91,50 @@ class PreviewWorkflowMixin:
                 rows.append(line)
         return "\n".join(rows) if rows else "No FITS header fields match the current search."
 
+    @staticmethod
+    def preview_canvas_to_image_point(
+        canvas_x,
+        canvas_y,
+        canvas_size,
+        rendered_size,
+        image_size,
+    ):
+        canvas_width, canvas_height = canvas_size
+        rendered_width, rendered_height = rendered_size
+        image_width, image_height = image_size
+        left = (canvas_width - rendered_width) / 2.0
+        top = (canvas_height - rendered_height) / 2.0
+        if not (
+            left <= canvas_x < left + rendered_width
+            and top <= canvas_y < top + rendered_height
+            and rendered_width > 0
+            and rendered_height > 0
+        ):
+            return None
+        image_x = min(image_width - 1, max(0, int((canvas_x - left) * image_width / rendered_width)))
+        image_y = min(image_height - 1, max(0, int((canvas_y - top) * image_height / rendered_height)))
+        return image_x, image_y
+
+    @staticmethod
+    def preview_format_sky_position(ra, dec):
+        if not (np.isfinite(ra) and np.isfinite(dec)):
+            return ""
+        ra_hours = (float(ra) % 360.0) / 15.0
+        ra_h = int(ra_hours)
+        ra_minutes = (ra_hours - ra_h) * 60.0
+        ra_m = int(ra_minutes)
+        ra_s = (ra_minutes - ra_m) * 60.0
+        sign = "+" if dec >= 0 else "-"
+        dec_abs = abs(float(dec))
+        dec_d = int(dec_abs)
+        dec_minutes = (dec_abs - dec_d) * 60.0
+        dec_m = int(dec_minutes)
+        dec_s = (dec_minutes - dec_m) * 60.0
+        return (
+            f"RA {ra:10.6f}° ({ra_h:02d}h {ra_m:02d}m {ra_s:05.2f}s)  |  "
+            f"Dec {dec:+10.6f}° ({sign}{dec_d:02d}° {dec_m:02d}′ {dec_s:04.1f}″)"
+        )
+
     def choose_convert_file(self):
         path = filedialog.askopenfilename(
             title="Choose FITS File",
@@ -133,12 +177,66 @@ class PreviewWorkflowMixin:
         self.preview_image = Image.fromarray(image, mode="L")
         self.preview_header = dict(header)
         self.preview_statistics = dict(statistics)
+        try:
+            self.preview_wcs = _celestial_wcs(header)
+        except Exception:
+            self.preview_wcs = None
         self.show_image_on_canvas(self.preview_canvas, self.preview_image, "preview_photo")
         summary = self.preview_metadata_summary(header, self.preview_image.size[::-1], statistics, path)
         self.preview_summary_text.delete("1.0", "end")
         self.preview_summary_text.insert("1.0", summary)
         self.refresh_preview_header_search()
         self.convert_status.set(f"Preview loaded at {self.preview_image.width} x {self.preview_image.height}px. Display is scaled to fit the canvas.")
+
+    def redraw_fits_preview(self, _event=None):
+        if hasattr(self, "preview_image"):
+            self.show_image_on_canvas(self.preview_canvas, self.preview_image, "preview_photo")
+
+    def preview_canvas_motion(self, event):
+        if not hasattr(self, "preview_image") or not hasattr(self, "preview_photo"):
+            return None
+        point = self.preview_canvas_to_image_point(
+            event.x,
+            event.y,
+            (max(1, self.preview_canvas.winfo_width()), max(1, self.preview_canvas.winfo_height())),
+            (self.preview_photo.width(), self.preview_photo.height()),
+            self.preview_image.size,
+        )
+        self.preview_canvas.delete("preview_cursor")
+        if point is None:
+            self.preview_cursor_var.set("Move over the image to inspect pixel and sky coordinates.")
+            return None
+        x, y = point
+        display_value = self.preview_image.getpixel((x, y))
+        details = f"Pixel X {x:,}, Y {y:,}  |  Stretched display value {display_value}"
+        wcs = getattr(self, "preview_wcs", None)
+        if wcs is not None:
+            try:
+                ra, dec = wcs.pixel_to_world_values(x, y)
+                sky = self.preview_format_sky_position(float(ra), float(dec))
+                if sky:
+                    details += f"\n{sky}"
+            except Exception:
+                pass
+        self.preview_cursor_var.set(details)
+        if self.preview_crosshair_var.get():
+            canvas_width = self.preview_canvas.winfo_width()
+            canvas_height = self.preview_canvas.winfo_height()
+            rendered_width = self.preview_photo.width()
+            rendered_height = self.preview_photo.height()
+            left = (canvas_width - rendered_width) / 2.0
+            top = (canvas_height - rendered_height) / 2.0
+            screen_x = left + (x + 0.5) * rendered_width / self.preview_image.width
+            screen_y = top + (y + 0.5) * rendered_height / self.preview_image.height
+            self.preview_canvas.create_line(left, screen_y, left + rendered_width, screen_y, fill="#22c55e", tags="preview_cursor")
+            self.preview_canvas.create_line(screen_x, top, screen_x, top + rendered_height, fill="#22c55e", tags="preview_cursor")
+        return point
+
+    def preview_canvas_leave(self, _event=None):
+        if hasattr(self, "preview_canvas"):
+            self.preview_canvas.delete("preview_cursor")
+        if hasattr(self, "preview_cursor_var"):
+            self.preview_cursor_var.set("Move over the image to inspect pixel and sky coordinates.")
 
     def refresh_preview_header_search(self, *_args):
         if not hasattr(self, "header_text"):

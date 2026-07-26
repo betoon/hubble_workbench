@@ -34,6 +34,29 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertNotIn("TELESCOP", PreviewWorkflowMixin.preview_header_text(header, "nircam"))
         self.assertIn("FILTER", PreviewWorkflowMixin.preview_header_text(header, "filter"))
 
+    def test_canvas_point_maps_centered_scaled_preview_to_full_image(self):
+        point = PreviewWorkflowMixin.preview_canvas_to_image_point(
+            500,
+            300,
+            canvas_size=(1000, 600),
+            rendered_size=(800, 400),
+            image_size=(4000, 2000),
+        )
+        self.assertEqual(point, (2000, 1000))
+        self.assertIsNone(PreviewWorkflowMixin.preview_canvas_to_image_point(
+            50,
+            50,
+            canvas_size=(1000, 600),
+            rendered_size=(800, 400),
+            image_size=(4000, 2000),
+        ))
+
+    def test_sky_position_formats_degrees_and_sexagesimal(self):
+        text = PreviewWorkflowMixin.preview_format_sky_position(83.633, -5.391)
+        self.assertIn("83.633000", text)
+        self.assertIn("05h", text)
+        self.assertIn("-05°", text)
+
 
 if __name__ == "__main__":
     unittest.main()

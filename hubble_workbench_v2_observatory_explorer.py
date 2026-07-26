@@ -1063,6 +1063,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Combobox(top, textvariable=self.stretch_var, values=["asinh", "pow", "sqrt", "log", "linear"], state="readonly", width=8).pack(side="left")
         ttk.Button(top, text="Preview", command=self.preview_fits_async).pack(side="left", padx=(8, 0))
         ttk.Button(top, text="Save PNG/TIFF", command=self.save_preview_outputs).pack(side="left", padx=(8, 0))
+        self.preview_crosshair_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(top, text="Crosshair", variable=self.preview_crosshair_var).pack(side="left", padx=(8, 0))
+        self.enable_responsive_toolbar(top)
 
         body = tk.PanedWindow(convert_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
         body.pack(fill="both", expand=True, pady=(8, 0))
@@ -1074,6 +1077,11 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
         self.preview_canvas = tk.Canvas(image_panel, bg="#111827", highlightthickness=0)
         self.preview_canvas.pack(fill="both", expand=True)
+        self.preview_cursor_var = tk.StringVar(value="Move over the image to inspect pixel and sky coordinates.")
+        self.responsive_wrap_label(image_panel, textvariable=self.preview_cursor_var, minimum=220).pack(fill="x", pady=(5, 0))
+        self.preview_canvas.bind("<Motion>", self.preview_canvas_motion)
+        self.preview_canvas.bind("<Leave>", self.preview_canvas_leave)
+        self.preview_canvas.bind("<Configure>", self.redraw_fits_preview)
         metadata_tabs = ttk.Notebook(info_panel)
         metadata_tabs.pack(fill="both", expand=True)
         summary_panel = ttk.Frame(metadata_tabs)
@@ -1104,6 +1112,15 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def copy_preview_metadata(self, full_header=False):
         return super().copy_preview_metadata(full_header=full_header)
+
+    def redraw_fits_preview(self, event=None):
+        return super().redraw_fits_preview(event)
+
+    def preview_canvas_motion(self, event):
+        return super().preview_canvas_motion(event)
+
+    def preview_canvas_leave(self, event=None):
+        return super().preview_canvas_leave(event)
 
     def build_compose_tab(self):
         compose_content = self.build_scrollable_tab_content(self.compose_tab)

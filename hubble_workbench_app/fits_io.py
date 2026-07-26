@@ -73,6 +73,58 @@ def first_image_hdu(path):
     raise RuntimeError(f"No 2D image data found in {path}")
 
 
+def first_image_hdu_details(path):
+    """Return preview data plus header cards and an inventory of every HDU."""
+    if FITS is None:
+        raise RuntimeError("astropy is not installed.")
+    with FITS.open(path, memmap=False, lazy_load_hdus=True) as hdul:
+        primary_header = hdul[0].header.copy() if len(hdul) else FITS.Header()
+        inventory = []
+        selected = None
+        selected_data = None
+        selected_header = None
+        for index, hdu in enumerate(hdul):
+            header = hdu.header
+            raw_shape = tuple(getattr(hdu, "shape", ()) or ())
+            inventory.append({
+                "index": index,
+                "name": str(getattr(hdu, "name", "") or "PRIMARY"),
+                "type": type(hdu).__name__,
+                "shape": raw_shape,
+                "bitpix": header.get("BITPIX", ""),
+                "cards": len(header.cards),
+                "selected": False,
+            })
+            if selected_data is not None:
+                continue
+            data = getattr(hdu, "data", None)
+            if data is None:
+                continue
+            arr = np.asarray(data)
+            while arr.ndim > 2:
+                arr = arr[0]
+            if arr.ndim != 2 or not arr.size:
+                continue
+            merged_header = primary_header.copy()
+            merged_header.extend(header, update=True, strip=False)
+            selected = index
+            selected_data = arr.astype(np.float64)
+            selected_header = merged_header
+        if selected_data is None:
+            raise RuntimeError(f"No 2D image data found in {path}")
+        inventory[selected]["selected"] = True
+        cards = [
+            {
+                "keyword": str(card.keyword),
+                "value": card.value,
+                "type": type(card.value).__name__,
+                "comment": str(card.comment or ""),
+            }
+            for card in selected_header.cards
+        ]
+        return selected_data, dict(selected_header), cards, inventory
+
+
 def _celestial_wcs(header):
     try:
         from astropy.wcs import WCS

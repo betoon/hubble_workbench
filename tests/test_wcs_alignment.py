@@ -6,7 +6,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 
-from hubble_workbench_app.fits_io import first_image_hdu, stack_fits_exposures, wcs_align_fits_channels
+from hubble_workbench_app.fits_io import first_image_hdu, first_image_hdu_details, stack_fits_exposures, wcs_align_fits_channels
 from hubble_workbench_app.image_processing import estimate_neutral_rgb_gains
 
 
@@ -31,6 +31,23 @@ class WcsAlignmentTests(unittest.TestCase):
             self.assertEqual(header["TELESCOP"], "JWST")
             self.assertEqual(header["INSTRUME"], "NIRCAM")
             self.assertEqual(header["CTYPE1"], "RA---TAN")
+
+    def test_first_image_hdu_details_preserves_comments_and_inventory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "extensions.fits"
+            primary = fits.PrimaryHDU()
+            primary.header["TELESCOP"] = ("JWST", "Observatory name")
+            science = fits.ImageHDU(np.ones((4, 6), dtype=np.float32), name="SCI")
+            fits.HDUList([primary, science]).writeto(path)
+
+            data, header, cards, inventory = first_image_hdu_details(path)
+
+            self.assertEqual(data.shape, (4, 6))
+            self.assertEqual(header["TELESCOP"], "JWST")
+            self.assertEqual(len(inventory), 2)
+            self.assertTrue(inventory[1]["selected"])
+            telescope = next(card for card in cards if card["keyword"] == "TELESCOP")
+            self.assertEqual(telescope["comment"], "Observatory name")
 
     def test_neutral_balance_ignores_black_border_and_reduces_color_cast(self):
         image = np.zeros((20, 20, 3), dtype=np.float32)

@@ -34,6 +34,21 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertNotIn("TELESCOP", PreviewWorkflowMixin.preview_header_text(header, "nircam"))
         self.assertIn("FILTER", PreviewWorkflowMixin.preview_header_text(header, "filter"))
 
+    def test_header_cards_show_type_and_comment(self):
+        cards = [{"keyword": "TELESCOP", "value": "JWST", "type": "str", "comment": "Observatory name"}]
+        text = PreviewWorkflowMixin.preview_header_text({}, cards=cards)
+        self.assertIn("[str]", text)
+        self.assertIn("Observatory name", text)
+
+    def test_hdu_inventory_marks_preview_extension(self):
+        text = PreviewWorkflowMixin.preview_hdu_inventory_text([
+            {"index": 0, "name": "PRIMARY", "type": "PrimaryHDU", "shape": (), "bitpix": 8, "cards": 5, "selected": False},
+            {"index": 1, "name": "SCI", "type": "ImageHDU", "shape": (20, 30), "bitpix": -32, "cards": 12, "selected": True},
+        ])
+        self.assertIn("*1", text)
+        self.assertIn("30 x 20", text)
+        self.assertIn("Total extensions: 2", text)
+
     def test_canvas_point_maps_centered_scaled_preview_to_full_image(self):
         point = PreviewWorkflowMixin.preview_canvas_to_image_point(
             500,

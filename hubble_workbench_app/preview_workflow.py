@@ -6,7 +6,7 @@ from tkinter import filedialog, messagebox
 import numpy as np
 from PIL import Image
 
-from .fits_io import FITS, _celestial_wcs, first_image_hdu
+from .fits_io import FITS, _celestial_wcs, first_image_hdu, first_image_hdu_details
 from .image_processing import downsample_array_for_preview, normalize_image
 from .paths import DOWNLOAD_DIR, OUTPUT_DIR
 
@@ -106,14 +106,48 @@ class PreviewWorkflowMixin:
         return "\n".join(lines)
 
     @staticmethod
-    def preview_header_text(header, query=""):
+    def preview_header_text(header, query="", cards=None):
         query = str(query or "").strip().lower()
         rows = []
-        for key, value in header.items():
-            line = f"{key:<10} = {value}"
+        source = cards or (
+            {"keyword": key, "value": value, "type": type(value).__name__, "comment": ""}
+            for key, value in header.items()
+        )
+        for card in source:
+            key = card.get("keyword", "")
+            value = card.get("value", "")
+            value_type = card.get("type", "")
+            comment = card.get("comment", "")
+            line = f"{key:<10} = {str(value):<30}  [{value_type}]"
+            if comment:
+                line += f"  / {comment}"
             if not query or query in line.lower():
                 rows.append(line)
         return "\n".join(rows) if rows else "No FITS header fields match the current search."
+
+    @staticmethod
+    def preview_hdu_inventory_text(inventory):
+        if not inventory:
+            return "No HDU information is available."
+        lines = [
+            "FITS HDU / EXTENSION INVENTORY",
+            "=" * 72,
+            f"{'HDU':<5} {'Name':<14} {'Type':<18} {'Dimensions':<20} {'BITPIX':<7} Cards",
+            "-" * 72,
+        ]
+        for item in inventory:
+            shape = " x ".join(str(value) for value in reversed(item.get("shape", ()))) or "No data"
+            marker = "*" if item.get("selected") else " "
+            lines.append(
+                f"{marker}{item.get('index', 0):<4} "
+                f"{str(item.get('name', ''))[:13]:<14} "
+                f"{str(item.get('type', ''))[:17]:<18} "
+                f"{shape[:19]:<20} "
+                f"{str(item.get('bitpix', '')):<7} "
+                f"{item.get('cards', 0)}"
+            )
+        lines.extend(("", "* HDU currently used for the image preview.", f"Total extensions: {len(inventory)}"))
+        return "\n".join(lines)
 
     @staticmethod
     def preview_canvas_to_image_point(
@@ -179,13 +213,13 @@ class PreviewWorkflowMixin:
 
         def worker():
             try:
-                data, header = first_image_hdu(path)
+                data, header, cards, inventory = first_image_hdu_details(path)
                 statistics = self.preview_image_statistics(data)
                 histogram = self.preview_histogram(data)
                 normalized = normalize_image(data, stretch=self.stretch_var.get())
-                result = (normalized, header, statistics, histogram, path, None)
+                result = (normalized, header, statistics, histogram, cards, inventory, path, None)
             except Exception as exc:
-                result = (None, {}, {}, {}, path, exc)
+                result = (None, {}, {}, {}, [], [], path, exc)
             self.after(0, lambda: self.finish_preview(result))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -193,12 +227,15 @@ class PreviewWorkflowMixin:
     def finish_preview(self, result):
         if len(result) == 3:
             image, header, error = result
-            statistics, histogram, path = {}, {}, self.convert_path_var.get().strip()
+            statistics, histogram, cards, inventory, path = {}, {}, [], [], self.convert_path_var.get().strip()
         elif len(result) == 5:
             image, header, statistics, path, error = result
-            histogram = {}
-        else:
+            histogram, cards, inventory = {}, [], []
+        elif len(result) == 6:
             image, header, statistics, histogram, path, error = result
+            cards, inventory = [], []
+        else:
+            image, header, statistics, histogram, cards, inventory, path, error = result
         if error:
             self.convert_status.set(f"Preview failed: {error}")
             return
@@ -206,6 +243,8 @@ class PreviewWorkflowMixin:
         self.preview_header = dict(header)
         self.preview_statistics = dict(statistics)
         self.preview_histogram_data = dict(histogram)
+        self.preview_header_cards = list(cards)
+        self.preview_hdu_inventory = list(inventory)
         try:
             self.preview_wcs = _celestial_wcs(header)
         except Exception:
@@ -216,6 +255,8 @@ class PreviewWorkflowMixin:
         self.preview_summary_text.delete("1.0", "end")
         self.preview_summary_text.insert("1.0", summary)
         self.refresh_preview_header_search()
+        self.preview_hdu_text.delete("1.0", "end")
+        self.preview_hdu_text.insert("1.0", self.preview_hdu_inventory_text(inventory))
         self.convert_status.set(f"Preview loaded at {self.preview_image.width} x {self.preview_image.height}px. Display is scaled to fit the canvas.")
 
     @staticmethod
@@ -317,7 +358,11 @@ class PreviewWorkflowMixin:
         if not hasattr(self, "header_text"):
             return
         query = self.preview_header_search_var.get() if hasattr(self, "preview_header_search_var") else ""
-        text = self.preview_header_text(getattr(self, "preview_header", {}), query)
+        text = self.preview_header_text(
+            getattr(self, "preview_header", {}),
+            query,
+            cards=getattr(self, "preview_header_cards", None),
+        )
         self.header_text.delete("1.0", "end")
         self.header_text.insert("1.0", text)
 

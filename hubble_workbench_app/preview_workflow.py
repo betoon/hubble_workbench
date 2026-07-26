@@ -4,7 +4,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 
 from .fits_io import FITS, _celestial_wcs, first_image_hdu, first_image_hdu_details
 from .image_processing import downsample_array_for_preview, normalize_image
@@ -187,6 +187,15 @@ class PreviewWorkflowMixin:
         return image_x, image_y
 
     @staticmethod
+    def preview_display_to_source_point(point, image_size, flip_vertical=False):
+        if point is None:
+            return None
+        x, y = point
+        if flip_vertical:
+            y = image_size[1] - 1 - y
+        return x, y
+
+    @staticmethod
     def preview_format_sky_position(ra, dec):
         if not (np.isfinite(ra) and np.isfinite(dec)):
             return ""
@@ -285,7 +294,7 @@ class PreviewWorkflowMixin:
             self.preview_wcs = _celestial_wcs(header)
         except Exception:
             self.preview_wcs = None
-        self.show_image_on_canvas(self.preview_canvas, self.preview_image, "preview_photo")
+        self.redraw_fits_preview()
         self.draw_preview_histogram()
         summary = self.preview_metadata_summary(header, self.preview_image.size[::-1], statistics, path)
         self.preview_summary_text.delete("1.0", "end")
@@ -342,12 +351,18 @@ class PreviewWorkflowMixin:
 
     def redraw_fits_preview(self, _event=None):
         if hasattr(self, "preview_image"):
-            self.show_image_on_canvas(self.preview_canvas, self.preview_image, "preview_photo")
+            flip_vertical = bool(
+                hasattr(self, "preview_flip_vertical_var")
+                and self.preview_flip_vertical_var.get()
+            )
+            display_image = ImageOps.flip(self.preview_image) if flip_vertical else self.preview_image
+            self.show_image_on_canvas(self.preview_canvas, display_image, "preview_photo")
+            self.preview_canvas.delete("preview_cursor")
 
     def preview_canvas_motion(self, event):
         if not hasattr(self, "preview_image") or not hasattr(self, "preview_photo"):
             return None
-        point = self.preview_canvas_to_image_point(
+        display_point = self.preview_canvas_to_image_point(
             event.x,
             event.y,
             (max(1, self.preview_canvas.winfo_width()), max(1, self.preview_canvas.winfo_height())),
@@ -355,10 +370,14 @@ class PreviewWorkflowMixin:
             self.preview_image.size,
         )
         self.preview_canvas.delete("preview_cursor")
-        if point is None:
+        if display_point is None:
             self.preview_cursor_var.set("Move over the image to inspect pixel and sky coordinates.")
             return None
-        x, y = point
+        flip_vertical = bool(
+            hasattr(self, "preview_flip_vertical_var")
+            and self.preview_flip_vertical_var.get()
+        )
+        x, y = self.preview_display_to_source_point(display_point, self.preview_image.size, flip_vertical)
         display_value = self.preview_image.getpixel((x, y))
         details = f"Pixel X {x:,}, Y {y:,}  |  Stretched display value {display_value}"
         wcs = getattr(self, "preview_wcs", None)
@@ -378,8 +397,9 @@ class PreviewWorkflowMixin:
             rendered_height = self.preview_photo.height()
             left = (canvas_width - rendered_width) / 2.0
             top = (canvas_height - rendered_height) / 2.0
-            screen_x = left + (x + 0.5) * rendered_width / self.preview_image.width
-            screen_y = top + (y + 0.5) * rendered_height / self.preview_image.height
+            display_x, display_y = display_point
+            screen_x = left + (display_x + 0.5) * rendered_width / self.preview_image.width
+            screen_y = top + (display_y + 0.5) * rendered_height / self.preview_image.height
             self.preview_canvas.create_line(left, screen_y, left + rendered_width, screen_y, fill="#22c55e", tags="preview_cursor")
             self.preview_canvas.create_line(screen_x, top, screen_x, top + rendered_height, fill="#22c55e", tags="preview_cursor")
         return point

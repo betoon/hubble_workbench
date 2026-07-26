@@ -1065,6 +1065,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(top, text="Save PNG/TIFF", command=self.save_preview_outputs).pack(side="left", padx=(8, 0))
         self.preview_crosshair_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(top, text="Crosshair", variable=self.preview_crosshair_var).pack(side="left", padx=(8, 0))
+        self.preview_flip_vertical_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            top,
+            text="Flip Vertical",
+            variable=self.preview_flip_vertical_var,
+            command=self.redraw_fits_preview,
+        ).pack(side="left", padx=(8, 0))
         self.enable_responsive_toolbar(top)
         stretch_controls = ttk.Frame(convert_content)
         stretch_controls.pack(fill="x", pady=(6, 0))

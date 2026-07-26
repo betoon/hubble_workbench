@@ -74,6 +74,16 @@ class PreviewMetadataTests(unittest.TestCase):
             image_size=(4000, 2000),
         ))
 
+    def test_vertical_flip_maps_display_row_back_to_source_row(self):
+        self.assertEqual(
+            PreviewWorkflowMixin.preview_display_to_source_point((12, 3), (100, 50), False),
+            (12, 3),
+        )
+        self.assertEqual(
+            PreviewWorkflowMixin.preview_display_to_source_point((12, 3), (100, 50), True),
+            (12, 46),
+        )
+
     def test_sky_position_formats_degrees_and_sexagesimal(self):
         text = PreviewWorkflowMixin.preview_format_sky_position(83.633, -5.391)
         self.assertIn("83.633000", text)

@@ -1371,6 +1371,23 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(controls, text="Save Project", command=self.save_project_file).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Open Project", command=self.open_project_file).pack(side="left", padx=(8, 0))
 
+        missing_channel_controls = ttk.Frame(compose_content)
+        missing_channel_controls.pack(fill="x", pady=(0, 8))
+        ttk.Label(missing_channel_controls, text="If one channel is missing").pack(side="left")
+        self.missing_channel_strategy_var = tk.StringVar(value="Zero fill")
+        ttk.Combobox(
+            missing_channel_controls,
+            textvariable=self.missing_channel_strategy_var,
+            values=["Zero fill", "Average available"],
+            state="readonly",
+            width=20,
+        ).pack(side="left", padx=(8, 8))
+        ttk.Label(
+            missing_channel_controls,
+            text="Average available produces a more neutral synthetic color; Zero fill preserves strict channel mapping.",
+        ).pack(side="left")
+        self.enable_responsive_toolbar(missing_channel_controls)
+
         coverage_controls = ttk.Frame(compose_content)
         coverage_controls.pack(fill="x", pady=(0, 8))
         self.enable_responsive_toolbar(coverage_controls)

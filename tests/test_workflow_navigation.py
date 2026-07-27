@@ -1,5 +1,7 @@
 import unittest
 
+import numpy as np
+
 from hubble_workbench_app.compose_workflow import ComposeWorkflowMixin
 from hubble_workbench_app.debug_console import DEBUG_SHOW_ON_ISSUE_DEFAULT
 from hubble_workbench_app.app_utilities import (
@@ -41,6 +43,32 @@ class WorkflowNavigationTests(unittest.TestCase):
     def test_color_composer_rejects_only_one_channel(self):
         with self.assertRaisesRegex(ValueError, "at least two"):
             ComposeWorkflowMixin.compose_channel_plan(["red.fits", "", ""])
+
+    def test_color_composer_zero_fills_missing_plane(self):
+        red = np.full((2, 3), 10, dtype=np.uint8)
+        blue = np.full((2, 3), 30, dtype=np.uint8)
+        (output_red, output_green, output_blue), method = (
+            ComposeWorkflowMixin.complete_rgb_channels(
+                {"red": red, "blue": blue},
+                "Zero fill",
+            )
+        )
+        np.testing.assert_array_equal(output_red, red)
+        np.testing.assert_array_equal(output_green, np.zeros_like(red))
+        np.testing.assert_array_equal(output_blue, blue)
+        self.assertIn("zero-filled green", method)
+
+    def test_color_composer_can_average_synthesize_missing_plane(self):
+        red = np.full((2, 3), 10, dtype=np.uint8)
+        blue = np.full((2, 3), 30, dtype=np.uint8)
+        (_output_red, output_green, _output_blue), method = (
+            ComposeWorkflowMixin.complete_rgb_channels(
+                {"red": red, "blue": blue},
+                "Average available",
+            )
+        )
+        np.testing.assert_array_equal(output_green, np.full((2, 3), 20, dtype=np.uint8))
+        self.assertIn("average-synthesized green", method)
 
     def test_responsive_window_layout_fits_small_monitor(self):
         layout = responsive_window_layout(800, 600)

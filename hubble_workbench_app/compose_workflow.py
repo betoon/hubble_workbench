@@ -37,6 +37,27 @@ class ComposeWorkflowMixin:
             )
         return available, missing
 
+    @staticmethod
+    def complete_rgb_channels(resized_by_name, strategy="Zero fill"):
+        if len(resized_by_name) < 2:
+            raise ValueError("At least two processed channels are required.")
+        strategy = str(strategy or "Zero fill")
+        reference = next(iter(resized_by_name.values()))
+        missing = [name for name in ("red", "green", "blue") if name not in resized_by_name]
+        if strategy == "Average available" and missing:
+            available = np.stack(list(resized_by_name.values()), axis=0)
+            replacement = np.mean(available, axis=0).astype(reference.dtype, copy=False)
+            method = f"average-synthesized {', '.join(missing)} channel"
+        else:
+            replacement = np.zeros_like(reference)
+            method = f"zero-filled {', '.join(missing)} channel" if missing else ""
+        channels = tuple(resized_by_name.get(name, replacement) for name in ("red", "green", "blue"))
+        return channels, method
+
+    def missing_channel_strategy(self):
+        variable = getattr(self, "missing_channel_strategy_var", None)
+        return variable.get() if variable is not None else "Zero fill"
+
     def compose_async(self):
         if not self.require_astropy():
             return
@@ -133,18 +154,22 @@ class ComposeWorkflowMixin:
         if high_quality:
             resized = resize_float_to_match([processed[name] for name in available_names], resize_mode)
             resized_by_name = dict(zip(available_names, resized))
-            blank = np.zeros_like(resized[0], dtype=np.float32)
-            r, g, b = (resized_by_name.get(name, blank) for name in ("red", "green", "blue"))
+            (r, g, b), missing_method = self.complete_rgb_channels(
+                resized_by_name,
+                self.missing_channel_strategy(),
+            )
             rgb_float = np.dstack([r, g, b]).astype(np.float32)
             image = Image.fromarray(float_rgb_to_uint8(rgb_float), mode="RGB")
-            missing_note = f" + zero-filled {', '.join(missing)} channel" if missing else ""
+            missing_note = f" + {missing_method}" if missing_method else ""
             return image, headers, source_shapes, resize_mode, rgb_float, "Python engine" + alignment_note + missing_note
         resized = resize_to_match([processed[name] for name in available_names], resize_mode)
         resized_by_name = dict(zip(available_names, resized))
-        blank = np.zeros_like(resized[0], dtype=np.uint8)
-        r, g, b = (resized_by_name.get(name, blank) for name in ("red", "green", "blue"))
+        (r, g, b), missing_method = self.complete_rgb_channels(
+            resized_by_name,
+            self.missing_channel_strategy(),
+        )
         rgb = np.dstack([r, g, b]).astype(np.uint8)
-        missing_note = f" + zero-filled {', '.join(missing)} channel" if missing else ""
+        missing_note = f" + {missing_method}" if missing_method else ""
         return Image.fromarray(rgb, mode="RGB"), headers, source_shapes, resize_mode, None, "Python engine" + alignment_note + missing_note
 
     def compose_rgb_with_fits_liberator(self, paths, cli_path):
@@ -193,11 +218,13 @@ class ComposeWorkflowMixin:
         resize_mode = "largest" if self.composite_size_var.get() == "Largest channel" else "smallest"
         resized = resize_float_to_match([channels[name] for name in available_names], resize_mode)
         resized_by_name = dict(zip(available_names, resized))
-        blank = np.zeros_like(resized[0], dtype=np.float32)
-        r, g, b = (resized_by_name.get(name, blank) for name in ("red", "green", "blue"))
+        (r, g, b), missing_method = self.complete_rgb_channels(
+            resized_by_name,
+            self.missing_channel_strategy(),
+        )
         rgb_float = np.dstack([r, g, b]).astype(np.float32)
         image = Image.fromarray(float_rgb_to_uint8(rgb_float), mode="RGB")
-        missing_note = f" + zero-filled {', '.join(missing)} channel" if missing else ""
+        missing_note = f" + {missing_method}" if missing_method else ""
         return image, headers, source_shapes, resize_mode, rgb_float, f"FITS Liberator engine ({Path(cli_path).name}){missing_note}"
 
     def finish_compose(self, result):

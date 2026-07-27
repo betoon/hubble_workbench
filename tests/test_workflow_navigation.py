@@ -29,6 +29,19 @@ class _Notebook:
 
 
 class WorkflowNavigationTests(unittest.TestCase):
+    def test_color_composer_accepts_two_channels_and_reports_missing_color(self):
+        available, missing = ComposeWorkflowMixin.compose_channel_plan([
+            "red.fits",
+            "",
+            "blue.fits",
+        ])
+        self.assertEqual(available, [("red", "red.fits"), ("blue", "blue.fits")])
+        self.assertEqual(missing, ["green"])
+
+    def test_color_composer_rejects_only_one_channel(self):
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            ComposeWorkflowMixin.compose_channel_plan(["red.fits", "", ""])
+
     def test_responsive_window_layout_fits_small_monitor(self):
         layout = responsive_window_layout(800, 600)
         self.assertLessEqual(layout["width"] + layout["x"], 800)

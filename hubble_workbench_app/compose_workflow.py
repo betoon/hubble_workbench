@@ -24,14 +24,30 @@ from .paths import NOTES_DIR, RGB_PRESET_PREVIEW_MAX_PIXELS
 
 
 class ComposeWorkflowMixin:
+    @staticmethod
+    def compose_channel_plan(paths):
+        names = ("red", "green", "blue")
+        normalized = [str(path or "").strip() for path in paths]
+        available = [(name, path) for name, path in zip(names, normalized) if path]
+        missing = [name for name, path in zip(names, normalized) if not path]
+        if len(available) < 2:
+            raise ValueError(
+                "Choose at least two FITS channels for a color composite. "
+                "Use FITS Preview / Convert to view a single channel."
+            )
+        return available, missing
+
     def compose_async(self):
         if not self.require_astropy():
             return
         paths = [self.red_path_var.get().strip(), self.green_path_var.get().strip(), self.blue_path_var.get().strip()]
-        if any(not path for path in paths):
-            messagebox.showinfo("Compose RGB", "Choose red, green, and blue FITS files.")
+        try:
+            available, missing = self.compose_channel_plan(paths)
+        except ValueError as exc:
+            messagebox.showinfo("Compose Color Image", str(exc))
             return
-        self.compose_status.set("Composing RGB image in the background...")
+        channel_note = f" ({', '.join(missing)} channel omitted)" if missing else ""
+        self.compose_status.set(f"Composing color image in the background{channel_note}...")
         self.compose_progress.start(12)
         self.update_idletasks()
 
@@ -54,6 +70,9 @@ class ComposeWorkflowMixin:
         return downsample_image_for_preview(image), None
 
     def compose_rgb_from_paths(self, paths):
+        available, missing = self.compose_channel_plan(paths)
+        available_names = [name for name, _path in available]
+        available_paths = [path for _name, path in available]
         if getattr(self, "use_fits_liberator_var", None) is not None and self.use_fits_liberator_var.get():
             cli_path = find_fits_liberator_cli()
             if cli_path:
@@ -61,7 +80,6 @@ class ComposeWorkflowMixin:
                     return self.compose_rgb_with_fits_liberator(paths, cli_path)
                 except Exception as exc:
                     self.after(0, lambda e=exc: self.compose_status.set(f"FITS Liberator unavailable for this set; using Python engine. {e}"))
-        channels = []
         headers = []
         source_shapes = []
         aligned_data = None
@@ -73,7 +91,7 @@ class ComposeWorkflowMixin:
                 and self.mosaic_coverage_mode_var.get() == "Shared exposure overlap"
             )
             aligned_data, headers, alignment = wcs_align_fits_channels(
-                paths,
+                available_paths,
                 require_full_stack_coverage=shared_coverage,
             )
             source_shapes = alignment["source_shapes"]
@@ -84,8 +102,8 @@ class ComposeWorkflowMixin:
         except Exception as exc:
             self.after(0, lambda e=exc: self.compose_status.set(f"WCS alignment unavailable; using image-size alignment. {e}"))
         high_quality = bool(self.high_quality_var.get())
-        channel_names = ("red", "green", "blue")
-        for index, (channel_name, path) in enumerate(zip(channel_names, paths)):
+        processed = {}
+        for index, (channel_name, path) in enumerate(available):
             self.after(0, lambda c=channel_name, p=path: self.compose_status.set(f"Reading {c} channel: {Path(p).name}"))
             if aligned_data is not None:
                 data = aligned_data[index]
@@ -100,36 +118,45 @@ class ComposeWorkflowMixin:
                 high = float(settings["high"].get())
                 if high <= low:
                     high = low + 0.1
-                channels.append(normalize_float_channel(
+                processed[channel_name] = normalize_float_channel(
                     data,
                     low_percent=low,
                     high_percent=high,
                     stretch=self.compose_stretch_var.get(),
                     gamma=float(settings["gamma"].get()),
                     asinh_strength=float(settings["asinh"].get()),
-                ))
+                )
             else:
-                channels.append(normalize_image(data, stretch=self.compose_stretch_var.get()))
+                processed[channel_name] = normalize_image(data, stretch=self.compose_stretch_var.get())
         self.after(0, lambda: self.compose_status.set("Combining RGB channels..."))
         resize_mode = "largest" if self.composite_size_var.get() == "Largest channel" else "smallest"
         if high_quality:
-            r, g, b = resize_float_to_match(channels, resize_mode)
+            resized = resize_float_to_match([processed[name] for name in available_names], resize_mode)
+            resized_by_name = dict(zip(available_names, resized))
+            blank = np.zeros_like(resized[0], dtype=np.float32)
+            r, g, b = (resized_by_name.get(name, blank) for name in ("red", "green", "blue"))
             rgb_float = np.dstack([r, g, b]).astype(np.float32)
             image = Image.fromarray(float_rgb_to_uint8(rgb_float), mode="RGB")
-            return image, headers, source_shapes, resize_mode, rgb_float, "Python engine" + alignment_note
-        r, g, b = resize_to_match(channels, resize_mode)
+            missing_note = f" + zero-filled {', '.join(missing)} channel" if missing else ""
+            return image, headers, source_shapes, resize_mode, rgb_float, "Python engine" + alignment_note + missing_note
+        resized = resize_to_match([processed[name] for name in available_names], resize_mode)
+        resized_by_name = dict(zip(available_names, resized))
+        blank = np.zeros_like(resized[0], dtype=np.uint8)
+        r, g, b = (resized_by_name.get(name, blank) for name in ("red", "green", "blue"))
         rgb = np.dstack([r, g, b]).astype(np.uint8)
-        return Image.fromarray(rgb, mode="RGB"), headers, source_shapes, resize_mode, None, "Python engine" + alignment_note
+        missing_note = f" + zero-filled {', '.join(missing)} channel" if missing else ""
+        return Image.fromarray(rgb, mode="RGB"), headers, source_shapes, resize_mode, None, "Python engine" + alignment_note + missing_note
 
     def compose_rgb_with_fits_liberator(self, paths, cli_path):
-        channels = []
+        available, missing = self.compose_channel_plan(paths)
+        available_names = [name for name, _path in available]
+        channels = {}
         headers = []
         source_shapes = []
-        channel_names = ("red", "green", "blue")
         stretch = self.compose_stretch_var.get()
         with tempfile.TemporaryDirectory(prefix="hubble_fitslib_") as temp_dir:
             temp_dir = Path(temp_dir)
-            for channel_name, path in zip(channel_names, paths):
+            for channel_name, path in available:
                 self.after(0, lambda c=channel_name, p=path: self.compose_status.set(f"Preparing {c} channel for FITS Liberator: {Path(p).name}"))
                 data, header = first_image_hdu(path)
                 source_shapes.append(data.shape)
@@ -147,7 +174,7 @@ class ComposeWorkflowMixin:
                 if not np.isfinite(low) or not np.isfinite(high) or high <= low:
                     low, high = np.nanmin(finite), np.nanmax(finite)
                 if high <= low:
-                    channels.append(np.zeros(data.shape, dtype=np.float32))
+                    channels[channel_name] = np.zeros(data.shape, dtype=np.float32)
                     continue
                 output_path = temp_dir / f"{channel_name}.tif"
                 self.after(0, lambda c=channel_name: self.compose_status.set(f"FITS Liberator is processing {c} channel..."))
@@ -161,13 +188,17 @@ class ComposeWorkflowMixin:
                     gamma=float(settings["gamma"].get()),
                     asinh_strength=float(settings["asinh"].get()),
                 )
-                channels.append(channel)
+                channels[channel_name] = channel
         self.after(0, lambda: self.compose_status.set("Combining FITS Liberator RGB channels..."))
         resize_mode = "largest" if self.composite_size_var.get() == "Largest channel" else "smallest"
-        r, g, b = resize_float_to_match(channels, resize_mode)
+        resized = resize_float_to_match([channels[name] for name in available_names], resize_mode)
+        resized_by_name = dict(zip(available_names, resized))
+        blank = np.zeros_like(resized[0], dtype=np.float32)
+        r, g, b = (resized_by_name.get(name, blank) for name in ("red", "green", "blue"))
         rgb_float = np.dstack([r, g, b]).astype(np.float32)
         image = Image.fromarray(float_rgb_to_uint8(rgb_float), mode="RGB")
-        return image, headers, source_shapes, resize_mode, rgb_float, f"FITS Liberator engine ({Path(cli_path).name})"
+        missing_note = f" + zero-filled {', '.join(missing)} channel" if missing else ""
+        return image, headers, source_shapes, resize_mode, rgb_float, f"FITS Liberator engine ({Path(cli_path).name}){missing_note}"
 
     def finish_compose(self, result):
         self.compose_progress.stop()

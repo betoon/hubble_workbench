@@ -1,4 +1,6 @@
 import unittest
+import tempfile
+from pathlib import Path
 
 import numpy as np
 
@@ -15,11 +17,14 @@ from hubble_workbench_app.app_utilities import (
 
 
 class _Value:
-    def __init__(self):
-        self.value = ""
+    def __init__(self, value=""):
+        self.value = value
 
     def set(self, value):
         self.value = value
+
+    def get(self):
+        return self.value
 
 
 class _Notebook:
@@ -69,6 +74,45 @@ class WorkflowNavigationTests(unittest.TestCase):
         )
         np.testing.assert_array_equal(output_green, np.full((2, 3), 20, dtype=np.uint8))
         self.assertIn("average-synthesized green", method)
+
+    def test_composer_channel_preview_opens_fits_preview_tab(self):
+        class Notebook:
+            def __init__(self):
+                self.selected = None
+
+            def select(self, tab):
+                self.selected = tab
+
+        class Harness(ComposeWorkflowMixin):
+            def __init__(self):
+                self.compose_status = _Value()
+                self.convert_path_var = _Value()
+                self.convert_tab = object()
+                self.notebook = Notebook()
+                self.preview_calls = 0
+
+            def preview_fits_async(self):
+                self.preview_calls += 1
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "single_channel.fits"
+            path.touch()
+            harness = Harness()
+            result = harness.preview_compose_channel(_Value(str(path)), "red")
+
+        self.assertTrue(result)
+        self.assertEqual(harness.convert_path_var.value, str(path))
+        self.assertIs(harness.notebook.selected, harness.convert_tab)
+        self.assertEqual(harness.preview_calls, 1)
+
+    def test_clear_composer_channel_allows_intentional_omission(self):
+        class Harness(ComposeWorkflowMixin):
+            def __init__(self):
+                self.compose_status = _Value()
+
+        variable = _Value("green.fits")
+        Harness().clear_compose_channel(variable, "green")
+        self.assertEqual(variable.value, "")
 
     def test_responsive_window_layout_fits_small_monitor(self):
         layout = responsive_window_layout(800, 600)

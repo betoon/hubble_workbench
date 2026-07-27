@@ -1336,14 +1336,24 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.red_path_var = tk.StringVar()
         self.green_path_var = tk.StringVar()
         self.blue_path_var = tk.StringVar()
-        for row, (label, var) in enumerate((
-            ("Red channel", self.red_path_var),
-            ("Green channel", self.green_path_var),
-            ("Blue channel", self.blue_path_var),
+        for row, (label, channel_name, var) in enumerate((
+            ("Red channel", "red", self.red_path_var),
+            ("Green channel", "green", self.green_path_var),
+            ("Blue channel", "blue", self.blue_path_var),
         )):
             ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", pady=3)
             ttk.Entry(form, textvariable=var).grid(row=row, column=1, sticky="ew", padx=(8, 8), pady=3)
             ttk.Button(form, text="Choose", command=lambda v=var: self.choose_channel(v)).grid(row=row, column=2, pady=3)
+            ttk.Button(
+                form,
+                text="Preview",
+                command=lambda v=var, name=channel_name: self.preview_compose_channel(v, name),
+            ).grid(row=row, column=3, padx=(6, 0), pady=3)
+            ttk.Button(
+                form,
+                text="Clear",
+                command=lambda v=var, name=channel_name: self.clear_compose_channel(v, name),
+            ).grid(row=row, column=4, padx=(6, 0), pady=3)
         form.columnconfigure(1, weight=1)
 
         controls = ttk.Frame(compose_content)

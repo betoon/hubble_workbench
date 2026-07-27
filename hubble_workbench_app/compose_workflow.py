@@ -58,6 +58,36 @@ class ComposeWorkflowMixin:
         variable = getattr(self, "missing_channel_strategy_var", None)
         return variable.get() if variable is not None else "Zero fill"
 
+    def preview_compose_channel(self, variable, channel_name="channel"):
+        value = variable.get().strip()
+        if not value:
+            self.compose_status.set(
+                f"Choose a {channel_name} FITS file before previewing it."
+            )
+            return False
+        path = Path(value)
+        if not path.is_file():
+            self.compose_status.set(
+                f"The {channel_name} channel file was not found: {path}"
+            )
+            return False
+        self.convert_path_var.set(str(path))
+        try:
+            self.notebook.select(self.convert_tab)
+        except Exception:
+            pass
+        self.preview_fits_async()
+        self.compose_status.set(
+            f"Opened the {channel_name} channel in FITS Preview / Convert."
+        )
+        return True
+
+    def clear_compose_channel(self, variable, channel_name="channel"):
+        variable.set("")
+        self.compose_status.set(
+            f"Cleared the {channel_name} channel. Two remaining channels can still be composed."
+        )
+
     def compose_async(self):
         if not self.require_astropy():
             return

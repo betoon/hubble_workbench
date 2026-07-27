@@ -1,4 +1,5 @@
 import unittest
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
@@ -173,6 +174,18 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["facility"], "JWST")
         self.assertEqual(metadata["instrument"], "NIRCAM")
         self.assertEqual(metadata["spectral_band"], "F200W")
+
+    def test_avm_xmp_packet_is_valid_xml_and_escapes_metadata(self):
+        packet = PreviewWorkflowMixin.avm_xmp_packet({
+            "title": "M42 & Friends",
+            "creator": 'A "Researcher"',
+            "facility": "JWST",
+        })
+        xml_text = packet[packet.index("<x:xmpmeta"):packet.index("<?xpacket end")]
+        root = ET.fromstring(xml_text)
+        self.assertTrue(root.tag.endswith("xmpmeta"))
+        self.assertIn("M42 &amp; Friends", packet)
+        self.assertIn("JWST", packet)
 
 
 if __name__ == "__main__":

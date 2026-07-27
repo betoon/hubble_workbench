@@ -1,5 +1,6 @@
 import threading
 import json
+from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -592,15 +593,33 @@ class PreviewWorkflowMixin:
         if redraw:
             self.redraw_fits_preview()
 
-    def preview_zoom(self, factor, _event=None):
+    def preview_zoom(self, factor, event=None):
         old = float(getattr(self, "preview_view_zoom", 1.0))
-        self.preview_view_zoom = min(20.0, max(0.1, old * float(factor)))
+        new = min(20.0, max(0.1, old * float(factor)))
+        actual_factor = new / old
+        if event is not None and hasattr(self, "preview_photo"):
+            left, top = getattr(self, "preview_render_origin", (0.0, 0.0))
+            old_width, old_height = self.preview_photo.width(), self.preview_photo.height()
+            if old_width > 0 and old_height > 0:
+                image_fraction_x = (event.x - left) / old_width
+                image_fraction_y = (event.y - top) / old_height
+                new_width = old_width * actual_factor
+                new_height = old_height * actual_factor
+                desired_left = event.x - image_fraction_x * new_width
+                desired_top = event.y - image_fraction_y * new_height
+                canvas_width = max(1, self.preview_canvas.winfo_width())
+                canvas_height = max(1, self.preview_canvas.winfo_height())
+                self.preview_view_pan = (
+                    desired_left + new_width / 2 - canvas_width / 2,
+                    desired_top + new_height / 2 - canvas_height / 2,
+                )
+        self.preview_view_zoom = new
         if hasattr(self, "preview_zoom_label_var"):
             self.preview_zoom_label_var.set(f"{self.preview_view_zoom * 100:.0f}% of fit")
         self.redraw_fits_preview()
 
     def preview_mousewheel_zoom(self, event):
-        self.preview_zoom(1.2 if event.delta > 0 else 1 / 1.2)
+        self.preview_zoom(1.2 if event.delta > 0 else 1 / 1.2, event)
         return "break"
 
     def preview_pan_start(self, event):
@@ -711,12 +730,28 @@ class PreviewWorkflowMixin:
         return x, y
 
     def draw_preview_clipping_overlay(self, display_image, size, origin):
-        if not hasattr(self, "preview_clipping_var") or not self.preview_clipping_var.get():
-            return
         arr = np.asarray(display_image.resize(size, Image.Resampling.NEAREST))
         rgba = np.zeros((size[1], size[0], 4), dtype=np.uint8)
-        rgba[arr <= 0] = (37, 99, 235, 105)
-        rgba[arr >= 255] = (34, 197, 94, 105)
+        shadow_mask = arr <= 0
+        highlight_mask = arr >= 255
+        show_shadows = (
+            not hasattr(self, "preview_shadow_clipping_var")
+            or self.preview_shadow_clipping_var.get()
+        )
+        show_highlights = (
+            not hasattr(self, "preview_highlight_clipping_var")
+            or self.preview_highlight_clipping_var.get()
+        )
+        if show_shadows:
+            rgba[shadow_mask] = (37, 99, 235, 105)
+        if show_highlights:
+            rgba[highlight_mask] = (34, 197, 94, 105)
+        if hasattr(self, "preview_clipping_summary_var"):
+            total = max(1, arr.size)
+            self.preview_clipping_summary_var.set(
+                f"Blue shadows {np.count_nonzero(shadow_mask) / total:.2%}  |  "
+                f"Green highlights {np.count_nonzero(highlight_mask) / total:.2%}"
+            )
         if not np.any(rgba[..., 3]):
             return
         from PIL import ImageTk
@@ -811,6 +846,30 @@ class PreviewWorkflowMixin:
             "spectral_band": str(header.get("FILTER") or header.get("FILTER1") or ""),
         }
 
+    @staticmethod
+    def avm_xmp_packet(metadata):
+        value = lambda key: escape(str(metadata.get(key, "") or ""), {'"': "&quot;"})
+        return f"""<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+      xmlns:dc="http://purl.org/dc/elements/1.1/"
+      xmlns:avm="http://www.communicatingastronomy.org/avm/1.0/">
+      <dc:title><rdf:Alt><rdf:li xml:lang="x-default">{value("title")}</rdf:li></rdf:Alt></dc:title>
+      <dc:description><rdf:Alt><rdf:li xml:lang="x-default">{value("description")}</rdf:li></rdf:Alt></dc:description>
+      <dc:creator><rdf:Seq><rdf:li>{value("creator")}</rdf:li></rdf:Seq></dc:creator>
+      <dc:rights><rdf:Alt><rdf:li xml:lang="x-default">{value("rights")}</rdf:li></rdf:Alt></dc:rights>
+      <dc:subject><rdf:Bag><rdf:li>{value("subject")}</rdf:li></rdf:Bag></dc:subject>
+      <avm:MetadataVersion>1.2</avm:MetadataVersion>
+      <avm:Credit>{value("credit")}</avm:Credit>
+      <avm:Facility>{value("facility")}</avm:Facility>
+      <avm:Instrument>{value("instrument")}</avm:Instrument>
+      <avm:SpectralBand>{value("spectral_band")}</avm:SpectralBand>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"""
+
     def load_avm_from_fits(self):
         values = self.avm_metadata_from_header(getattr(self, "preview_header", {}))
         for key, var in getattr(self, "preview_avm_vars", {}).items():
@@ -827,12 +886,16 @@ class PreviewWorkflowMixin:
             **{key: var.get().strip() for key, var in self.preview_avm_vars.items()},
         }
         output = Path(path).with_suffix(".avm.json")
+        xmp_output = Path(path).with_suffix(".xmp")
         try:
             output.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            xmp_output.write_text(self.avm_xmp_packet(payload), encoding="utf-8")
         except Exception as exc:
             self.convert_status.set(f"AVM metadata save failed: {exc}")
             return
-        self.convert_status.set(f"Saved publication metadata sidecar: {output.name}")
+        self.convert_status.set(
+            f"Saved publication sidecars: {xmp_output.name} and {output.name}"
+        )
 
     def save_preview_outputs(self):
         if not hasattr(self, "preview_image"):

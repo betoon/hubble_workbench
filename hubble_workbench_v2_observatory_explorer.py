@@ -1139,13 +1139,22 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Label(view_controls, textvariable=self.preview_zoom_label_var).pack(side="left", padx=(8, 12))
         ttk.Button(view_controls, text="Pick Background", command=lambda: self.set_preview_sample_mode("background")).pack(side="left")
         ttk.Button(view_controls, text="Pick Peak", command=lambda: self.set_preview_sample_mode("peak")).pack(side="left", padx=(6, 0))
-        self.preview_clipping_var = tk.BooleanVar(value=True)
+        self.preview_shadow_clipping_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             view_controls,
-            text="Clipping Overlay",
-            variable=self.preview_clipping_var,
+            text="Blue Shadows",
+            variable=self.preview_shadow_clipping_var,
             command=self.redraw_fits_preview,
         ).pack(side="left", padx=(10, 0))
+        self.preview_highlight_clipping_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            view_controls,
+            text="Green Highlights",
+            variable=self.preview_highlight_clipping_var,
+            command=self.redraw_fits_preview,
+        ).pack(side="left", padx=(6, 0))
+        self.preview_clipping_summary_var = tk.StringVar(value="Clipping appears after preview.")
+        ttk.Label(view_controls, textvariable=self.preview_clipping_summary_var).pack(side="left", padx=(10, 0))
         self.enable_responsive_toolbar(view_controls)
 
         body = tk.PanedWindow(convert_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
@@ -1171,6 +1180,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_canvas.bind("<ButtonPress-3>", self.preview_pan_start)
         self.preview_canvas.bind("<B3-Motion>", self.preview_pan_motion)
         self.preview_canvas.bind("<ButtonRelease-3>", self.preview_pan_end)
+        self.preview_canvas.bind("<ButtonPress-2>", self.preview_pan_start)
+        self.preview_canvas.bind("<B2-Motion>", self.preview_pan_motion)
+        self.preview_canvas.bind("<ButtonRelease-2>", self.preview_pan_end)
         self.preview_canvas.bind("<MouseWheel>", self.preview_mousewheel_zoom)
         self.preview_canvas.bind("<Leave>", self.preview_canvas_leave)
         self.preview_canvas.bind("<Configure>", self.redraw_fits_preview)
@@ -1241,7 +1253,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         avm_tools = ttk.Frame(avm_panel)
         avm_tools.pack(fill="x", pady=(0, 8))
         ttk.Button(avm_tools, text="Load from FITS", command=self.load_avm_from_fits).pack(side="left")
-        ttk.Button(avm_tools, text="Save Sidecar", command=self.save_avm_metadata, style="Accent.TButton").pack(side="left", padx=(6, 0))
+        ttk.Button(avm_tools, text="Save XMP + JSON", command=self.save_avm_metadata, style="Accent.TButton").pack(side="left", padx=(6, 0))
         avm_form = ttk.Frame(avm_panel)
         avm_form.pack(fill="both", expand=True)
         self.preview_avm_vars = {}

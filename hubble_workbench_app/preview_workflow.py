@@ -1,4 +1,5 @@
 import threading
+import json
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -303,11 +304,14 @@ class PreviewWorkflowMixin:
             self.convert_status.set(f"Preview settings need attention: {exc}")
             return
         stretch = self.stretch_var.get()
+        same_file = path == getattr(self, "preview_loaded_path", None)
+        hdu_index = getattr(self, "preview_selected_hdu_index", None) if same_file else None
+        plane_index = int(self.preview_plane_var.get()) if same_file and hasattr(self, "preview_plane_var") else 0
         self.convert_status.set("Reading FITS image...")
 
         def worker():
             try:
-                data, header, cards, inventory = first_image_hdu_details(path)
+                data, header, cards, inventory = first_image_hdu_details(path, hdu_index, plane_index)
                 statistics = self.preview_image_statistics(data)
                 histogram = self.preview_histogram(
                     data,
@@ -320,9 +324,9 @@ class PreviewWorkflowMixin:
                     high_percent=white_percent,
                     stretch=stretch,
                 )
-                result = (normalized, header, statistics, histogram, cards, inventory, path, None)
+                result = (normalized, header, statistics, histogram, cards, inventory, path, data, None)
             except Exception as exc:
-                result = (None, {}, {}, {}, [], [], path, exc)
+                result = (None, {}, {}, {}, [], [], path, None, exc)
             self.after(0, lambda: self.finish_preview(result))
 
         threading.Thread(target=worker, daemon=True).start()
@@ -383,17 +387,26 @@ class PreviewWorkflowMixin:
         elif len(result) == 6:
             image, header, statistics, histogram, path, error = result
             cards, inventory = [], []
-        else:
+        elif len(result) == 8:
             image, header, statistics, histogram, cards, inventory, path, error = result
+            source_data = None
+        else:
+            image, header, statistics, histogram, cards, inventory, path, source_data, error = result
         if error:
             self.convert_status.set(f"Preview failed: {error}")
             return
         self.preview_image = Image.fromarray(image, mode="L")
+        self.preview_source_data = source_data
         self.preview_header = dict(header)
         self.preview_statistics = dict(statistics)
         self.preview_histogram_data = dict(histogram)
         self.preview_header_cards = list(cards)
         self.preview_hdu_inventory = list(inventory)
+        self.preview_loaded_path = path
+        selected = next((item for item in inventory if item.get("selected")), None)
+        self.preview_selected_hdu_index = selected.get("index") if selected else None
+        self.refresh_preview_hdu_controls()
+        self.reset_preview_view(redraw=False)
         try:
             self.preview_wcs = _celestial_wcs(header)
         except Exception:
@@ -408,6 +421,55 @@ class PreviewWorkflowMixin:
         self.preview_hdu_text.insert("1.0", self.preview_hdu_inventory_text(inventory))
         self.clear_preview_probe(update_status=False)
         self.convert_status.set(f"Preview loaded at {self.preview_image.width} x {self.preview_image.height}px. Display is scaled to fit the canvas.")
+
+    @staticmethod
+    def preview_image_hdu_choices(inventory):
+        choices = []
+        for item in inventory or ():
+            shape = tuple(item.get("shape", ()) or ())
+            if len(shape) < 2:
+                continue
+            dimensions = " x ".join(map(str, reversed(shape)))
+            label = f"{item.get('index', 0)}: {item.get('name', 'PRIMARY')}  ({dimensions})"
+            choices.append((label, int(item.get("index", 0)), max(1, int(np.prod(shape[:-2])))))
+        return choices
+
+    def refresh_preview_hdu_controls(self):
+        if not hasattr(self, "preview_hdu_combo"):
+            return
+        choices = self.preview_image_hdu_choices(getattr(self, "preview_hdu_inventory", []))
+        self.preview_hdu_choice_map = {label: (index, planes) for label, index, planes in choices}
+        self.preview_hdu_combo.configure(values=list(self.preview_hdu_choice_map))
+        selected_index = getattr(self, "preview_selected_hdu_index", None)
+        selected_label = next(
+            (label for label, (index, _planes) in self.preview_hdu_choice_map.items() if index == selected_index),
+            "",
+        )
+        if not selected_label:
+            return
+        self.preview_hdu_var.set(selected_label)
+        planes = self.preview_hdu_choice_map[selected_label][1]
+        self.preview_plane_spin.configure(
+            to=max(0, planes - 1),
+            state="normal" if planes > 1 else "disabled",
+        )
+        if int(self.preview_plane_var.get()) >= planes:
+            self.preview_plane_var.set(0)
+
+    def select_preview_hdu(self, _event=None):
+        selection = getattr(self, "preview_hdu_choice_map", {}).get(self.preview_hdu_var.get())
+        if not selection:
+            return
+        self.preview_selected_hdu_index, planes = selection
+        self.preview_plane_var.set(0)
+        self.preview_plane_spin.configure(
+            to=max(0, planes - 1),
+            state="normal" if planes > 1 else "disabled",
+        )
+        self.preview_fits_async()
+
+    def select_preview_plane(self):
+        self.preview_fits_async()
 
     @staticmethod
     def preview_histogram_x(value, lower, upper, left, right):
@@ -442,17 +504,59 @@ class PreviewWorkflowMixin:
             polygon = [left, bottom, *points, right, bottom]
             canvas.create_polygon(polygon, fill="#cbd5e1", outline="#64748b")
         lower, upper = float(edges[0]), float(edges[-1])
+        self.preview_histogram_plot = (left, right, lower, upper)
         for value, color, label in (
             (histogram.get("black", lower), "#2563eb", "Black"),
             (histogram.get("white", upper), "#16a34a", "White"),
         ):
             x = self.preview_histogram_x(value, lower, upper, left, right)
-            canvas.create_line(x, top, x, bottom, fill=color, width=2)
+            canvas.create_line(x, top, x, bottom, fill=color, width=3, tags=(f"hist_{label.lower()}", "hist_marker"))
             anchor = "nw" if x < (left + right) / 2 else "ne"
             canvas.create_text(x + (4 if anchor == "nw" else -4), top + 2, text=f"{label}\n{value:.4g}", anchor=anchor, fill=color)
         canvas.create_text(left, bottom + 6, text=f"{lower:.4g}", anchor="nw", fill="#374151")
         canvas.create_text(right, bottom + 6, text=f"{upper:.4g}", anchor="ne", fill="#374151")
         canvas.create_text((left + right) / 2, bottom + 6, text=f"Input intensity • log count • {histogram.get('sampled', 0):,} sampled pixels", anchor="n", fill="#374151")
+
+    def preview_histogram_press(self, event):
+        plot = getattr(self, "preview_histogram_plot", None)
+        histogram = getattr(self, "preview_histogram_data", {}) or {}
+        if not plot or not histogram:
+            return
+        left, right, lower, upper = plot
+        black_x = self.preview_histogram_x(histogram.get("black", lower), lower, upper, left, right)
+        white_x = self.preview_histogram_x(histogram.get("white", upper), lower, upper, left, right)
+        self.preview_histogram_drag = "black" if abs(event.x - black_x) <= abs(event.x - white_x) else "white"
+        self.preview_histogram_drag_motion(event)
+
+    def preview_histogram_drag_motion(self, event):
+        marker = getattr(self, "preview_histogram_drag", None)
+        plot = getattr(self, "preview_histogram_plot", None)
+        histogram = getattr(self, "preview_histogram_data", {}) or {}
+        counts = np.asarray(histogram.get("counts", []), dtype=float)
+        edges = np.asarray(histogram.get("edges", []), dtype=float)
+        if not marker or not plot or not counts.size or edges.size != counts.size + 1:
+            return
+        left, right, lower, upper = plot
+        fraction = min(1.0, max(0.0, (event.x - left) / max(1, right - left)))
+        value = lower + fraction * (upper - lower)
+        bin_index = min(counts.size - 1, max(0, int(np.searchsorted(edges, value, side="right") - 1)))
+        before = float(np.sum(counts[:bin_index]))
+        bin_width = max(np.finfo(float).eps, edges[bin_index + 1] - edges[bin_index])
+        within = min(1.0, max(0.0, (value - edges[bin_index]) / bin_width))
+        percentile = 100.0 * (before + counts[bin_index] * within) / max(1.0, float(np.sum(counts)))
+        if marker == "black":
+            percentile = min(percentile, float(self.preview_white_percent_var.get()) - 0.01)
+            self.preview_black_percent_var.set(f"{max(0, percentile):.3f}")
+        else:
+            percentile = max(percentile, float(self.preview_black_percent_var.get()) + 0.01)
+            self.preview_white_percent_var.set(f"{min(100, percentile):.3f}")
+        self.preview_histogram_data[marker] = value
+        self.draw_preview_histogram()
+
+    def preview_histogram_release(self, _event=None):
+        if getattr(self, "preview_histogram_drag", None):
+            self.preview_histogram_drag = None
+            self.preview_fits_async()
 
     def redraw_fits_preview(self, _event=None):
         if hasattr(self, "preview_image"):
@@ -461,19 +565,76 @@ class PreviewWorkflowMixin:
                 and self.preview_flip_vertical_var.get()
             )
             display_image = ImageOps.flip(self.preview_image) if flip_vertical else self.preview_image
-            self.show_image_on_canvas(self.preview_canvas, display_image, "preview_photo")
+            canvas = self.preview_canvas
+            width, height = max(1, canvas.winfo_width()), max(1, canvas.winfo_height())
+            fit = min(width / display_image.width, height / display_image.height)
+            zoom = max(0.05, float(getattr(self, "preview_view_zoom", 1.0)))
+            size = (
+                max(1, int(display_image.width * fit * zoom)),
+                max(1, int(display_image.height * fit * zoom)),
+            )
+            rendered = display_image.resize(size, Image.Resampling.LANCZOS)
+            from PIL import ImageTk
+            self.preview_photo = ImageTk.PhotoImage(rendered)
+            canvas.delete("all")
+            pan_x, pan_y = getattr(self, "preview_view_pan", (0.0, 0.0))
+            center_x, center_y = width / 2 + pan_x, height / 2 + pan_y
+            canvas.create_image(center_x, center_y, image=self.preview_photo, anchor="center", tags="preview_image")
+            self.preview_render_origin = (center_x - size[0] / 2, center_y - size[1] / 2)
+            self.draw_preview_clipping_overlay(display_image, size, self.preview_render_origin)
             self.preview_canvas.delete("preview_cursor")
+
+    def reset_preview_view(self, redraw=True):
+        self.preview_view_zoom = 1.0
+        self.preview_view_pan = (0.0, 0.0)
+        if hasattr(self, "preview_zoom_label_var"):
+            self.preview_zoom_label_var.set("Fit")
+        if redraw:
+            self.redraw_fits_preview()
+
+    def preview_zoom(self, factor, _event=None):
+        old = float(getattr(self, "preview_view_zoom", 1.0))
+        self.preview_view_zoom = min(20.0, max(0.1, old * float(factor)))
+        if hasattr(self, "preview_zoom_label_var"):
+            self.preview_zoom_label_var.set(f"{self.preview_view_zoom * 100:.0f}% of fit")
+        self.redraw_fits_preview()
+
+    def preview_mousewheel_zoom(self, event):
+        self.preview_zoom(1.2 if event.delta > 0 else 1 / 1.2)
+        return "break"
+
+    def preview_pan_start(self, event):
+        self.preview_pan_anchor = (event.x, event.y, *getattr(self, "preview_view_pan", (0.0, 0.0)))
+
+    def preview_pan_motion(self, event):
+        anchor = getattr(self, "preview_pan_anchor", None)
+        if not anchor:
+            return
+        self.preview_view_pan = (anchor[2] + event.x - anchor[0], anchor[3] + event.y - anchor[1])
+        self.redraw_fits_preview()
+
+    def preview_pan_end(self, _event=None):
+        self.preview_pan_anchor = None
+
+    def preview_canvas_display_point(self, canvas_x, canvas_y):
+        if not hasattr(self, "preview_photo"):
+            return None
+        left, top = getattr(self, "preview_render_origin", (0, 0))
+        rendered_width, rendered_height = self.preview_photo.width(), self.preview_photo.height()
+        if not (
+            left <= canvas_x < left + rendered_width
+            and top <= canvas_y < top + rendered_height
+        ):
+            return None
+        return (
+            min(self.preview_image.width - 1, max(0, int((canvas_x - left) * self.preview_image.width / rendered_width))),
+            min(self.preview_image.height - 1, max(0, int((canvas_y - top) * self.preview_image.height / rendered_height))),
+        )
 
     def preview_canvas_motion(self, event):
         if not hasattr(self, "preview_image") or not hasattr(self, "preview_photo"):
             return None
-        display_point = self.preview_canvas_to_image_point(
-            event.x,
-            event.y,
-            (max(1, self.preview_canvas.winfo_width()), max(1, self.preview_canvas.winfo_height())),
-            (self.preview_photo.width(), self.preview_photo.height()),
-            self.preview_image.size,
-        )
+        display_point = self.preview_canvas_display_point(event.x, event.y)
         self.preview_canvas.delete("preview_cursor")
         if display_point is None:
             self.preview_cursor_var.set("Move over the image to inspect pixel and sky coordinates.")
@@ -501,14 +662,72 @@ class PreviewWorkflowMixin:
             canvas_height = self.preview_canvas.winfo_height()
             rendered_width = self.preview_photo.width()
             rendered_height = self.preview_photo.height()
-            left = (canvas_width - rendered_width) / 2.0
-            top = (canvas_height - rendered_height) / 2.0
+            left, top = getattr(
+                self,
+                "preview_render_origin",
+                ((canvas_width - rendered_width) / 2.0, (canvas_height - rendered_height) / 2.0),
+            )
             display_x, display_y = display_point
             screen_x = left + (display_x + 0.5) * rendered_width / self.preview_image.width
             screen_y = top + (display_y + 0.5) * rendered_height / self.preview_image.height
             self.preview_canvas.create_line(left, screen_y, left + rendered_width, screen_y, fill="#22c55e", tags="preview_cursor")
             self.preview_canvas.create_line(screen_x, top, screen_x, top + rendered_height, fill="#22c55e", tags="preview_cursor")
         return x, y
+
+    def set_preview_sample_mode(self, mode):
+        self.preview_sample_mode = mode
+        self.convert_status.set(f"Click the image to sample the {mode} level.")
+
+    def preview_primary_click(self, event):
+        if getattr(self, "preview_sample_mode", None):
+            return self.sample_preview_level(event)
+        return self.freeze_preview_probe(event)
+
+    def sample_preview_level(self, event):
+        point = self.preview_canvas_display_point(event.x, event.y)
+        data = getattr(self, "preview_source_data", None)
+        if point is None or data is None:
+            return None
+        flip = bool(self.preview_flip_vertical_var.get())
+        x, y = self.preview_display_to_source_point(point, self.preview_image.size, flip)
+        y0, y1 = max(0, y - 2), min(data.shape[0], y + 3)
+        x0, x1 = max(0, x - 2), min(data.shape[1], x + 3)
+        value = float(np.nanmedian(data[y0:y1, x0:x1]))
+        values = np.asarray(data).reshape(-1)
+        if values.size > 1_000_000:
+            values = values[::max(1, values.size // 1_000_000)]
+        finite = values[np.isfinite(values)]
+        percentile = float(np.mean(finite <= value) * 100.0)
+        mode = self.preview_sample_mode
+        if mode == "background":
+            self.preview_black_percent_var.set(f"{min(99.98, percentile):.3f}")
+        else:
+            self.preview_white_percent_var.set(f"{max(0.01, percentile):.3f}")
+        self.preview_sample_mode = None
+        self.convert_status.set(
+            f"Sampled {mode} at X {x}, Y {y}: {value:.7g} ({percentile:.3f} percentile)."
+        )
+        self.preview_fits_async()
+        return x, y
+
+    def draw_preview_clipping_overlay(self, display_image, size, origin):
+        if not hasattr(self, "preview_clipping_var") or not self.preview_clipping_var.get():
+            return
+        arr = np.asarray(display_image.resize(size, Image.Resampling.NEAREST))
+        rgba = np.zeros((size[1], size[0], 4), dtype=np.uint8)
+        rgba[arr <= 0] = (37, 99, 235, 105)
+        rgba[arr >= 255] = (34, 197, 94, 105)
+        if not np.any(rgba[..., 3]):
+            return
+        from PIL import ImageTk
+        self.preview_clipping_photo = ImageTk.PhotoImage(Image.fromarray(rgba, "RGBA"))
+        self.preview_canvas.create_image(
+            origin[0],
+            origin[1],
+            image=self.preview_clipping_photo,
+            anchor="nw",
+            tags="preview_clipping",
+        )
 
     @staticmethod
     def preview_frozen_probe_text(details, captured_at=""):
@@ -578,6 +797,43 @@ class PreviewWorkflowMixin:
         self.clipboard_append(text)
         self.convert_status.set("Copied FITS header." if full_header else "Copied FITS science summary.")
 
+    @staticmethod
+    def avm_metadata_from_header(header):
+        return {
+            "title": str(header.get("OBJECT") or header.get("TARGNAME") or ""),
+            "description": "",
+            "creator": str(header.get("ORIGIN") or ""),
+            "credit": str(header.get("PI_NAME") or header.get("PR_INV_L") or ""),
+            "rights": "",
+            "subject": str(header.get("OBJECT") or header.get("TARGNAME") or ""),
+            "facility": str(header.get("TELESCOP") or ""),
+            "instrument": str(header.get("INSTRUME") or ""),
+            "spectral_band": str(header.get("FILTER") or header.get("FILTER1") or ""),
+        }
+
+    def load_avm_from_fits(self):
+        values = self.avm_metadata_from_header(getattr(self, "preview_header", {}))
+        for key, var in getattr(self, "preview_avm_vars", {}).items():
+            var.set(values.get(key, ""))
+        self.convert_status.set("Loaded available publication metadata from the current FITS header.")
+
+    def save_avm_metadata(self):
+        path = self.convert_path_var.get().strip()
+        if not path:
+            messagebox.showinfo("AVM Metadata", "Choose and preview a FITS file first.")
+            return
+        payload = {
+            "avm_version": "1.2",
+            **{key: var.get().strip() for key, var in self.preview_avm_vars.items()},
+        }
+        output = Path(path).with_suffix(".avm.json")
+        try:
+            output.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception as exc:
+            self.convert_status.set(f"AVM metadata save failed: {exc}")
+            return
+        self.convert_status.set(f"Saved publication metadata sidecar: {output.name}")
+
     def save_preview_outputs(self):
         if not hasattr(self, "preview_image"):
             messagebox.showinfo("Save", "Preview a FITS file first.")
@@ -614,7 +870,13 @@ class PreviewWorkflowMixin:
 
         def worker():
             try:
-                data, _header = first_image_hdu(path)
+                hdu_index = getattr(self, "preview_selected_hdu_index", None)
+                plane_index = int(self.preview_plane_var.get()) if hasattr(self, "preview_plane_var") else 0
+                data, _header, _cards, _inventory = first_image_hdu_details(
+                    path,
+                    hdu_index,
+                    plane_index,
+                )
                 normalized = normalize_image_uint16(
                     data,
                     low_percent=black_percent,

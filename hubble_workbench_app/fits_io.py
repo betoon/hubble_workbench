@@ -73,7 +73,7 @@ def first_image_hdu(path):
     raise RuntimeError(f"No 2D image data found in {path}")
 
 
-def first_image_hdu_details(path):
+def first_image_hdu_details(path, hdu_index=None, plane_index=0):
     """Return preview data plus header cards and an inventory of every HDU."""
     if FITS is None:
         raise RuntimeError("astropy is not installed.")
@@ -97,12 +97,16 @@ def first_image_hdu_details(path):
             })
             if selected_data is not None:
                 continue
+            if hdu_index is not None and index != int(hdu_index):
+                continue
             data = getattr(hdu, "data", None)
             if data is None:
                 continue
             arr = np.asarray(data)
-            while arr.ndim > 2:
-                arr = arr[0]
+            if arr.ndim > 2:
+                planes = arr.reshape((-1, arr.shape[-2], arr.shape[-1]))
+                requested_plane = min(max(0, int(plane_index)), planes.shape[0] - 1)
+                arr = planes[requested_plane]
             if arr.ndim != 2 or not arr.size:
                 continue
             merged_header = primary_header.copy()
@@ -111,7 +115,8 @@ def first_image_hdu_details(path):
             selected_data = arr.astype(np.float64)
             selected_header = merged_header
         if selected_data is None:
-            raise RuntimeError(f"No 2D image data found in {path}")
+            requested = f" in HDU {hdu_index}" if hdu_index is not None else ""
+            raise RuntimeError(f"No 2D image data found{requested} in {path}")
         inventory[selected]["selected"] = True
         cards = [
             {

@@ -1130,6 +1130,23 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(stretch_controls, text="Restore Saved", command=self.apply_saved_preview_stretch_settings).pack(side="left", padx=(8, 0))
         ttk.Label(stretch_controls, text="Lower white percentiles reveal faint detail but clip bright cores sooner.").pack(side="left", padx=(12, 0))
         self.enable_responsive_toolbar(stretch_controls)
+        view_controls = ttk.Frame(convert_content)
+        view_controls.pack(fill="x", pady=(6, 0))
+        ttk.Button(view_controls, text="Fit", command=self.reset_preview_view).pack(side="left")
+        ttk.Button(view_controls, text="Zoom -", command=lambda: self.preview_zoom(1 / 1.25)).pack(side="left", padx=(6, 0))
+        ttk.Button(view_controls, text="Zoom +", command=lambda: self.preview_zoom(1.25)).pack(side="left", padx=(6, 0))
+        self.preview_zoom_label_var = tk.StringVar(value="Fit")
+        ttk.Label(view_controls, textvariable=self.preview_zoom_label_var).pack(side="left", padx=(8, 12))
+        ttk.Button(view_controls, text="Pick Background", command=lambda: self.set_preview_sample_mode("background")).pack(side="left")
+        ttk.Button(view_controls, text="Pick Peak", command=lambda: self.set_preview_sample_mode("peak")).pack(side="left", padx=(6, 0))
+        self.preview_clipping_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            view_controls,
+            text="Clipping Overlay",
+            variable=self.preview_clipping_var,
+            command=self.redraw_fits_preview,
+        ).pack(side="left", padx=(10, 0))
+        self.enable_responsive_toolbar(view_controls)
 
         body = tk.PanedWindow(convert_content, orient="horizontal", bd=0, relief="flat", sashwidth=6, bg="#d1d5db")
         body.pack(fill="both", expand=True, pady=(8, 0))
@@ -1146,8 +1163,15 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_histogram_canvas = tk.Canvas(image_panel, height=130, bg="#f8fafc", highlightthickness=0)
         self.preview_histogram_canvas.pack(fill="x", pady=(5, 0))
         self.preview_histogram_canvas.bind("<Configure>", self.draw_preview_histogram)
+        self.preview_histogram_canvas.bind("<Button-1>", self.preview_histogram_press)
+        self.preview_histogram_canvas.bind("<B1-Motion>", self.preview_histogram_drag_motion)
+        self.preview_histogram_canvas.bind("<ButtonRelease-1>", self.preview_histogram_release)
         self.preview_canvas.bind("<Motion>", self.preview_canvas_motion)
-        self.preview_canvas.bind("<Button-1>", self.freeze_preview_probe)
+        self.preview_canvas.bind("<Button-1>", self.preview_primary_click)
+        self.preview_canvas.bind("<ButtonPress-3>", self.preview_pan_start)
+        self.preview_canvas.bind("<B3-Motion>", self.preview_pan_motion)
+        self.preview_canvas.bind("<ButtonRelease-3>", self.preview_pan_end)
+        self.preview_canvas.bind("<MouseWheel>", self.preview_mousewheel_zoom)
         self.preview_canvas.bind("<Leave>", self.preview_canvas_leave)
         self.preview_canvas.bind("<Configure>", self.redraw_fits_preview)
         metadata_tabs = ttk.Notebook(info_panel)
@@ -1157,11 +1181,13 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         header_panel = ttk.Frame(metadata_tabs)
         hdu_panel = ttk.Frame(metadata_tabs)
         probe_panel = ttk.Frame(metadata_tabs)
+        avm_panel = ttk.Frame(metadata_tabs)
         self.preview_probe_panel = probe_panel
         metadata_tabs.add(summary_panel, text="Science Summary")
         metadata_tabs.add(header_panel, text="Full Header")
         metadata_tabs.add(hdu_panel, text="HDU List")
         metadata_tabs.add(probe_panel, text="Pixel Probe")
+        metadata_tabs.add(avm_panel, text="Publication")
         summary_tools = ttk.Frame(summary_panel)
         summary_tools.pack(fill="x", pady=(0, 4))
         ttk.Button(summary_tools, text="Copy Summary", command=self.copy_preview_metadata).pack(side="right")
@@ -1177,6 +1203,31 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(header_tools, text="Copy", command=lambda: self.copy_preview_metadata(full_header=True)).pack(side="left", padx=(6, 0))
         self.header_text = tk.Text(header_panel, wrap="none", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.header_text.pack(fill="both", expand=True)
+        hdu_tools = ttk.Frame(hdu_panel)
+        hdu_tools.pack(fill="x", pady=(0, 4))
+        ttk.Label(hdu_tools, text="Image extension").pack(side="left")
+        self.preview_hdu_var = tk.StringVar(value="")
+        self.preview_hdu_combo = ttk.Combobox(
+            hdu_tools,
+            textvariable=self.preview_hdu_var,
+            state="readonly",
+            width=38,
+        )
+        self.preview_hdu_combo.pack(side="left", fill="x", expand=True, padx=(6, 8))
+        self.preview_hdu_combo.bind("<<ComboboxSelected>>", self.select_preview_hdu)
+        ttk.Label(hdu_tools, text="Cube plane").pack(side="left")
+        self.preview_plane_var = tk.IntVar(value=0)
+        self.preview_plane_spin = ttk.Spinbox(
+            hdu_tools,
+            from_=0,
+            to=0,
+            textvariable=self.preview_plane_var,
+            width=6,
+            state="disabled",
+            command=self.select_preview_plane,
+        )
+        self.preview_plane_spin.pack(side="left", padx=(6, 0))
+        self.preview_plane_spin.bind("<Return>", lambda _event: self.select_preview_plane())
         self.preview_hdu_text = tk.Text(hdu_panel, wrap="none", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.preview_hdu_text.pack(fill="both", expand=True)
         self.preview_hdu_text.insert("1.0", "HDU information appears after a FITS preview is loaded.")
@@ -1187,6 +1238,29 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_probe_text = tk.Text(probe_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.preview_probe_text.pack(fill="both", expand=True)
         self.preview_probe_text.insert("1.0", "Click a point in the FITS preview to freeze its pixel and sky-coordinate data.")
+        avm_tools = ttk.Frame(avm_panel)
+        avm_tools.pack(fill="x", pady=(0, 8))
+        ttk.Button(avm_tools, text="Load from FITS", command=self.load_avm_from_fits).pack(side="left")
+        ttk.Button(avm_tools, text="Save Sidecar", command=self.save_avm_metadata, style="Accent.TButton").pack(side="left", padx=(6, 0))
+        avm_form = ttk.Frame(avm_panel)
+        avm_form.pack(fill="both", expand=True)
+        self.preview_avm_vars = {}
+        for row, (key, label) in enumerate((
+            ("title", "Title"),
+            ("description", "Description"),
+            ("creator", "Creator"),
+            ("credit", "Credit"),
+            ("rights", "Rights"),
+            ("subject", "Subject"),
+            ("facility", "Facility"),
+            ("instrument", "Instrument"),
+            ("spectral_band", "Spectral band"),
+        )):
+            ttk.Label(avm_form, text=label).grid(row=row, column=0, sticky="w", padx=(4, 8), pady=4)
+            var = tk.StringVar(value="")
+            self.preview_avm_vars[key] = var
+            ttk.Entry(avm_form, textvariable=var).grid(row=row, column=1, sticky="ew", padx=(0, 4), pady=4)
+        avm_form.columnconfigure(1, weight=1)
         self.preview_header_search_var.trace_add("write", self.refresh_preview_header_search)
         self.convert_status = tk.StringVar(value="")
         ttk.Label(convert_content, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
@@ -1200,6 +1274,15 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def redraw_fits_preview(self, event=None):
         return super().redraw_fits_preview(event)
+
+    def reset_preview_view(self):
+        return super().reset_preview_view()
+
+    def load_avm_from_fits(self):
+        return super().load_avm_from_fits()
+
+    def save_avm_metadata(self):
+        return super().save_avm_metadata()
 
     def preview_canvas_motion(self, event):
         return super().preview_canvas_motion(event)

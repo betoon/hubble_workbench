@@ -49,6 +49,30 @@ class WcsAlignmentTests(unittest.TestCase):
             telescope = next(card for card in cards if card["keyword"] == "TELESCOP")
             self.assertEqual(telescope["comment"], "Observatory name")
 
+    def test_first_image_hdu_details_selects_extension_and_flattened_cube_plane(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "science_products.fits"
+            science = fits.ImageHDU(np.ones((4, 6), dtype=np.float32), name="SCI")
+            error = fits.ImageHDU(np.full((4, 6), 2.0, dtype=np.float32), name="ERR")
+            quality = fits.ImageHDU(
+                np.arange(6 * 4 * 6, dtype=np.int16).reshape((2, 3, 4, 6)),
+                name="DQ",
+            )
+            fits.HDUList([fits.PrimaryHDU(), science, error, quality]).writeto(path)
+
+            error_data, _header, _cards, error_inventory = first_image_hdu_details(path, hdu_index=2)
+            plane_data, _header, _cards, plane_inventory = first_image_hdu_details(
+                path,
+                hdu_index=3,
+                plane_index=4,
+            )
+
+            self.assertTrue(np.all(error_data == 2.0))
+            self.assertTrue(error_inventory[2]["selected"])
+            self.assertTrue(plane_inventory[3]["selected"])
+            self.assertEqual(plane_data.shape, (4, 6))
+            np.testing.assert_array_equal(plane_data, quality.data.reshape((-1, 4, 6))[4])
+
     def test_neutral_balance_ignores_black_border_and_reduces_color_cast(self):
         image = np.zeros((20, 20, 3), dtype=np.float32)
         image[3:17, 3:17] = (0.20, 0.10, 0.05)

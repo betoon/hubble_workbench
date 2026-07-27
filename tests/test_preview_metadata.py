@@ -151,6 +151,29 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(PreviewWorkflowMixin.preview_histogram_x(-5, 0, 10, 40, 240), 40)
         self.assertEqual(PreviewWorkflowMixin.preview_histogram_x(15, 0, 10, 40, 240), 240)
 
+    def test_hdu_choices_include_images_and_count_cube_planes(self):
+        choices = PreviewWorkflowMixin.preview_image_hdu_choices([
+            {"index": 0, "name": "PRIMARY", "shape": ()},
+            {"index": 1, "name": "SCI", "shape": (20, 30)},
+            {"index": 2, "name": "ERR", "shape": (4, 20, 30)},
+            {"index": 3, "name": "DQ", "shape": (2, 3, 20, 30)},
+        ])
+        self.assertEqual([item[1] for item in choices], [1, 2, 3])
+        self.assertEqual([item[2] for item in choices], [1, 4, 6])
+
+    def test_avm_metadata_prefills_from_fits_header(self):
+        metadata = PreviewWorkflowMixin.avm_metadata_from_header({
+            "OBJECT": "M42",
+            "TELESCOP": "JWST",
+            "INSTRUME": "NIRCAM",
+            "FILTER": "F200W",
+            "ORIGIN": "STScI",
+        })
+        self.assertEqual(metadata["title"], "M42")
+        self.assertEqual(metadata["facility"], "JWST")
+        self.assertEqual(metadata["instrument"], "NIRCAM")
+        self.assertEqual(metadata["spectral_band"], "F200W")
+
 
 if __name__ == "__main__":
     unittest.main()

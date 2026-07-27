@@ -1,5 +1,6 @@
 import html
 import threading
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,8 @@ class DownloadWorkflowMixin:
         self.download_product_rows_async(rows)
 
     def download_product_rows_async(self, rows, folder_label=None, rgb_set=None, stack_rows=None):
-        if not (rows and rows[0].get("_source") == "HLA") and not self.require_astroquery():
+        needs_mast = any(self.download_row_source(row)[0] == "mast" for row in rows)
+        if needs_mast and not self.require_astroquery():
             return
         target = self.target_var.get().strip().replace(" ", "_") or "target"
         if folder_label:
@@ -30,6 +32,7 @@ class DownloadWorkflowMixin:
         operation_id = self.start_browser_activity(f"Downloading {len(rows)} product(s)...")
         self.reset_download_progress()
         heartbeat_active = {"running": True}
+        self.last_download_warnings = []
 
         def download_heartbeat(started):
             if operation_id != self.browser_operation_id or not heartbeat_active["running"]:
@@ -47,8 +50,8 @@ class DownloadWorkflowMixin:
 
         def worker():
             try:
-                if rows and rows[0].get("_source") == "HLA":
-                    manifest = self.download_hla_products(rows, download_path, operation_id)
+                if any(row.get("_source") == "HLA" for row in rows):
+                    manifest = self.download_mixed_archive_products(rows, download_path, operation_id)
                 else:
                     self.after(
                         0,
@@ -123,6 +126,72 @@ class DownloadWorkflowMixin:
         cleaned = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in str(name))
         return cleaned.strip("._") or "hla_product.fits"
 
+    @staticmethod
+    def download_row_source(row):
+        url = html.unescape(str(row.get("URL", "") or "")).strip()
+        if urllib.parse.urlsplit(url).scheme.lower() in ("http", "https"):
+            return "url", url
+        data_uri = str(row.get("dataURI", "") or row.get("dataURL", "") or "").strip()
+        if data_uri:
+            return "mast", data_uri
+        return "missing", ""
+
+    def download_mixed_archive_products(self, rows, download_path, operation_id):
+        downloaded = []
+        skipped = []
+        total_files = max(1, len(rows))
+        for index, row in enumerate(rows, start=1):
+            source_kind, source = self.download_row_source(row)
+            filename = self.safe_filename(row.get("productFilename", f"archive_product_{index}.fits"))
+            output_path = download_path / filename
+            self.after(
+                0,
+                lambda i=index, total=total_files, name=filename: self.set_download_progress(
+                    operation_id,
+                    ((i - 1) / total) * 100,
+                    f"Downloading file {i} of {total}: {name}",
+                ),
+            )
+            try:
+                if source_kind == "url":
+                    def reporthook(block_count, block_size, total_size, i=index, total=total_files, name=filename):
+                        if total_size and total_size > 0:
+                            file_fraction = min(1.0, (block_count * block_size) / total_size)
+                            percent = (((i - 1) + file_fraction) / total) * 100
+                            detail = f"Downloading file {i} of {total}: {name} ({int(file_fraction * 100)}%)"
+                            self.after(0, lambda p=percent, d=detail: self.set_download_progress(operation_id, p, d))
+
+                    urllib.request.urlretrieve(source, output_path, reporthook=reporthook)
+                elif source_kind == "mast":
+                    OBSERVATIONS.download_file(source, local_path=str(output_path), cache=True)
+                else:
+                    raise RuntimeError("no HLA URL or MAST data URI")
+            except Exception as exc:
+                skipped.append(f"{filename}: {self.format_error_message(exc)}")
+                self.after(
+                    0,
+                    lambda i=index, total=total_files, name=filename: self.set_download_progress(
+                        operation_id,
+                        (i / total) * 100,
+                        f"Skipped file {i} of {total}: {name}",
+                    ),
+                )
+                continue
+            downloaded.append(str(output_path))
+            self.after(
+                0,
+                lambda i=index, total=total_files, name=filename: self.set_download_progress(
+                    operation_id,
+                    (i / total) * 100,
+                    f"Finished file {i} of {total}: {name}",
+                ),
+            )
+        self.last_download_warnings = skipped
+        if not downloaded:
+            detail = "; ".join(skipped[:3]) or "no downloadable product locations were provided"
+            raise RuntimeError(f"None of the selected products could be downloaded: {detail}")
+        return downloaded
+
     def download_hla_products(self, rows, download_path, operation_id):
         downloaded = []
         total_files = max(1, len(rows))
@@ -184,6 +253,7 @@ class DownloadWorkflowMixin:
                 "rgb_set": rgb_set,
                 "stacked_paths": {channel: str(path) for channel, path in stacked_paths.items()},
                 "stack_metadata": stack_metadata,
+                "warnings": list(getattr(self, "last_download_warnings", [])),
             })
         if rgb_set:
             self.load_downloaded_rgb_set(manifest, download_path, rgb_set, stacked_paths=stacked_paths, stack_metadata=stack_metadata)
@@ -192,7 +262,13 @@ class DownloadWorkflowMixin:
             if self.observatory_continue_marker_preview_after_download(manifest, download_path):
                 self.stop_browser_activity(f"Downloaded marker preview to {download_path}")
                 return
-        self.stop_browser_activity(f"Downloaded products to {download_path}")
+        warnings = list(getattr(self, "last_download_warnings", []))
+        if warnings:
+            self.stop_browser_activity(
+                f"Downloaded products to {download_path}. Skipped {len(warnings)} file(s): {'; '.join(warnings[:2])}"
+            )
+        else:
+            self.stop_browser_activity(f"Downloaded products to {download_path}")
 
     def load_downloaded_rgb_set(self, manifest, download_path, rgb_set, stacked_paths=None, stack_metadata=None):
         downloaded = self.extract_downloaded_paths(manifest, download_path)

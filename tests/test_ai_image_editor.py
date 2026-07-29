@@ -43,7 +43,7 @@ class AIImageEditorTests(unittest.TestCase):
             b"\x89PNG\r\n",
         )
         self.assertIn("multipart/form-data; boundary=", content_type)
-        self.assertIn(b"gpt-image-2", body)
+        self.assertIn(b"gpt-image-1", body)
         self.assertIn(b'name="image[]"', body)
         self.assertIn(b"\x89PNG\r\n", body)
 

@@ -11,6 +11,7 @@ from tkinter import messagebox, ttk
 from .ai_image_editor import (
     AI_EDIT_PRESETS,
     AI_EDIT_WARNING,
+    AI_IMAGE_MODEL,
     ai_edit_output_paths,
     ai_edit_provenance,
     build_ai_edit_prompt,
@@ -420,6 +421,11 @@ class GalleryWorkflowMixin:
         body = ttk.Frame(dialog, padding=14)
         body.pack(fill="both", expand=True)
         ttk.Label(body, text="AI Creative Edit", font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        ttk.Label(
+            body,
+            text=f"Editing model: {AI_IMAGE_MODEL}",
+            foreground="#4b5563",
+        ).pack(anchor="w", pady=(1, 0))
         ttk.Label(body, text=source_path.name, wraplength=610).pack(anchor="w", pady=(2, 10))
         ttk.Label(
             body,

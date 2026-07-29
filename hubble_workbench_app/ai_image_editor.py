@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 from PIL import Image, ImageOps
 
 
-AI_IMAGE_MODEL = "gpt-image-2"
+AI_IMAGE_MODEL = "gpt-image-1"
 AI_IMAGE_EDIT_URL = "https://api.openai.com/v1/images/edits"
 AI_EDIT_WARNING = (
     "AI output is a creative interpretation. It may alter, remove, or invent astronomical "

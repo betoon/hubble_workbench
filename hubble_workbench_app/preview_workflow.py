@@ -597,7 +597,7 @@ class PreviewWorkflowMixin:
         old = float(getattr(self, "preview_view_zoom", 1.0))
         new = min(20.0, max(0.1, old * float(factor)))
         actual_factor = new / old
-        if event is not None and hasattr(self, "preview_photo"):
+        if event is not None and getattr(self, "preview_photo", None) is not None:
             left, top = getattr(self, "preview_render_origin", (0.0, 0.0))
             old_width, old_height = self.preview_photo.width(), self.preview_photo.height()
             if old_width > 0 and old_height > 0:
@@ -636,7 +636,10 @@ class PreviewWorkflowMixin:
         self.preview_pan_anchor = None
 
     def preview_canvas_display_point(self, canvas_x, canvas_y):
-        if not hasattr(self, "preview_photo"):
+        if (
+            getattr(self, "preview_photo", None) is None
+            or getattr(self, "preview_image", None) is None
+        ):
             return None
         left, top = getattr(self, "preview_render_origin", (0, 0))
         rendered_width, rendered_height = self.preview_photo.width(), self.preview_photo.height()
@@ -651,7 +654,10 @@ class PreviewWorkflowMixin:
         )
 
     def preview_canvas_motion(self, event):
-        if not hasattr(self, "preview_image") or not hasattr(self, "preview_photo"):
+        if (
+            getattr(self, "preview_image", None) is None
+            or getattr(self, "preview_photo", None) is None
+        ):
             return None
         display_point = self.preview_canvas_display_point(event.x, event.y)
         self.preview_canvas.delete("preview_cursor")

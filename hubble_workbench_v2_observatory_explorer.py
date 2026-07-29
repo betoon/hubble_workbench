@@ -1295,8 +1295,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
     def redraw_fits_preview(self, event=None):
         return super().redraw_fits_preview(event)
 
-    def reset_preview_view(self):
-        return super().reset_preview_view()
+    def reset_preview_view(self, redraw=True):
+        return super().reset_preview_view(redraw=redraw)
 
     def load_avm_from_fits(self):
         return super().load_avm_from_fits()

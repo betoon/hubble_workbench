@@ -1,5 +1,6 @@
 import unittest
 import xml.etree.ElementTree as ET
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -8,6 +9,17 @@ from hubble_workbench_app.image_processing import normalize_image, normalize_ima
 
 
 class PreviewMetadataTests(unittest.TestCase):
+    def test_preview_canvas_ignores_photo_placeholder_before_render(self):
+        workflow = SimpleNamespace(preview_photo=None, preview_image=None)
+        self.assertIsNone(
+            PreviewWorkflowMixin.preview_canvas_display_point(workflow, 10, 10)
+        )
+        self.assertIsNone(
+            PreviewWorkflowMixin.preview_canvas_motion(
+                workflow, SimpleNamespace(x=10, y=10)
+            )
+        )
+
     def test_linear_preview_stretch_does_not_apply_asinh(self):
         data = np.array([[0.0, 0.5, 1.0]])
         linear = normalize_image(data, low_percent=0, high_percent=100, stretch="linear")

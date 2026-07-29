@@ -525,6 +525,19 @@ class GalleryWorkflowMixin:
         )
         ttk.Label(body, textvariable=status_var, wraplength=610).pack(fill="x", pady=(0, 8))
 
+        google_row = ttk.Frame(body)
+        google_row.pack(fill="x", pady=(0, 8))
+        ttk.Button(
+            google_row,
+            text="Open in Google AI Studio",
+            command=lambda: self.open_file("https://aistudio.google.com/"),
+        ).pack(side="left")
+        ttk.Label(
+            google_row,
+            text="Opens Google separately; upload the image there yourself.",
+            foreground="#4b5563",
+        ).pack(side="left", padx=(8, 0))
+
         buttons = ttk.Frame(body)
         buttons.pack(fill="x")
         ttk.Button(

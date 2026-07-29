@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from PIL import Image, ImageTk
 
 from .paths import PLANETARY_DIR
@@ -109,6 +109,64 @@ class PlanetaryWorkflowMixin:
         with urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8", "replace"))
         return cls.parse_mars_ode_response(payload), url
+
+    @classmethod
+    def build_mars_files_url(cls, product):
+        product_id = cls.planetary_archive_product_id(product, "")
+        if not product_id:
+            raise ValueError("The selected product does not provide an archive product identifier.")
+        return "https://oderest.rsl.wustl.edu/live2?" + urlencode({
+            "target": "mars",
+            "query": "product",
+            "results": "mf",
+            "output": "json",
+            "pdsid": product_id,
+        })
+
+    @staticmethod
+    def parse_planetary_product_files(payload):
+        products = PlanetaryWorkflowMixin.parse_mars_ode_response(payload)
+        if not products:
+            return []
+        files = products[0].get("Product_files", {}).get("Product_file", [])
+        if isinstance(files, dict):
+            files = [files]
+        return [
+            dict(item)
+            for item in files or []
+            if str(item.get("URL") or "").startswith(("https://", "http://"))
+        ]
+
+    @classmethod
+    def query_planetary_product_files(cls, product, timeout=35):
+        url = cls.build_mars_files_url(product)
+        request = Request(url, headers={"User-Agent": "Hubble-Workbench/2.0 Planetary-Observatory"})
+        with urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8", "replace"))
+        return cls.parse_planetary_product_files(payload), url
+
+    @staticmethod
+    def planetary_file_size_text(kbytes):
+        try:
+            size = max(0.0, float(kbytes))
+        except (TypeError, ValueError):
+            return "Unknown"
+        if size >= 1024 * 1024:
+            return f"{size / (1024 * 1024):.2f} GB"
+        if size >= 1024:
+            return f"{size / 1024:.1f} MB"
+        return f"{size:.0f} KB"
+
+    @staticmethod
+    def unique_planetary_destination(folder, filename):
+        folder = Path(folder)
+        safe_name = Path(str(filename or "planetary_product.dat")).name
+        destination = folder / safe_name
+        counter = 2
+        while destination.exists():
+            destination = folder / f"{Path(safe_name).stem}_{counter}{Path(safe_name).suffix}"
+            counter += 1
+        return destination
 
     @staticmethod
     def planetary_map_point(latitude, longitude, width, height, padding=28):
@@ -292,6 +350,7 @@ class PlanetaryWorkflowMixin:
         product_tools.pack(fill="x", pady=6)
         ttk.Button(product_tools, text="Open Product Page", command=lambda: self.open_selected_planetary_url("ProductURL")).pack(side="left")
         ttk.Button(product_tools, text="Open Files", command=lambda: self.open_selected_planetary_url("FilesURL")).pack(side="left", padx=(6, 0))
+        ttk.Button(product_tools, text="Browse / Download Files", command=self.load_planetary_file_list_async).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Open Mission Preview", command=lambda: self.open_selected_planetary_url("External_url")).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Load Preview", command=lambda: self.load_planetary_preview("browse")).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Save Browse Image", command=self.save_planetary_browse_async).pack(side="left", padx=(6, 0))
@@ -571,3 +630,281 @@ class PlanetaryWorkflowMixin:
             return False
         self.open_file(url)
         return True
+
+    def load_planetary_file_list_async(self):
+        product = self.planetary_selected_product
+        if not product:
+            self.planetary_status_var.set("Select a PDS product first.")
+            return False
+        product_id = self.planetary_product_id(product)
+        self.planetary_status_var.set(f"Loading the official file list for {product_id}...")
+
+        def worker():
+            try:
+                files, query_url = self.query_planetary_product_files(product)
+                error = None
+            except Exception as exc:
+                files, query_url, error = [], "", exc
+            self.after(
+                0,
+                lambda: self.finish_planetary_file_list(product, files, query_url, error),
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_planetary_file_list(self, product, files, query_url, error=None):
+        product_id = self.planetary_product_id(product)
+        if error:
+            self.planetary_status_var.set(f"Could not load the PDS file list: {error}")
+            return
+        self.planetary_status_var.set(f"Found {len(files)} downloadable file(s) for {product_id}.")
+        self.show_planetary_file_dialog(product, files, query_url)
+
+    def show_planetary_file_dialog(self, product, files, query_url=""):
+        dialog = tk.Toplevel(self)
+        dialog.title(f"PDS Product Files — {self.planetary_product_id(product)}")
+        dialog.geometry("900x570")
+        dialog.minsize(650, 420)
+        dialog.transient(self)
+
+        body = ttk.Frame(dialog, padding=12)
+        body.pack(fill="both", expand=True)
+        ttk.Label(
+            body,
+            text="Select one official archive file. Large science products can require several gigabytes.",
+            wraplength=850,
+        ).pack(anchor="w", pady=(0, 8))
+
+        tree_frame = ttk.Frame(body)
+        tree_frame.pack(fill="both", expand=True)
+        columns = ("type", "name", "size", "description")
+        tree = ttk.Treeview(tree_frame, columns=columns, show="headings", selectmode="browse")
+        for column, heading, width in (
+            ("type", "Type", 90),
+            ("name", "File", 280),
+            ("size", "Size", 90),
+            ("description", "Description", 350),
+        ):
+            tree.heading(column, text=heading)
+            tree.column(column, width=width, anchor="w")
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
+        tree.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        for index, item in enumerate(files):
+            tree.insert(
+                "",
+                "end",
+                iid=str(index),
+                values=(
+                    item.get("Type", ""),
+                    item.get("FileName", ""),
+                    self.planetary_file_size_text(item.get("KBytes")),
+                    re.sub(r"<[^>]+>", "", str(item.get("Description") or "")),
+                ),
+            )
+
+        status_var = tk.StringVar(value=f"{len(files)} file(s) supplied by NASA PDS ODE.")
+        ttk.Label(body, textvariable=status_var, wraplength=850).pack(fill="x", pady=(8, 4))
+        progress_var = tk.DoubleVar(value=0)
+        ttk.Progressbar(body, variable=progress_var, maximum=100).pack(fill="x", pady=(0, 8))
+
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x")
+        cancel_event = threading.Event()
+
+        def selected_file():
+            selection = tree.selection()
+            if not selection:
+                status_var.set("Select a file first.")
+                return None
+            index = int(selection[0])
+            return files[index] if 0 <= index < len(files) else None
+
+        def open_selected_url():
+            item = selected_file()
+            if not item:
+                return
+            self.open_file(str(item.get("URL")))
+
+        ttk.Button(
+            buttons,
+            text="Open File URL",
+            command=open_selected_url,
+        ).pack(side="left")
+        if query_url:
+            ttk.Button(
+                buttons,
+                text="Open File List Source",
+                command=lambda: self.open_file(query_url),
+            ).pack(side="left", padx=(6, 0))
+        download_button = ttk.Button(buttons, text="Download Selected")
+        download_button.pack(side="right")
+        cancel_button = ttk.Button(
+            buttons,
+            text="Cancel Download",
+            state="disabled",
+            command=cancel_event.set,
+        )
+        cancel_button.pack(side="right", padx=(0, 6))
+
+        def close_dialog():
+            if str(cancel_button.cget("state")) != "disabled":
+                cancel_event.set()
+                status_var.set("Cancelling the download before closing...")
+                return
+            dialog.destroy()
+
+        ttk.Button(buttons, text="Close", command=close_dialog).pack(side="right", padx=(0, 6))
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+
+        download_button.configure(
+            command=lambda: self.download_planetary_file_async(
+                product,
+                selected_file(),
+                dialog,
+                status_var,
+                progress_var,
+                download_button,
+                cancel_button,
+                cancel_event,
+            )
+        )
+        if files:
+            tree.selection_set("0")
+        dialog.grab_set()
+
+    def download_planetary_file_async(
+        self,
+        product,
+        file_record,
+        dialog,
+        status_var,
+        progress_var,
+        download_button,
+        cancel_button,
+        cancel_event,
+    ):
+        if not file_record:
+            status_var.set("Select a file first.")
+            return False
+        try:
+            kbytes = float(file_record.get("KBytes") or 0)
+        except (TypeError, ValueError):
+            kbytes = 0
+        if kbytes >= 100 * 1024:
+            size_text = self.planetary_file_size_text(kbytes)
+            if not messagebox.askyesno(
+                "Large Planetary Download",
+                f"{file_record.get('FileName', 'This file')} is approximately {size_text}.\n\n"
+                "Download it now?",
+                parent=dialog,
+            ):
+                return False
+
+        product_folder = PLANETARY_DIR / re.sub(
+            r"[^A-Za-z0-9_.-]+",
+            "_",
+            self.planetary_archive_product_id(product, "mars_product"),
+        )
+        product_folder.mkdir(parents=True, exist_ok=True)
+        destination = self.unique_planetary_destination(
+            product_folder,
+            file_record.get("FileName"),
+        )
+        part_path = destination.with_name(destination.name + ".part")
+        cancel_event.clear()
+        download_button.configure(state="disabled")
+        cancel_button.configure(state="normal")
+        progress_var.set(0)
+        status_var.set(f"Downloading {destination.name}...")
+
+        def report(completed, total):
+            percent = completed / total * 100 if total else 0
+            self.after(
+                0,
+                lambda: (
+                    progress_var.set(percent),
+                    status_var.set(
+                        f"Downloading {destination.name}: "
+                        f"{completed / (1024 * 1024):.1f} MB"
+                        + (f" of {total / (1024 * 1024):.1f} MB" if total else "")
+                    ),
+                ),
+            )
+
+        def worker():
+            error = None
+            cancelled = False
+            try:
+                request = Request(
+                    str(file_record.get("URL")),
+                    headers={"User-Agent": "Hubble-Workbench/2.0 Planetary-Observatory"},
+                )
+                with urlopen(request, timeout=60) as response, part_path.open("wb") as output:
+                    total = int(response.headers.get("Content-Length") or 0)
+                    completed = 0
+                    while True:
+                        if cancel_event.is_set():
+                            cancelled = True
+                            break
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        output.write(chunk)
+                        completed += len(chunk)
+                        report(completed, total)
+                if cancelled:
+                    if part_path.exists():
+                        part_path.unlink()
+                else:
+                    part_path.replace(destination)
+            except Exception as exc:
+                error = exc
+                if part_path.exists():
+                    try:
+                        part_path.unlink()
+                    except OSError:
+                        pass
+            self.after(
+                0,
+                lambda: self.finish_planetary_file_download(
+                    destination,
+                    cancelled,
+                    error,
+                    status_var,
+                    progress_var,
+                    download_button,
+                    cancel_button,
+                ),
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_planetary_file_download(
+        self,
+        destination,
+        cancelled,
+        error,
+        status_var,
+        progress_var,
+        download_button,
+        cancel_button,
+    ):
+        download_button.configure(state="normal")
+        cancel_button.configure(state="disabled")
+        if cancelled:
+            progress_var.set(0)
+            status_var.set("Download cancelled. The incomplete temporary file was removed.")
+            self.planetary_status_var.set("Planetary file download cancelled.")
+            return
+        if error:
+            progress_var.set(0)
+            status_var.set(f"Download failed: {error}")
+            self.planetary_status_var.set(f"Planetary file download failed: {error}")
+            return
+        progress_var.set(100)
+        status_var.set(f"Saved {destination.name}")
+        self.planetary_status_var.set(f"Saved planetary file: {destination}")

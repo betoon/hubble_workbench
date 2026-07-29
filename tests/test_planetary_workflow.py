@@ -1,4 +1,6 @@
+import tempfile
 import unittest
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
@@ -103,6 +105,50 @@ class PlanetaryWorkflowTests(unittest.TestCase):
             ),
             [],
         )
+
+    def test_files_url_uses_specific_archive_product_id(self):
+        url = PlanetaryWorkflowMixin.build_mars_files_url({
+            "Observation_id": "ESP_TEST",
+            "ProductURL": "https://ode.example/product?product_id=ESP_TEST_COLOR",
+        })
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["query"], ["product"])
+        self.assertEqual(query["results"], ["mf"])
+        self.assertEqual(query["pdsid"], ["ESP_TEST_COLOR"])
+
+    def test_parse_product_files_accepts_single_or_list_and_filters_bad_urls(self):
+        payload = {
+            "ODEResults": {
+                "Status": "Success",
+                "Products": {
+                    "Product": {
+                        "Product_files": {
+                            "Product_file": [
+                                {"FileName": "image.jp2", "URL": "https://example.invalid/image.jp2"},
+                                {"FileName": "missing.jp2", "URL": ""},
+                            ]
+                        }
+                    }
+                },
+            }
+        }
+        files = PlanetaryWorkflowMixin.parse_planetary_product_files(payload)
+        self.assertEqual([item["FileName"] for item in files], ["image.jp2"])
+
+    def test_planetary_file_size_text(self):
+        self.assertEqual(PlanetaryWorkflowMixin.planetary_file_size_text(512), "512 KB")
+        self.assertEqual(PlanetaryWorkflowMixin.planetary_file_size_text(2048), "2.0 MB")
+        self.assertEqual(
+            PlanetaryWorkflowMixin.planetary_file_size_text(2 * 1024 * 1024),
+            "2.00 GB",
+        )
+
+    def test_unique_destination_never_overwrites_existing_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            first = Path(folder) / "mars.jp2"
+            first.write_bytes(b"existing")
+            destination = PlanetaryWorkflowMixin.unique_planetary_destination(folder, "mars.jp2")
+            self.assertEqual(destination.name, "mars_2.jp2")
 
 
 if __name__ == "__main__":

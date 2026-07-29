@@ -8,10 +8,12 @@ from PIL import Image
 from hubble_workbench_app.ai_image_editor import (
     AI_EDIT_WARNING,
     AI_IMAGE_MODEL,
+    AI_IMAGE_MODELS,
     ai_edit_output_paths,
     ai_edit_provenance,
     build_ai_edit_prompt,
     encode_multipart,
+    image_edit_cost_notice,
     prepare_ai_image,
 )
 
@@ -47,6 +49,15 @@ class AIImageEditorTests(unittest.TestCase):
         self.assertIn(b'name="image[]"', body)
         self.assertIn(b"\x89PNG\r\n", body)
 
+    def test_model_picker_supports_both_requested_models(self):
+        self.assertEqual(AI_IMAGE_MODELS, ("gpt-image-1", "gpt-image-2"))
+
+    def test_cost_notice_uses_published_gpt_image_1_output_estimate(self):
+        notice = image_edit_cost_notice("gpt-image-1", "low", "1024x1024")
+        self.assertIn("$0.011", notice)
+        self.assertIn("additional", notice)
+        self.assertIn("Paid API request", image_edit_cost_notice("gpt-image-2", "low", "auto"))
+
     def test_output_is_separate_and_clearly_named(self):
         output, notes = ai_edit_output_paths(
             "M42.png",
@@ -59,10 +70,18 @@ class AIImageEditorTests(unittest.TestCase):
         self.assertEqual(notes.name, "M42_ai_creative_20260728_123456_notes.txt")
 
     def test_provenance_marks_output_non_scientific(self):
-        text = ai_edit_provenance("source.png", "edited.png", "Polish it.", "medium")
+        text = ai_edit_provenance(
+            "source.png",
+            "edited.png",
+            "Polish it.",
+            "medium",
+            model="gpt-image-2",
+            size="1024x1536",
+        )
         self.assertIn("NOT SCIENTIFIC DATA", text)
         self.assertIn(AI_EDIT_WARNING, text)
-        self.assertIn(AI_IMAGE_MODEL, text)
+        self.assertIn("gpt-image-2", text)
+        self.assertIn("1024x1536", text)
         self.assertIn("source.png", text)
 
 

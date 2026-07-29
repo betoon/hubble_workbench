@@ -12,9 +12,13 @@ from .ai_image_editor import (
     AI_EDIT_PRESETS,
     AI_EDIT_WARNING,
     AI_IMAGE_MODEL,
+    AI_IMAGE_MODELS,
+    AI_IMAGE_SIZES,
     ai_edit_output_paths,
     ai_edit_provenance,
     build_ai_edit_prompt,
+    image_edit_cost_notice,
+    prepare_ai_image,
     request_ai_image_edit,
 )
 from .paths import NOTES_DIR, OUTPUT_DIR
@@ -414,18 +418,13 @@ class GalleryWorkflowMixin:
 
         dialog = tk.Toplevel(self)
         dialog.title("AI Creative Edit — Account Required")
-        dialog.geometry("660x600")
-        dialog.minsize(520, 480)
+        dialog.geometry("680x690")
+        dialog.minsize(540, 560)
         dialog.transient(self)
 
         body = ttk.Frame(dialog, padding=14)
         body.pack(fill="both", expand=True)
         ttk.Label(body, text="AI Creative Edit", font=("Segoe UI", 13, "bold")).pack(anchor="w")
-        ttk.Label(
-            body,
-            text=f"Editing model: {AI_IMAGE_MODEL}",
-            foreground="#4b5563",
-        ).pack(anchor="w", pady=(1, 0))
         ttk.Label(body, text=source_path.name, wraplength=610).pack(anchor="w", pady=(2, 10))
         ttk.Label(
             body,
@@ -452,9 +451,18 @@ class GalleryWorkflowMixin:
             "Improve this image while keeping the astronomical subject recognizable.",
         )
 
-        options = ttk.Frame(body)
+        options = ttk.LabelFrame(body, text="Paid API request settings", padding=8)
         options.pack(fill="x")
-        ttk.Label(options, text="Quality").pack(side="left")
+        ttk.Label(options, text="Model").grid(row=0, column=0, sticky="w")
+        model_var = tk.StringVar(value=AI_IMAGE_MODEL)
+        ttk.Combobox(
+            options,
+            textvariable=model_var,
+            values=AI_IMAGE_MODELS,
+            state="readonly",
+            width=15,
+        ).grid(row=0, column=1, sticky="w", padx=(6, 18))
+        ttk.Label(options, text="Quality").grid(row=0, column=2, sticky="w")
         quality_var = tk.StringVar(value="medium")
         ttk.Combobox(
             options,
@@ -462,7 +470,35 @@ class GalleryWorkflowMixin:
             values=["low", "medium", "high"],
             state="readonly",
             width=10,
-        ).pack(side="left", padx=(6, 12))
+        ).grid(row=0, column=3, sticky="w", padx=(6, 0))
+        ttk.Label(options, text="Output size").grid(row=1, column=0, sticky="w", pady=(8, 0))
+        size_var = tk.StringVar(value="1024x1024")
+        ttk.Combobox(
+            options,
+            textvariable=size_var,
+            values=AI_IMAGE_SIZES,
+            state="readonly",
+            width=15,
+        ).grid(row=1, column=1, sticky="w", padx=(6, 18), pady=(8, 0))
+        cost_var = tk.StringVar()
+        ttk.Label(
+            options,
+            textvariable=cost_var,
+            foreground="#9a3412",
+            wraplength=590,
+            justify="left",
+        ).grid(row=2, column=0, columnspan=4, sticky="ew", pady=(8, 0))
+        options.columnconfigure(3, weight=1)
+
+        def update_cost_notice(*_args):
+            cost_var.set(
+                image_edit_cost_notice(model_var.get(), quality_var.get(), size_var.get())
+            )
+
+        model_var.trace_add("write", update_cost_notice)
+        quality_var.trace_add("write", update_cost_notice)
+        size_var.trace_add("write", update_cost_notice)
+        update_cost_notice()
 
         key_row = ttk.Frame(body)
         key_row.pack(fill="x", pady=(10, 0))
@@ -496,6 +532,19 @@ class GalleryWorkflowMixin:
             text="Account / API Key Setup",
             command=lambda: self.open_file("https://platform.openai.com/api-keys"),
         ).pack(side="left")
+        ttk.Button(
+            buttons,
+            text="Local Preview (Free)",
+            command=lambda: self.preview_ai_image_edit_locally(
+                dialog,
+                source_path,
+                preset_var.get(),
+                instructions.get("1.0", "end").strip(),
+                model_var.get(),
+                quality_var.get(),
+                size_var.get(),
+            ),
+        ).pack(side="left", padx=(6, 0))
         run_button = ttk.Button(buttons, text="Create AI Edit")
         run_button.pack(side="right")
         ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(0, 6))
@@ -520,11 +569,59 @@ class GalleryWorkflowMixin:
                 preset_var.get(),
                 instructions.get("1.0", "end").strip(),
                 quality_var.get(),
+                size_var.get(),
+                model_var.get(),
                 run_button,
                 status_var,
             )
         )
         dialog.grab_set()
+        return True
+
+    def preview_ai_image_edit_locally(
+        self,
+        parent,
+        source_path,
+        preset,
+        instructions,
+        model,
+        quality,
+        size,
+    ):
+        image_data, _filename = prepare_ai_image(source_path)
+        from io import BytesIO
+
+        with Image.open(BytesIO(image_data)) as prepared:
+            preview = prepared.copy()
+            prepared_size = prepared.size
+        preview.thumbnail((760, 500), Image.Resampling.LANCZOS)
+        preview_photo = ImageTk.PhotoImage(preview)
+        window = tk.Toplevel(parent)
+        window.title("Local AI Request Preview — No API Call")
+        window.geometry("820x680")
+        window.minsize(560, 480)
+        window.transient(parent)
+        frame = ttk.Frame(window, padding=12)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(
+            frame,
+            text="Local preview only — nothing was uploaded and no charge was made.",
+            foreground="#166534",
+            font=("Segoe UI", 11, "bold"),
+        ).pack(anchor="w", pady=(0, 8))
+        image_label = ttk.Label(frame, image=preview_photo)
+        image_label.image = preview_photo
+        image_label.pack(fill="both", expand=True)
+        prompt = build_ai_edit_prompt(preset, instructions)
+        summary = (
+            f"Would submit: {model} | {quality} | {size}\n"
+            f"Prepared upload copy: {prepared_size[0]} × {prepared_size[1]} pixels\n"
+            f"Prompt: {prompt}"
+        )
+        ttk.Label(frame, text=summary, wraplength=780, justify="left").pack(
+            fill="x", pady=(8, 0)
+        )
+        ttk.Button(frame, text="Close", command=window.destroy).pack(anchor="e", pady=(8, 0))
         return True
 
     def start_ai_image_edit(
@@ -535,6 +632,8 @@ class GalleryWorkflowMixin:
         preset,
         instructions,
         quality,
+        size,
+        model,
         run_button,
         status_var,
     ):
@@ -543,6 +642,18 @@ class GalleryWorkflowMixin:
             status_var.set("Enter an OpenAI API key, or use Account / API Key Setup first.")
             return False
         prompt = build_ai_edit_prompt(preset, instructions)
+        cost_notice = image_edit_cost_notice(model, quality, size)
+        if not messagebox.askyesno(
+            "Confirm Paid AI Request",
+            (
+                "This will send the selected image to the OpenAI API and may incur a charge.\n\n"
+                f"Model: {model}\nQuality: {quality}\nSize: {size}\n\n{cost_notice}\n\n"
+                "Continue with this paid request?"
+            ),
+            parent=dialog,
+        ):
+            status_var.set("Paid API request cancelled. No image was uploaded.")
+            return False
         output_path, notes_path = ai_edit_output_paths(source_path, OUTPUT_DIR, NOTES_DIR)
         run_button.configure(state="disabled")
         status_var.set("Sending a reduced PNG copy to OpenAI. This can take a few minutes...")
@@ -550,12 +661,26 @@ class GalleryWorkflowMixin:
 
         def worker():
             try:
-                image_data = request_ai_image_edit(api_key, source_path, prompt, quality)
+                image_data = request_ai_image_edit(
+                    api_key,
+                    source_path,
+                    prompt,
+                    quality=quality,
+                    size=size,
+                    model=model,
+                )
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 notes_path.parent.mkdir(parents=True, exist_ok=True)
                 output_path.write_bytes(image_data)
                 notes_path.write_text(
-                    ai_edit_provenance(source_path, output_path, prompt, quality),
+                    ai_edit_provenance(
+                        source_path,
+                        output_path,
+                        prompt,
+                        quality,
+                        model=model,
+                        size=size,
+                    ),
                     encoding="utf-8",
                 )
                 error = None

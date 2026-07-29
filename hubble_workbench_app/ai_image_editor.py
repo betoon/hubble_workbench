@@ -11,6 +11,8 @@ from PIL import Image, ImageOps
 
 
 AI_IMAGE_MODEL = "gpt-image-1"
+AI_IMAGE_MODELS = ("gpt-image-1", "gpt-image-2")
+AI_IMAGE_SIZES = ("auto", "1024x1024", "1024x1536", "1536x1024")
 AI_IMAGE_EDIT_URL = "https://api.openai.com/v1/images/edits"
 AI_EDIT_WARNING = (
     "AI output is a creative interpretation. It may alter, remove, or invent astronomical "
@@ -33,6 +35,40 @@ AI_EDIT_PRESETS = {
         "and fine detail while keeping the main subject and composition recognizable."
     ),
 }
+
+_GPT_IMAGE_1_OUTPUT_ESTIMATES = {
+    ("low", "1024x1024"): 0.011,
+    ("low", "1024x1536"): 0.016,
+    ("low", "1536x1024"): 0.016,
+    ("medium", "1024x1024"): 0.042,
+    ("medium", "1024x1536"): 0.063,
+    ("medium", "1536x1024"): 0.063,
+    ("high", "1024x1024"): 0.167,
+    ("high", "1024x1536"): 0.250,
+    ("high", "1536x1024"): 0.250,
+}
+
+
+def image_edit_cost_notice(model, quality, size):
+    model = str(model or AI_IMAGE_MODEL)
+    quality = str(quality or "medium")
+    size = str(size or "auto")
+    if model != "gpt-image-1":
+        return "Paid API request. Check current OpenAI pricing for this model before submitting."
+    if size == "auto":
+        return (
+            "Estimated GPT Image 1 output: $0.042-$0.063 at medium quality; "
+            "input-image and prompt charges are additional."
+            if quality == "medium"
+            else "Paid API request. Choose a fixed size to see the published output estimate."
+        )
+    estimate = _GPT_IMAGE_1_OUTPUT_ESTIMATES.get((quality, size))
+    if estimate is None:
+        return "Paid API request. Final cost depends on model usage and current pricing."
+    return (
+        f"Estimated GPT Image 1 output: ${estimate:.3f}; "
+        "input-image and prompt charges are additional."
+    )
 
 
 def build_ai_edit_prompt(preset, instructions=""):
@@ -83,17 +119,29 @@ def encode_multipart(fields, file_field, filename, file_data, content_type="imag
     return body.getvalue(), f"multipart/form-data; boundary={boundary}"
 
 
-def request_ai_image_edit(api_key, image_path, prompt, quality="medium", timeout=180):
+def request_ai_image_edit(
+    api_key,
+    image_path,
+    prompt,
+    quality="medium",
+    size="auto",
+    model=AI_IMAGE_MODEL,
+    timeout=180,
+):
     api_key = str(api_key or "").strip()
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is not configured.")
+    if model not in AI_IMAGE_MODELS:
+        raise ValueError(f"Unsupported image editing model: {model}")
+    if size not in AI_IMAGE_SIZES:
+        raise ValueError(f"Unsupported image size: {size}")
     image_data, filename = prepare_ai_image(image_path)
     body, content_type = encode_multipart(
         {
-            "model": AI_IMAGE_MODEL,
+            "model": model,
             "prompt": prompt,
             "quality": quality,
-            "size": "auto",
+            "size": size,
             "output_format": "png",
         },
         "image[]",
@@ -133,7 +181,14 @@ def ai_edit_output_paths(source_path, output_dir, notes_dir, now=None):
     return Path(output_dir) / "ai_creative_edits" / f"{stem}.png", Path(notes_dir) / f"{stem}_notes.txt"
 
 
-def ai_edit_provenance(source_path, output_path, prompt, quality):
+def ai_edit_provenance(
+    source_path,
+    output_path,
+    prompt,
+    quality,
+    model=AI_IMAGE_MODEL,
+    size="auto",
+):
     return "\n".join((
         "AI CREATIVE EDIT — NOT SCIENTIFIC DATA",
         "=" * 48,
@@ -141,8 +196,9 @@ def ai_edit_provenance(source_path, output_path, prompt, quality):
         "",
         f"Source file: {Path(source_path)}",
         f"Output file: {Path(output_path)}",
-        f"Model: {AI_IMAGE_MODEL}",
+        f"Model: {model}",
         f"Quality: {quality}",
+        f"Requested size: {size}",
         f"Created: {datetime.now().isoformat(timespec='seconds')}",
         "",
         "Prompt:",

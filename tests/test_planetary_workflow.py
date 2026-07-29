@@ -73,7 +73,28 @@ class PlanetaryWorkflowTests(unittest.TestCase):
             set(PlanetaryWorkflowMixin.PLANETARY_FEATURES),
         )
         for url in PlanetaryWorkflowMixin.PLANETARY_FULL_VIEW_URLS.values():
-            self.assertTrue(url.startswith("https://trek.nasa.gov/"))
+            self.assertTrue(
+                url.startswith("https://trek.nasa.gov/")
+                or url.startswith("https://eyes.nasa.gov/")
+            )
+
+    def test_venus_url_uses_magellan_radar_codes(self):
+        dataset = "Magellan SAR — full-resolution radar mosaics"
+        url = PlanetaryWorkflowMixin.build_planetary_ode_url(
+            0.5, 194.5, 0.5, dataset
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["target"], ["venus"])
+        self.assertEqual(query["ihid"], ["MGN"])
+        self.assertEqual(query["iid"], ["RDRS"])
+        self.assertEqual(query["pt"], ["FMIDR"])
+
+    def test_outer_planets_use_official_external_archives(self):
+        for planet in ("Jupiter", "Saturn"):
+            datasets = PlanetaryWorkflowMixin.PLANETARY_DATASETS[planet]
+            self.assertGreaterEqual(len(datasets), 4)
+            for dataset in datasets.values():
+                self.assertTrue(dataset["external_url"].startswith("https://"))
 
     def test_ode_response_accepts_single_product_or_list(self):
         single = {

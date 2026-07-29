@@ -127,22 +127,112 @@ class PlanetaryWorkflowMixin:
         },
     }
 
+    VENUS_FEATURES = {
+        "Maxwell Montes": (65.2, 3.1, "The highest mountain range on Venus, rising above Ishtar Terra."),
+        "Maat Mons": (0.5, 194.5, "A large shield volcano whose surface shows evidence of comparatively recent activity."),
+        "Aphrodite Terra": (-10.0, 100.0, "An extensive equatorial highland region comparable in size to Africa."),
+        "Ishtar Terra": (70.0, 30.0, "A northern highland region containing Lakshmi Planum and Maxwell Montes."),
+        "Ovda Regio": (-10.0, 90.0, "Tessera terrain in western Aphrodite Terra, intensely deformed by tectonic activity."),
+        "Sapas Mons": (8.5, 188.0, "A broad shield volcano imaged in detail by Magellan radar."),
+        "Mead Crater": (12.5, 57.2, "The largest known impact crater on Venus."),
+    }
+
+    VENUS_DATASETS = {
+        "Magellan SAR — full-resolution radar mosaics": {
+            "target": "venus", "ihid": "MGN", "iid": "RDRS", "pt": "FMIDR",
+            "description": "Full-resolution Magellan synthetic-aperture radar mosaics.",
+        },
+        "Magellan SAR — regional context mosaics": {
+            "target": "venus", "ihid": "MGN", "iid": "RDRS", "pt": "C1MIDR",
+            "description": "Compressed regional Magellan radar mosaics at 225 meters per pixel.",
+        },
+        "Magellan SAR — broad context mosaics": {
+            "target": "venus", "ihid": "MGN", "iid": "RDRS", "pt": "C3MIDR",
+            "description": "Broad-coverage Magellan radar mosaics for regional and global context.",
+        },
+    }
+
+    JUPITER_FEATURES = {
+        "Great Red Spot": (-22.0, 0.0, "A long-lived anticyclonic storm; its longitude changes with time."),
+        "North Polar Cyclones": (89.0, 0.0, "Juno revealed a central cyclone surrounded by a persistent polygon of cyclones."),
+        "South Polar Cyclones": (-89.0, 0.0, "A cluster of powerful cyclones surrounding Jupiter's south pole."),
+        "Equatorial Zone": (0.0, 0.0, "Bright ammonia-cloud region shaped by strong east-west jet streams."),
+        "North Equatorial Belt": (12.0, 0.0, "A dark atmospheric belt containing turbulent clouds and vortices."),
+        "South Equatorial Belt": (-12.0, 0.0, "The prominent belt bordering the Great Red Spot."),
+    }
+
+    JUPITER_DATASETS = {
+        "JunoCam — raw and community-processed images": {
+            "external_url": "https://www.missionjuno.swri.edu/junocam/processing",
+            "description": "JunoCam observations, raw products, and processed submissions.",
+        },
+        "NASA PDS Juno mission archive": {
+            "external_url": "https://pds-atmospheres.nmsu.edu/data_and_services/atmospheres_data/JUNO/juno.html",
+            "description": "Calibrated Juno atmospheric, particle, and supporting mission data.",
+        },
+        "NASA PDS OPUS — Jupiter observations": {
+            "external_url": "https://opus.pds-rings.seti.org/opus/#/",
+            "description": "Cross-mission Jupiter observations from Voyager, Galileo, Cassini, Hubble, and others.",
+        },
+        "NASA Jupiter image gallery": {
+            "external_url": "https://science.nasa.gov/gallery/jupiter/",
+            "description": "Curated full-disk and detailed Jupiter imagery from NASA missions.",
+        },
+    }
+
+    SATURN_FEATURES = {
+        "North Polar Hexagon": (78.0, 0.0, "A persistent six-sided jet-stream pattern surrounding the north pole."),
+        "North Polar Vortex": (90.0, 0.0, "A compact hurricane-like vortex centered on Saturn's north pole."),
+        "South Polar Vortex": (-90.0, 0.0, "A warm, eye-like atmospheric vortex observed by Cassini."),
+        "Equatorial Zone": (0.0, 0.0, "A broad cloud zone containing some of Saturn's fastest winds."),
+        "Great White Spot Region": (35.0, 0.0, "Latitude band where immense episodic storms have developed."),
+        "Main Ring System": (0.0, 0.0, "The A, B, and C rings; use mission archives for viewing rather than fixed surface coordinates."),
+    }
+
+    SATURN_DATASETS = {
+        "Cassini ISS — OPUS image search": {
+            "external_url": "https://opus.pds-rings.seti.org/opus/#/",
+            "description": "Search calibrated Cassini Imaging Science Subsystem observations.",
+        },
+        "Cassini raw image archive": {
+            "external_url": "https://science.nasa.gov/mission/cassini/multimedia/images/",
+            "description": "NASA's mission imagery from Saturn, its rings, and its moons.",
+        },
+        "NASA PDS Saturn system archive": {
+            "external_url": "https://pds-rings.seti.org/saturn/",
+            "description": "PDS holdings for Saturn's rings, moons, and Cassini observations.",
+        },
+        "NASA Saturn image gallery": {
+            "external_url": "https://science.nasa.gov/gallery/saturn/",
+            "description": "Curated full-disk and detailed Saturn imagery from multiple missions.",
+        },
+    }
+
     PLANETARY_FEATURES = {
         "Mars": MARS_FEATURES,
         "Moon": MOON_FEATURES,
         "Mercury": MERCURY_FEATURES,
+        "Venus": VENUS_FEATURES,
+        "Jupiter": JUPITER_FEATURES,
+        "Saturn": SATURN_FEATURES,
     }
 
     PLANETARY_DATASETS = {
         "Mars": MARS_DATASETS,
         "Moon": MOON_DATASETS,
         "Mercury": MERCURY_DATASETS,
+        "Venus": VENUS_DATASETS,
+        "Jupiter": JUPITER_DATASETS,
+        "Saturn": SATURN_DATASETS,
     }
 
     PLANETARY_FULL_VIEW_URLS = {
         "Mars": "https://trek.nasa.gov/mars/",
         "Moon": "https://trek.nasa.gov/moon/",
         "Mercury": "https://trek.nasa.gov/mercury/",
+        "Venus": "https://trek.nasa.gov/venus/",
+        "Jupiter": "https://eyes.nasa.gov/apps/solar-system/#/jupiter",
+        "Saturn": "https://eyes.nasa.gov/apps/solar-system/#/saturn",
     }
 
     PLANETARY_SOURCES = (
@@ -159,6 +249,12 @@ class PlanetaryWorkflowMixin:
         ("MESSENGER Image Archive", "https://messenger.jhuapl.edu/Explore/Images.html", "Mission images and science highlights from Mercury and the spacecraft."),
         ("ESA BepiColombo Image Archive", "https://www.esa.int/Science_Exploration/Space_Science/BepiColombo/%28archive%29/0/%28type%29/image", "Official images from BepiColombo's cruise and Mercury flybys."),
         ("ESA Planetary Science Archive — BepiColombo", "https://psa.esa.int/", "BepiColombo science products and mission documentation in ESA's archive."),
+        ("NASA PDS Venus ODE", "https://ode.rsl.wustl.edu/venus/", "Search and download Magellan radar products by surface location."),
+        ("NASA Venus Trek", "https://trek.nasa.gov/venus/", "Interactive global Magellan radar, topography, and geology layers."),
+        ("JunoCam Image Processing", "https://www.missionjuno.swri.edu/junocam/processing", "Raw and community-processed JunoCam observations of Jupiter."),
+        ("NASA PDS OPUS", "https://opus.pds-rings.seti.org/opus/#/", "Cross-mission search for Jupiter, Saturn, rings, and satellite observations."),
+        ("NASA Cassini Images", "https://science.nasa.gov/mission/cassini/multimedia/images/", "Mission imagery of Saturn, its rings, and its moons."),
+        ("NASA Eyes on the Solar System", "https://eyes.nasa.gov/apps/solar-system/", "Interactive 3D full-planet and spacecraft views for the outer planets."),
     )
 
     @staticmethod
@@ -417,7 +513,7 @@ class PlanetaryWorkflowMixin:
         view_combo = ttk.Combobox(
             controls,
             textvariable=self.planetary_view_var,
-            values=("Surface Detail", "Full Planet (NASA Trek)"),
+            values=("Surface Detail", "Full Planet / Mission View"),
             state="readonly",
             width=22,
         )
@@ -443,7 +539,15 @@ class PlanetaryWorkflowMixin:
             values=list(self.MARS_DATASETS), state="readonly", width=34,
         )
         self.planetary_dataset_combo.pack(side="left", padx=(6, 12))
-        ttk.Button(controls, text="Search NASA PDS", command=lambda: self.planetary_search_async()).pack(side="left")
+        self.planetary_dataset_combo.bind(
+            "<<ComboboxSelected>>", self.planetary_dataset_changed
+        )
+        self.planetary_search_button = ttk.Button(
+            controls,
+            text="Search NASA PDS",
+            command=lambda: self.planetary_search_async(),
+        )
+        self.planetary_search_button.pack(side="left")
         ttk.Button(
             controls,
             text="Apollo Image Atlas",
@@ -489,7 +593,7 @@ class PlanetaryWorkflowMixin:
         tabs.pack(fill="both", expand=True)
         products_panel = ttk.Frame(tabs)
         sources_panel = ttk.Frame(tabs)
-        tabs.add(products_panel, text="PDS Products")
+        tabs.add(products_panel, text="Products / Preview")
         tabs.add(sources_panel, text="Official Sources")
         sources_content = self.build_scrollable_tab_content(sources_panel)
 
@@ -543,6 +647,20 @@ class PlanetaryWorkflowMixin:
         planet = self.planetary_planet_var.get() if hasattr(self, "planetary_planet_var") else "Mars"
         return self.PLANETARY_DATASETS.get(planet, self.MARS_DATASETS)
 
+    def planetary_dataset_changed(self, _event=None):
+        dataset = self.planetary_current_datasets().get(
+            self.planetary_dataset_var.get(), {}
+        )
+        external = bool(dataset.get("external_url"))
+        self.planetary_search_button.configure(
+            text="Open Mission Archive" if external else "Search NASA PDS"
+        )
+        if external:
+            self.planetary_status_var.set(
+                dataset.get("description", "Open the official mission archive.")
+            )
+        return True
+
     def planetary_view_changed(self, _event=None):
         planet = self.planetary_planet_var.get()
         if self.planetary_view_var.get().startswith("Full Planet"):
@@ -568,7 +686,7 @@ class PlanetaryWorkflowMixin:
                 return False
             self.open_file(url)
             self.planetary_status_var.set(
-                f"Opened NASA's interactive full-{planet} globe in your browser."
+                f"Opened NASA's interactive full-{planet} mission view in your browser."
             )
             return True
         self.draw_planetary_map()
@@ -585,15 +703,22 @@ class PlanetaryWorkflowMixin:
         self.planetary_dataset_combo.configure(values=list(datasets))
         self.planetary_feature_var.set(next(iter(features)))
         self.planetary_dataset_var.set(next(iter(datasets)))
+        self.planetary_dataset_changed()
         self.planetary_products = []
         self.planetary_selected_product = None
         self.planetary_results_tree.delete(*self.planetary_results_tree.get_children())
         self.clear_planetary_preview(
             f"Select a {planet} product to load its official PDS browse image."
         )
-        self.planetary_status_var.set(
-            f"Choose a {planet} feature or click the map, then search official PDS products."
-        )
+        selected_dataset = datasets[self.planetary_dataset_var.get()]
+        if selected_dataset.get("external_url"):
+            self.planetary_status_var.set(
+                f"Choose a {planet} mission collection, then open its official archive."
+            )
+        else:
+            self.planetary_status_var.set(
+                f"Choose a {planet} feature or click the map, then search official PDS products."
+            )
         self.planetary_select_feature()
         if self.planetary_view_var.get().startswith("Full Planet"):
             self.planetary_view_changed()
@@ -621,6 +746,9 @@ class PlanetaryWorkflowMixin:
         palettes = {
             "Moon": ("#171717", "#78716c", "#e7e5e4", "#a8a29e"),
             "Mercury": ("#151515", "#625f5a", "#d6d3d1", "#8f8a83"),
+            "Venus": ("#2a1e0f", "#ad7a32", "#f6d58d", "#cf9d55"),
+            "Jupiter": ("#241b18", "#b88968", "#f4d4bd", "#8f624d"),
+            "Saturn": ("#242117", "#b7a36d", "#f3e5b5", "#8c7a4d"),
             "Mars": ("#2b1510", "#8f3f24", "#f4a261", "#b96542"),
         }
         background, map_fill, map_outline, grid_fill = palettes.get(
@@ -703,11 +831,22 @@ class PlanetaryWorkflowMixin:
         self.draw_planetary_map()
 
     def planetary_search_async(self):
+        dataset_name = self.planetary_dataset_var.get()
+        dataset_configuration = self.planetary_current_datasets().get(
+            dataset_name, {}
+        )
+        external_url = dataset_configuration.get("external_url")
+        if external_url:
+            self.open_file(external_url)
+            self.planetary_status_var.set(
+                f"Opened the official {dataset_name} source in your browser."
+            )
+            return True
         try:
             latitude = float(self.planetary_latitude_var.get())
             longitude = float(self.planetary_longitude_var.get())
             radius = float(self.planetary_radius_var.get())
-            dataset = self.planetary_dataset_var.get()
+            dataset = dataset_name
             self.build_planetary_ode_url(latitude, longitude, radius, dataset)
         except Exception as exc:
             self.planetary_status_var.set(f"Search settings need attention: {exc}")
@@ -726,6 +865,7 @@ class PlanetaryWorkflowMixin:
             self.after(0, lambda: self.finish_planetary_search(products, query_url, dataset, error))
 
         threading.Thread(target=worker, daemon=True).start()
+        return True
 
     def finish_planetary_search(self, products, query_url, dataset, error=None):
         if error:

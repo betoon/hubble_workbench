@@ -45,6 +45,28 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         self.assertIn("Clementine", names)
         self.assertIn("Chandrayaan-1", names)
 
+    def test_mercury_datasets_cover_messenger_mdis_imaging(self):
+        names = " ".join(PlanetaryWorkflowMixin.MERCURY_DATASETS)
+        self.assertIn("MESSENGER", names)
+        self.assertIn("NAC", names)
+        self.assertIn("WAC", names)
+
+    def test_mercury_url_uses_messenger_mdis_codes(self):
+        dataset = "MESSENGER MDIS NAC — calibrated high resolution"
+        url = PlanetaryWorkflowMixin.build_planetary_ode_url(
+            30.5, 162.7, 0.5, dataset
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["target"], ["mercury"])
+        self.assertEqual(query["ihid"], ["MESSENGER"])
+        self.assertEqual(query["iid"], ["MDIS-NAC"])
+        self.assertEqual(query["pt"], ["CDRNAC"])
+
+    def test_mercury_sources_include_messenger_and_bepicolombo(self):
+        names = " ".join(source[0] for source in PlanetaryWorkflowMixin.PLANETARY_SOURCES)
+        self.assertIn("MESSENGER", names)
+        self.assertIn("BepiColombo", names)
+
     def test_ode_response_accepts_single_product_or_list(self):
         single = {
             "ODEResults": {

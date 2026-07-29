@@ -81,14 +81,62 @@ class PlanetaryWorkflowMixin:
         },
     }
 
+    MERCURY_FEATURES = {
+        "Caloris Basin": (
+            30.5, 162.7,
+            "One of the Solar System's largest impact basins, surrounded by extensive volcanic plains.",
+        ),
+        "Rembrandt Basin": (
+            -32.9, 271.8,
+            "A large, well-preserved impact basin with exposed tectonic and volcanic structures.",
+        ),
+        "Rachmaninoff Basin": (
+            27.6, 57.6,
+            "A double-ring impact basin containing unusually young-looking smooth plains.",
+        ),
+        "Raditladi Basin": (
+            27.0, 119.0,
+            "A comparatively young peak-ring basin containing troughs and smooth interior plains.",
+        ),
+        "Pantheon Fossae": (
+            30.0, 162.0,
+            "A radiating system of tectonic troughs near the center of Caloris Basin.",
+        ),
+        "Discovery Rupes": (
+            -56.3, 38.3,
+            "A major lobate scarp formed as Mercury's interior cooled and the planet contracted.",
+        ),
+        "North Polar Deposits": (
+            85.0, 30.0,
+            "Permanently shadowed craters containing radar-bright deposits consistent with water ice.",
+        ),
+    }
+
+    MERCURY_DATASETS = {
+        "MESSENGER MDIS NAC — calibrated high resolution": {
+            "target": "mercury", "ihid": "MESSENGER", "iid": "MDIS-NAC", "pt": "CDRNAC",
+            "description": "Calibrated monochrome narrow-angle images from MESSENGER MDIS.",
+        },
+        "MESSENGER MDIS WAC — calibrated multispectral": {
+            "target": "mercury", "ihid": "MESSENGER", "iid": "MDIS-WAC", "pt": "CDRWAC",
+            "description": "Calibrated wide-angle multispectral images from MESSENGER MDIS.",
+        },
+        "MESSENGER MDIS WAC — map-projected color": {
+            "target": "mercury", "ihid": "MESSENGER", "iid": "MDIS-WAC", "pt": "MDRWAC",
+            "description": "Map-projected three-color multispectral products from MESSENGER MDIS.",
+        },
+    }
+
     PLANETARY_FEATURES = {
         "Mars": MARS_FEATURES,
         "Moon": MOON_FEATURES,
+        "Mercury": MERCURY_FEATURES,
     }
 
     PLANETARY_DATASETS = {
         "Mars": MARS_DATASETS,
         "Moon": MOON_DATASETS,
+        "Mercury": MERCURY_DATASETS,
     }
 
     PLANETARY_SOURCES = (
@@ -101,6 +149,10 @@ class PlanetaryWorkflowMixin:
         ("LROC QuickMap", "https://quickmap.lroc.asu.edu/", "Interactive LRO imagery, terrain, and Apollo landing sites."),
         ("NASA Apollo Image Atlas", "https://www.lpi.usra.edu/resources/apollo/", "Original Apollo orbital and lunar-surface photography."),
         ("NASA PDS Chandrayaan-1", "https://pds-geosciences.wustl.edu/missions/chandrayaan1/", "M3 mineralogy and Mini-RF radar archives."),
+        ("NASA PDS Mercury ODE", "https://ode.rsl.wustl.edu/mercury/", "Search and download MESSENGER MDIS products by location."),
+        ("MESSENGER Image Archive", "https://messenger.jhuapl.edu/Explore/Images.html", "Mission images and science highlights from Mercury and the spacecraft."),
+        ("ESA BepiColombo Image Archive", "https://www.esa.int/Science_Exploration/Space_Science/BepiColombo/%28archive%29/0/%28type%29/image", "Official images from BepiColombo's cruise and Mercury flybys."),
+        ("ESA Planetary Science Archive — BepiColombo", "https://psa.esa.int/", "BepiColombo science products and mission documentation in ESA's archive."),
     )
 
     @staticmethod
@@ -417,6 +469,7 @@ class PlanetaryWorkflowMixin:
         sources_panel = ttk.Frame(tabs)
         tabs.add(products_panel, text="PDS Products")
         tabs.add(sources_panel, text="Official Sources")
+        sources_content = self.build_scrollable_tab_content(sources_panel)
 
         result_columns = ("id", "date", "scale", "description")
         self.planetary_results_tree = ttk.Treeview(products_panel, columns=result_columns, show="headings", height=11)
@@ -448,7 +501,7 @@ class PlanetaryWorkflowMixin:
         self.planetary_details_text.insert("1.0", self.planetary_product_details(None))
 
         for name, url, description in self.PLANETARY_SOURCES:
-            row = ttk.Frame(sources_panel, padding=8, relief="ridge")
+            row = ttk.Frame(sources_content, padding=8, relief="ridge")
             row.pack(fill="x", padx=4, pady=4)
             ttk.Label(row, text=name, font=("Segoe UI", 10, "bold")).pack(anchor="w")
             ttk.Label(row, text=description, wraplength=480).pack(anchor="w", pady=(2, 5))
@@ -507,10 +560,15 @@ class PlanetaryWorkflowMixin:
         width, height = max(420, canvas.winfo_width()), max(260, canvas.winfo_height())
         padding = 28
         planet = self.planetary_planet_var.get()
-        canvas.configure(bg="#171717" if planet == "Moon" else "#2b1510")
-        map_fill = "#78716c" if planet == "Moon" else "#8f3f24"
-        map_outline = "#e7e5e4" if planet == "Moon" else "#f4a261"
-        grid_fill = "#a8a29e" if planet == "Moon" else "#b96542"
+        palettes = {
+            "Moon": ("#171717", "#78716c", "#e7e5e4", "#a8a29e"),
+            "Mercury": ("#151515", "#625f5a", "#d6d3d1", "#8f8a83"),
+            "Mars": ("#2b1510", "#8f3f24", "#f4a261", "#b96542"),
+        }
+        background, map_fill, map_outline, grid_fill = palettes.get(
+            planet, palettes["Mars"]
+        )
+        canvas.configure(bg=background)
         canvas.create_rectangle(
             padding, padding, width - padding, height - padding,
             fill=map_fill, outline=map_outline, width=2,

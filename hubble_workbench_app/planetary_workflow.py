@@ -139,6 +139,12 @@ class PlanetaryWorkflowMixin:
         "Mercury": MERCURY_DATASETS,
     }
 
+    PLANETARY_FULL_VIEW_URLS = {
+        "Mars": "https://trek.nasa.gov/mars/",
+        "Moon": "https://trek.nasa.gov/moon/",
+        "Mercury": "https://trek.nasa.gov/mercury/",
+    }
+
     PLANETARY_SOURCES = (
         ("NASA PDS Mars ODE", "https://ode.rsl.wustl.edu/mars/", "Cross-mission orbital product search and downloads."),
         ("NASA Mars Trek", "https://trek.nasa.gov/mars/", "Interactive global mosaics, elevation, landing sites, and WMTS layers."),
@@ -406,6 +412,22 @@ class PlanetaryWorkflowMixin:
         )
         planet_combo.pack(side="left", padx=(6, 12))
         planet_combo.bind("<<ComboboxSelected>>", self.planetary_select_planet)
+        ttk.Label(controls, text="View").pack(side="left")
+        self.planetary_view_var = tk.StringVar(value="Surface Detail")
+        view_combo = ttk.Combobox(
+            controls,
+            textvariable=self.planetary_view_var,
+            values=("Surface Detail", "Full Planet (NASA Trek)"),
+            state="readonly",
+            width=22,
+        )
+        view_combo.pack(side="left", padx=(6, 6))
+        view_combo.bind("<<ComboboxSelected>>", self.planetary_view_changed)
+        ttk.Button(
+            controls,
+            text="Open View",
+            command=self.open_selected_planetary_view,
+        ).pack(side="left", padx=(0, 12))
         ttk.Label(controls, text="Named feature").pack(side="left")
         self.planetary_feature_var = tk.StringVar(value="Jezero Crater")
         self.planetary_feature_combo = ttk.Combobox(
@@ -521,6 +543,40 @@ class PlanetaryWorkflowMixin:
         planet = self.planetary_planet_var.get() if hasattr(self, "planetary_planet_var") else "Mars"
         return self.PLANETARY_DATASETS.get(planet, self.MARS_DATASETS)
 
+    def planetary_view_changed(self, _event=None):
+        planet = self.planetary_planet_var.get()
+        if self.planetary_view_var.get().startswith("Full Planet"):
+            self.planetary_status_var.set(
+                f"Full Planet mode selected for {planet}. Choose Open View for NASA's "
+                "interactive mission-data globe."
+            )
+        else:
+            self.planetary_status_var.set(
+                f"Surface Detail mode selected for {planet}. Choose a feature or click "
+                "the map, then search official PDS products."
+            )
+        return True
+
+    def open_selected_planetary_view(self):
+        planet = self.planetary_planet_var.get()
+        if self.planetary_view_var.get().startswith("Full Planet"):
+            url = self.PLANETARY_FULL_VIEW_URLS.get(planet)
+            if not url:
+                self.planetary_status_var.set(
+                    f"A full-planet globe is not configured for {planet} yet."
+                )
+                return False
+            self.open_file(url)
+            self.planetary_status_var.set(
+                f"Opened NASA's interactive full-{planet} globe in your browser."
+            )
+            return True
+        self.draw_planetary_map()
+        self.planetary_status_var.set(
+            f"Showing the {planet} surface-detail map. Select a feature or search PDS."
+        )
+        return True
+
     def planetary_select_planet(self, _event=None):
         planet = self.planetary_planet_var.get()
         features = self.planetary_current_features()
@@ -539,6 +595,8 @@ class PlanetaryWorkflowMixin:
             f"Choose a {planet} feature or click the map, then search official PDS products."
         )
         self.planetary_select_feature()
+        if self.planetary_view_var.get().startswith("Full Planet"):
+            self.planetary_view_changed()
 
     def planetary_select_feature(self, _event=None):
         feature = self.planetary_current_features().get(self.planetary_feature_var.get())

@@ -67,6 +67,14 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         self.assertIn("MESSENGER", names)
         self.assertIn("BepiColombo", names)
 
+    def test_full_planet_views_cover_every_supported_world(self):
+        self.assertEqual(
+            set(PlanetaryWorkflowMixin.PLANETARY_FULL_VIEW_URLS),
+            set(PlanetaryWorkflowMixin.PLANETARY_FEATURES),
+        )
+        for url in PlanetaryWorkflowMixin.PLANETARY_FULL_VIEW_URLS.values():
+            self.assertTrue(url.startswith("https://trek.nasa.gov/"))
+
     def test_ode_response_accepts_single_product_or_list(self):
         single = {
             "ODEResults": {

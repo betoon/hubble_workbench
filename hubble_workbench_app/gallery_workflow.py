@@ -1,12 +1,21 @@
 import hashlib
+import os
 import threading
 from datetime import datetime
 from pathlib import Path
 
 from PIL import Image, ImageOps, ImageTk
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
+from .ai_image_editor import (
+    AI_EDIT_PRESETS,
+    AI_EDIT_WARNING,
+    ai_edit_output_paths,
+    ai_edit_provenance,
+    build_ai_edit_prompt,
+    request_ai_image_edit,
+)
 from .paths import NOTES_DIR, OUTPUT_DIR
 
 
@@ -236,6 +245,12 @@ class GalleryWorkflowMixin:
         ttk.Button(details_tools, text="Open Image", command=lambda: self.open_selected_gallery_image()).pack(side="left")
         ttk.Button(details_tools, text="Copy Path", command=lambda: self.copy_selected_gallery_path()).pack(side="left", padx=(6, 0))
         ttk.Button(details_tools, text="Open Notes", command=lambda: self.open_selected_gallery_notes()).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            details_tools,
+            text="AI Creative Edit (Account Required)",
+            command=self.open_ai_image_editor,
+        ).pack(side="left", padx=(6, 0))
+        self.enable_responsive_toolbar(details_tools)
         self.gallery_details_text = tk.Text(details_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.gallery_details_text.pack(fill="both", expand=True)
         self.gallery_details_text.insert("1.0", self.gallery_item_details(None))
@@ -386,3 +401,188 @@ class GalleryWorkflowMixin:
             return False
         self.open_file(Path(self.gallery_selected_item["notes_path"]))
         return True
+
+    def open_ai_image_editor(self):
+        if not self.gallery_selected_item:
+            self.gallery_status_var.set("Select an image first.")
+            return False
+        source_path = Path(self.gallery_selected_item.get("path", ""))
+        if not source_path.is_file():
+            self.gallery_status_var.set("The selected image is no longer available. Refresh the gallery.")
+            return False
+
+        dialog = tk.Toplevel(self)
+        dialog.title("AI Creative Edit — Account Required")
+        dialog.geometry("660x600")
+        dialog.minsize(520, 480)
+        dialog.transient(self)
+
+        body = ttk.Frame(dialog, padding=14)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="AI Creative Edit", font=("Segoe UI", 13, "bold")).pack(anchor="w")
+        ttk.Label(body, text=source_path.name, wraplength=610).pack(anchor="w", pady=(2, 10))
+        ttk.Label(
+            body,
+            text=AI_EDIT_WARNING,
+            foreground="#9a3412",
+            wraplength=610,
+            justify="left",
+        ).pack(fill="x", pady=(0, 12))
+
+        ttk.Label(body, text="Editing style").pack(anchor="w")
+        preset_var = tk.StringVar(value=next(iter(AI_EDIT_PRESETS)))
+        ttk.Combobox(
+            body,
+            textvariable=preset_var,
+            values=list(AI_EDIT_PRESETS),
+            state="readonly",
+        ).pack(fill="x", pady=(3, 10))
+
+        ttk.Label(body, text="Additional instructions (optional)").pack(anchor="w")
+        instructions = tk.Text(body, height=8, wrap="word")
+        instructions.pack(fill="both", expand=True, pady=(3, 10))
+        instructions.insert(
+            "1.0",
+            "Improve this image while keeping the astronomical subject recognizable.",
+        )
+
+        options = ttk.Frame(body)
+        options.pack(fill="x")
+        ttk.Label(options, text="Quality").pack(side="left")
+        quality_var = tk.StringVar(value="medium")
+        ttk.Combobox(
+            options,
+            textvariable=quality_var,
+            values=["low", "medium", "high"],
+            state="readonly",
+            width=10,
+        ).pack(side="left", padx=(6, 12))
+
+        key_row = ttk.Frame(body)
+        key_row.pack(fill="x", pady=(10, 0))
+        ttk.Label(key_row, text="OpenAI API key").pack(side="left")
+        api_key_var = tk.StringVar(value=os.environ.get("OPENAI_API_KEY", "").strip())
+        ttk.Entry(key_row, textvariable=api_key_var, show="•").pack(
+            side="left", fill="x", expand=True, padx=(8, 0)
+        )
+        ttk.Label(
+            body,
+            text="Used for this edit only and never saved by Workbench.",
+            foreground="#4b5563",
+        ).pack(anchor="w", pady=(2, 0))
+
+        acknowledgement_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(
+            body,
+            text="I understand this output may contain invented details and is not scientific data.",
+            variable=acknowledgement_var,
+        ).pack(anchor="w", pady=(12, 8))
+
+        status_var = tk.StringVar(
+            value="Your original will remain unchanged. API usage is billed to your OpenAI account."
+        )
+        ttk.Label(body, textvariable=status_var, wraplength=610).pack(fill="x", pady=(0, 8))
+
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x")
+        ttk.Button(
+            buttons,
+            text="Account / API Key Setup",
+            command=lambda: self.open_file("https://platform.openai.com/api-keys"),
+        ).pack(side="left")
+        run_button = ttk.Button(buttons, text="Create AI Edit")
+        run_button.pack(side="right")
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(0, 6))
+
+        def update_run_state(*_args):
+            run_button.configure(
+                state=(
+                    "normal"
+                    if api_key_var.get().strip() and acknowledgement_var.get()
+                    else "disabled"
+                )
+            )
+
+        acknowledgement_var.trace_add("write", update_run_state)
+        api_key_var.trace_add("write", update_run_state)
+        update_run_state()
+        run_button.configure(
+            command=lambda: self.start_ai_image_edit(
+                dialog,
+                source_path,
+                api_key_var.get(),
+                preset_var.get(),
+                instructions.get("1.0", "end").strip(),
+                quality_var.get(),
+                run_button,
+                status_var,
+            )
+        )
+        dialog.grab_set()
+        return True
+
+    def start_ai_image_edit(
+        self,
+        dialog,
+        source_path,
+        api_key,
+        preset,
+        instructions,
+        quality,
+        run_button,
+        status_var,
+    ):
+        api_key = str(api_key or "").strip()
+        if not api_key:
+            status_var.set("Enter an OpenAI API key, or use Account / API Key Setup first.")
+            return False
+        prompt = build_ai_edit_prompt(preset, instructions)
+        output_path, notes_path = ai_edit_output_paths(source_path, OUTPUT_DIR, NOTES_DIR)
+        run_button.configure(state="disabled")
+        status_var.set("Sending a reduced PNG copy to OpenAI. This can take a few minutes...")
+        self.gallery_status_var.set(f"AI Creative Edit is processing {source_path.name}...")
+
+        def worker():
+            try:
+                image_data = request_ai_image_edit(api_key, source_path, prompt, quality)
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                notes_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_bytes(image_data)
+                notes_path.write_text(
+                    ai_edit_provenance(source_path, output_path, prompt, quality),
+                    encoding="utf-8",
+                )
+                error = None
+            except Exception as exc:
+                error = exc
+            self.after(
+                0,
+                lambda: self.finish_ai_image_edit(
+                    dialog, output_path, notes_path, run_button, status_var, error
+                ),
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_ai_image_edit(
+        self,
+        dialog,
+        output_path,
+        notes_path,
+        run_button,
+        status_var,
+        error=None,
+    ):
+        if error:
+            run_button.configure(state="normal")
+            status_var.set(f"AI edit failed: {error}")
+            self.gallery_status_var.set(f"AI Creative Edit failed: {error}")
+            messagebox.showerror("AI Creative Edit", str(error), parent=dialog)
+            return
+        self.gallery_status_var.set(
+            f"Saved AI creative edit and provenance note: {output_path.name}"
+        )
+        self.refresh_gallery_async()
+        dialog.destroy()
+        self.open_file(output_path)

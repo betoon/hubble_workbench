@@ -54,6 +54,23 @@ For testing the newer Observatory Explorer, sensor coverage, sky mosaic, and mix
 - `outputs/` stores PNG/TIFF exports.
 - `notes/` stores processing notes for RGB composites.
 
+## Optional AI Creative Edit
+
+The Gallery includes **AI Creative Edit (Account Required)** for sending a selected
+PNG, TIFF, or JPEG to OpenAI's image-editing API. This optional feature requires
+an OpenAI API account with billing. Paste an API key into the masked editor field,
+or configure the `OPENAI_API_KEY` environment variable. The key is used for the
+current edit and is not saved in the project or settings.
+
+AI-edited images are saved under `outputs/ai_creative_edits/`. A companion note
+records the source file, model, quality, and exact prompt. The original image is
+never overwritten.
+
+AI image edits are creative interpretations. They can alter or invent stars,
+surface texture, clouds, nebular structure, and other details. Do not use an AI
+edit as scientific evidence, measurement data, or a faithful record of an
+observation.
+
 ## Notes
 
 Space telescope FITS processing can be tricky. Different filters and products may have different image sizes, orientations, or artifacts. This workbench keeps the process simple and automatic: it stretches each channel, resizes channels to match, and combines them into RGB.

@@ -36,6 +36,21 @@ Use this after creating a final RGB image in **Color Composer**. Click **Use Fin
 
 Choose **Save Enhanced PNG + TIFF** to save an 8-bit PNG, a 16-bit RGB TIFF, and the enhancement mask in `outputs/`. This is a visual hydrogen/H-II enhancement, not a calibrated scientific H-alpha measurement.
 
+## AI Creative Edit in the Gallery
+
+Select a finished image in **Gallery**, then click **AI Creative Edit (Account
+Required)**. Choose an editing style, add optional instructions, and acknowledge
+the scientific-accuracy warning before creating the edit.
+
+This feature requires your own OpenAI API account and API billing. Paste your API
+key into the masked field, or configure an `OPENAI_API_KEY` environment variable.
+Workbench uses the key for the edit but does not store it.
+
+The original image stays unchanged. AI results are placed in
+`outputs/ai_creative_edits/`, and a notes file records the source, model, prompt,
+and quality setting. AI can create convincing details that were not present in
+the telescope data, so use these results for presentation or artwork—not science.
+
 ## Setup Tab
 
 The **Setup** tab checks whether the astronomy tools are installed.

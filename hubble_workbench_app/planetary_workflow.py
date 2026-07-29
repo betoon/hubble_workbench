@@ -11,6 +11,7 @@ from tkinter import messagebox, ttk
 from PIL import Image, ImageTk
 
 from .paths import PLANETARY_DIR
+from .planetary_opus import query_opus_product_files, query_opus_products
 
 
 class PlanetaryWorkflowMixin:
@@ -166,17 +167,17 @@ class PlanetaryWorkflowMixin:
             "external_url": "https://www.missionjuno.swri.edu/junocam/processing",
             "description": "JunoCam observations, raw products, and processed submissions.",
         },
-        "NASA PDS Juno mission archive": {
-            "external_url": "https://pds-atmospheres.nmsu.edu/data_and_services/atmospheres_data/JUNO/juno.html",
-            "description": "Calibrated Juno atmospheric, particle, and supporting mission data.",
+        "Galileo SSI — Jupiter images": {
+            "opus_query": {"planet": "Jupiter", "instrument": "Galileo SSI"},
+            "description": "Galileo Solid State Imager observations of Jupiter and its system.",
         },
-        "NASA PDS OPUS — Jupiter observations": {
-            "external_url": "https://opus.pds-rings.seti.org/opus/#/",
-            "description": "Cross-mission Jupiter observations from Voyager, Galileo, Cassini, Hubble, and others.",
+        "Cassini ISS — Jupiter encounter images": {
+            "opus_query": {"planet": "Jupiter", "instrument": "Cassini ISS"},
+            "description": "Cassini Imaging Science Subsystem observations from the Jupiter encounter.",
         },
-        "NASA Jupiter image gallery": {
-            "external_url": "https://science.nasa.gov/gallery/jupiter/",
-            "description": "Curated full-disk and detailed Jupiter imagery from NASA missions.",
+        "Voyager ISS — Jupiter images": {
+            "opus_query": {"planet": "Jupiter", "instrument": "Voyager ISS"},
+            "description": "Voyager Imaging Science Subsystem observations of Jupiter.",
         },
     }
 
@@ -191,16 +192,16 @@ class PlanetaryWorkflowMixin:
 
     SATURN_DATASETS = {
         "Cassini ISS — OPUS image search": {
-            "external_url": "https://opus.pds-rings.seti.org/opus/#/",
+            "opus_query": {"planet": "Saturn", "instrument": "Cassini ISS"},
             "description": "Search calibrated Cassini Imaging Science Subsystem observations.",
         },
-        "Cassini raw image archive": {
-            "external_url": "https://science.nasa.gov/mission/cassini/multimedia/images/",
-            "description": "NASA's mission imagery from Saturn, its rings, and its moons.",
+        "Voyager ISS — Saturn images": {
+            "opus_query": {"planet": "Saturn", "instrument": "Voyager ISS"},
+            "description": "Voyager Imaging Science Subsystem observations of Saturn.",
         },
-        "NASA PDS Saturn system archive": {
-            "external_url": "https://pds-rings.seti.org/saturn/",
-            "description": "PDS holdings for Saturn's rings, moons, and Cassini observations.",
+        "Hubble — Saturn observations": {
+            "opus_query": {"planet": "Saturn", "mission": "Hubble"},
+            "description": "Hubble observations of Saturn available through OPUS.",
         },
         "NASA Saturn image gallery": {
             "external_url": "https://science.nasa.gov/gallery/saturn/",
@@ -361,6 +362,8 @@ class PlanetaryWorkflowMixin:
 
     @classmethod
     def query_planetary_product_files(cls, product, timeout=35):
+        if product.get("_OPUS_id"):
+            return query_opus_product_files(product["_OPUS_id"], timeout)
         url = cls.build_mars_files_url(product)
         request = Request(url, headers={"User-Agent": "Hubble-Workbench/2.0 Planetary-Observatory"})
         with urlopen(request, timeout=timeout) as response:
@@ -430,6 +433,10 @@ class PlanetaryWorkflowMixin:
     def build_mars_asset_url(cls, product, kind="thumbnail"):
         if kind not in {"thumbnail", "browse", "lgbrowse"}:
             raise ValueError(f"Unsupported planetary preview type: {kind}")
+        if product.get("_OPUS_preview_url"):
+            return str(product["_OPUS_preview_url"])
+        if product.get("_OPUS_id"):
+            raise ValueError("This OPUS observation does not provide a preview image.")
         product_id = cls.planetary_archive_product_id(product, "")
         if not product_id:
             raise ValueError("The selected product does not provide a PDS product identifier.")
@@ -480,7 +487,11 @@ class PlanetaryWorkflowMixin:
             str(product.get("Comment") or product.get("Description") or "No description supplied."),
             "",
             f"Dataset: {dataset_name}",
+            f"Archive: {'NASA PDS OPUS' if product.get('_OPUS_id') else 'NASA PDS ODE'}",
+            f"Instrument: {product.get('Instrument', 'Unknown')}",
+            f"Target: {product.get('Target', product.get('_Planetary_target', 'Unknown'))}",
             f"Observation time: {product.get('Observation_time') or product.get('UTC_start_time') or 'Unknown'}",
+            f"Duration: {product.get('Duration', 'Unknown')} seconds",
             f"Center: {product.get('Center_latitude', '?')}° latitude, {product.get('Center_longitude', '?')}° longitude",
             f"Map scale: {product.get('Map_scale', 'Unknown')} m/pixel",
             f"Incidence angle: {product.get('Incidence_angle', 'Unknown')}°",
@@ -652,12 +663,23 @@ class PlanetaryWorkflowMixin:
             self.planetary_dataset_var.get(), {}
         )
         external = bool(dataset.get("external_url"))
+        opus = bool(dataset.get("opus_query"))
         self.planetary_search_button.configure(
-            text="Open Mission Archive" if external else "Search NASA PDS"
+            text=(
+                "Open Mission Archive"
+                if external
+                else "Search OPUS"
+                if opus
+                else "Search NASA PDS"
+            )
         )
         if external:
             self.planetary_status_var.set(
                 dataset.get("description", "Open the official mission archive.")
+            )
+        elif opus:
+            self.planetary_status_var.set(
+                dataset.get("description", "Search NASA PDS OPUS mission products.")
             )
         return True
 
@@ -714,6 +736,10 @@ class PlanetaryWorkflowMixin:
         if selected_dataset.get("external_url"):
             self.planetary_status_var.set(
                 f"Choose a {planet} mission collection, then open its official archive."
+            )
+        elif selected_dataset.get("opus_query"):
+            self.planetary_status_var.set(
+                f"Choose a {planet} mission collection, then search OPUS products."
             )
         else:
             self.planetary_status_var.set(
@@ -841,6 +867,32 @@ class PlanetaryWorkflowMixin:
             self.planetary_status_var.set(
                 f"Opened the official {dataset_name} source in your browser."
             )
+            return True
+        opus_query = dataset_configuration.get("opus_query")
+        if opus_query:
+            planet = self.planetary_planet_var.get()
+            self.planetary_status_var.set(
+                f"Searching NASA PDS OPUS for {dataset_name}..."
+            )
+
+            def opus_worker():
+                try:
+                    products, query_url = query_opus_products(
+                        opus_query, limit=25, timeout=35
+                    )
+                    for product in products:
+                        product["_Planetary_target"] = planet.lower()
+                    error = None
+                except Exception as exc:
+                    products, query_url, error = [], "", exc
+                self.after(
+                    0,
+                    lambda: self.finish_planetary_search(
+                        products, query_url, dataset_name, error
+                    ),
+                )
+
+            threading.Thread(target=opus_worker, daemon=True).start()
             return True
         try:
             latitude = float(self.planetary_latitude_var.get())

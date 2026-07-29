@@ -93,8 +93,9 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         for planet in ("Jupiter", "Saturn"):
             datasets = PlanetaryWorkflowMixin.PLANETARY_DATASETS[planet]
             self.assertGreaterEqual(len(datasets), 4)
+            self.assertTrue(any("opus_query" in dataset for dataset in datasets.values()))
             for dataset in datasets.values():
-                self.assertTrue(dataset["external_url"].startswith("https://"))
+                self.assertTrue("opus_query" in dataset or "external_url" in dataset)
 
     def test_ode_response_accepts_single_product_or_list(self):
         single = {

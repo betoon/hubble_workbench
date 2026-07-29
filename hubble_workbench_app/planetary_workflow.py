@@ -209,6 +209,94 @@ class PlanetaryWorkflowMixin:
         },
     }
 
+    URANUS_FEATURES = {
+        "North Polar Cap": (
+            75.0, 0.0,
+            "A bright seasonal atmospheric cap visible in modern Hubble and Webb observations.",
+        ),
+        "North Polar Collar": (
+            60.0, 0.0,
+            "A changing band near the edge of Uranus's bright northern polar region.",
+        ),
+        "Equatorial Region": (
+            0.0, 0.0,
+            "A methane-rich atmospheric zone that often appears comparatively subdued.",
+        ),
+        "Southern Mid-Latitudes": (
+            -45.0, 0.0,
+            "Atmospheric region observed by Voyager 2 during the 1986 southern-solstice encounter.",
+        ),
+        "Ring Plane": (
+            0.0, 0.0,
+            "Uranus's narrow ring system; use full-planet and mission imagery for ring views.",
+        ),
+    }
+
+    URANUS_DATASETS = {
+        "Voyager ISS - Uranus encounter images": {
+            "opus_query": {"planet": "Uranus", "instrument": "Voyager ISS"},
+            "description": "Voyager 2 Imaging Science Subsystem observations from the 1986 Uranus encounter.",
+        },
+        "Hubble - Uranus observations": {
+            "opus_query": {"planet": "Uranus", "mission": "Hubble"},
+            "description": "Multi-year Hubble observations of Uranus available through OPUS.",
+        },
+        "JWST - Uranus image products": {
+            "external_url": "https://science.nasa.gov/asset/webb/uranus-nircam-image/",
+            "description": "Official Webb NIRCam imagery, metadata, filter assignments, and full-resolution downloads.",
+        },
+        "NASA Uranus image gallery": {
+            "external_url": "https://science.nasa.gov/gallery/uranus/",
+            "description": "Curated full-disk and detailed Uranus imagery from Voyager, Hubble, Webb, and other observatories.",
+        },
+    }
+
+    NEPTUNE_FEATURES = {
+        "North Polar Region": (
+            80.0, 0.0,
+            "A remote atmospheric region monitored in full-disk observations from Earth orbit.",
+        ),
+        "Equatorial Region": (
+            0.0, 0.0,
+            "A bright cloud band shaped by Neptune's powerful east-west winds.",
+        ),
+        "Great Dark Spot Region": (
+            -22.0, 0.0,
+            "Approximate latitude of the large storm seen by Voyager 2; Neptune's dark vortices evolve and migrate.",
+        ),
+        "Scooter Cloud Region": (
+            -42.0, 0.0,
+            "Approximate latitude of the fast-moving bright cloud feature observed by Voyager 2.",
+        ),
+        "South Polar Region": (
+            -80.0, 0.0,
+            "A comparatively warm polar region with dynamic methane-cloud activity.",
+        ),
+        "Ring Plane": (
+            0.0, 0.0,
+            "Neptune's faint rings and dusty arcs; use full-planet and mission imagery for ring views.",
+        ),
+    }
+
+    NEPTUNE_DATASETS = {
+        "Voyager ISS - Neptune encounter images": {
+            "opus_query": {"planet": "Neptune", "instrument": "Voyager ISS"},
+            "description": "Voyager 2 Imaging Science Subsystem observations from the 1989 Neptune encounter.",
+        },
+        "Hubble - Neptune observations": {
+            "opus_query": {"planet": "Neptune", "mission": "Hubble"},
+            "description": "Multi-year Hubble observations of Neptune available through OPUS.",
+        },
+        "JWST - Neptune image products": {
+            "external_url": "https://science.nasa.gov/asset/webb/neptune-nircam/",
+            "description": "Official Webb NIRCam imagery, metadata, filter assignments, and full-resolution downloads.",
+        },
+        "NASA Neptune image gallery": {
+            "external_url": "https://science.nasa.gov/gallery/neptune/",
+            "description": "Curated full-disk and detailed Neptune imagery from Voyager, Hubble, Webb, and other observatories.",
+        },
+    }
+
     PLANETARY_FEATURES = {
         "Mars": MARS_FEATURES,
         "Moon": MOON_FEATURES,
@@ -216,6 +304,8 @@ class PlanetaryWorkflowMixin:
         "Venus": VENUS_FEATURES,
         "Jupiter": JUPITER_FEATURES,
         "Saturn": SATURN_FEATURES,
+        "Uranus": URANUS_FEATURES,
+        "Neptune": NEPTUNE_FEATURES,
     }
 
     PLANETARY_DATASETS = {
@@ -225,6 +315,8 @@ class PlanetaryWorkflowMixin:
         "Venus": VENUS_DATASETS,
         "Jupiter": JUPITER_DATASETS,
         "Saturn": SATURN_DATASETS,
+        "Uranus": URANUS_DATASETS,
+        "Neptune": NEPTUNE_DATASETS,
     }
 
     PLANETARY_FULL_VIEW_URLS = {
@@ -234,6 +326,8 @@ class PlanetaryWorkflowMixin:
         "Venus": "https://trek.nasa.gov/venus/",
         "Jupiter": "https://eyes.nasa.gov/apps/solar-system/#/jupiter",
         "Saturn": "https://eyes.nasa.gov/apps/solar-system/#/saturn",
+        "Uranus": "https://eyes.nasa.gov/apps/solar-system/#/uranus",
+        "Neptune": "https://eyes.nasa.gov/apps/solar-system/#/neptune",
     }
 
     PLANETARY_SOURCES = (
@@ -255,6 +349,10 @@ class PlanetaryWorkflowMixin:
         ("JunoCam Image Processing", "https://www.missionjuno.swri.edu/junocam/processing", "Raw and community-processed JunoCam observations of Jupiter."),
         ("NASA PDS OPUS", "https://opus.pds-rings.seti.org/opus/#/", "Cross-mission search for Jupiter, Saturn, rings, and satellite observations."),
         ("NASA Cassini Images", "https://science.nasa.gov/mission/cassini/multimedia/images/", "Mission imagery of Saturn, its rings, and its moons."),
+        ("NASA Uranus Images", "https://science.nasa.gov/gallery/uranus/", "Voyager, Hubble, Webb, and ground-based imagery of Uranus."),
+        ("NASA Neptune Images", "https://science.nasa.gov/gallery/neptune/", "Voyager, Hubble, Webb, and ground-based imagery of Neptune."),
+        ("NASA Webb Uranus", "https://science.nasa.gov/asset/webb/uranus-nircam-image/", "Webb NIRCam imagery with filter information and full-resolution downloads."),
+        ("NASA Webb Neptune", "https://science.nasa.gov/asset/webb/neptune-nircam/", "Webb NIRCam imagery with filter information and full-resolution downloads."),
         ("NASA Eyes on the Solar System", "https://eyes.nasa.gov/apps/solar-system/", "Interactive 3D full-planet and spacecraft views for the outer planets."),
     )
 
@@ -775,6 +873,8 @@ class PlanetaryWorkflowMixin:
             "Venus": ("#2a1e0f", "#ad7a32", "#f6d58d", "#cf9d55"),
             "Jupiter": ("#241b18", "#b88968", "#f4d4bd", "#8f624d"),
             "Saturn": ("#242117", "#b7a36d", "#f3e5b5", "#8c7a4d"),
+            "Uranus": ("#10252b", "#5b9fab", "#c8f2ef", "#397984"),
+            "Neptune": ("#101c38", "#315d9b", "#8fb9f2", "#244674"),
             "Mars": ("#2b1510", "#8f3f24", "#f4a261", "#b96542"),
         }
         background, map_fill, map_outline, grid_fill = palettes.get(

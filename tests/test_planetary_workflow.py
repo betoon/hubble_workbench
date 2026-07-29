@@ -90,12 +90,26 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         self.assertEqual(query["pt"], ["FMIDR"])
 
     def test_outer_planets_use_official_external_archives(self):
-        for planet in ("Jupiter", "Saturn"):
+        for planet in ("Jupiter", "Saturn", "Uranus", "Neptune"):
             datasets = PlanetaryWorkflowMixin.PLANETARY_DATASETS[planet]
             self.assertGreaterEqual(len(datasets), 4)
             self.assertTrue(any("opus_query" in dataset for dataset in datasets.values()))
             for dataset in datasets.values():
                 self.assertTrue("opus_query" in dataset or "external_url" in dataset)
+
+    def test_ice_giants_offer_voyager_hubble_and_webb_sources(self):
+        for planet in ("Uranus", "Neptune"):
+            datasets = PlanetaryWorkflowMixin.PLANETARY_DATASETS[planet]
+            names = " ".join(datasets)
+            self.assertIn("Voyager", names)
+            self.assertIn("Hubble", names)
+            self.assertIn("JWST", names)
+            self.assertTrue(
+                any(
+                    dataset.get("opus_query", {}).get("planet") == planet
+                    for dataset in datasets.values()
+                )
+            )
 
     def test_ode_response_accepts_single_product_or_list(self):
         single = {

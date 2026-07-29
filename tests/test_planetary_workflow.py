@@ -64,6 +64,46 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         })
         self.assertEqual(product_id, "P02_TEST")
 
+    def test_preview_url_uses_ode_thumbnail_query_and_product_id(self):
+        url = PlanetaryWorkflowMixin.build_mars_asset_url(
+            {"Observation_id": "ESP_TEST"},
+            "thumbnail",
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["target"], ["mars"])
+        self.assertEqual(query["query"], ["thumbnail"])
+        self.assertEqual(query["pdsid"], ["ESP_TEST"])
+
+    def test_preview_url_prefers_specific_archive_product_id(self):
+        url = PlanetaryWorkflowMixin.build_mars_asset_url({
+            "Observation_id": "ESP_TEST",
+            "ProductURL": "https://ode.example/product?product_id=ESP_TEST_COLOR",
+        })
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["pdsid"], ["ESP_TEST_COLOR"])
+
+    def test_preview_url_rejects_unknown_asset_type(self):
+        with self.assertRaises(ValueError):
+            PlanetaryWorkflowMixin.build_mars_asset_url(
+                {"Observation_id": "ESP_TEST"},
+                "unknown",
+            )
+
+    def test_planetary_footprint_points_parse_c0_polygon(self):
+        points = PlanetaryWorkflowMixin.planetary_footprint_points({
+            "Footprint_C0_geometry": "POLYGON ((77.3 17.6, 77.2 18.1, 77.3 17.6))",
+        })
+        self.assertEqual(points[0], (17.6, 77.3))
+        self.assertEqual(len(points), 3)
+
+    def test_planetary_footprint_points_ignore_empty_or_invalid_geometry(self):
+        self.assertEqual(
+            PlanetaryWorkflowMixin.planetary_footprint_points(
+                {"Footprint_C0_geometry": "MULTIPOLYGON EMPTY"}
+            ),
+            [],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

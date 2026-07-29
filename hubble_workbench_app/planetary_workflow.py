@@ -1,11 +1,14 @@
 import json
+import re
 import threading
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
 import tkinter as tk
 from tkinter import ttk
+from PIL import Image, ImageTk
 
 from .paths import PLANETARY_DIR
 
@@ -136,6 +139,57 @@ class PlanetaryWorkflowMixin:
         return fallback
 
     @staticmethod
+    def planetary_archive_product_id(product, fallback=""):
+        for field in ("ProductURL", "FilesURL"):
+            query = parse_qs(urlparse(str(product.get(field) or "")).query)
+            if query.get("product_id"):
+                return str(query["product_id"][0])
+        return PlanetaryWorkflowMixin.planetary_product_id(product, fallback)
+
+    @classmethod
+    def build_mars_asset_url(cls, product, kind="thumbnail"):
+        if kind not in {"thumbnail", "browse", "lgbrowse"}:
+            raise ValueError(f"Unsupported Mars preview type: {kind}")
+        product_id = cls.planetary_archive_product_id(product, "")
+        if not product_id:
+            raise ValueError("The selected product does not provide a PDS product identifier.")
+        return "https://oderest.rsl.wustl.edu/live2?" + urlencode({
+            "target": "mars",
+            "query": kind,
+            "pdsid": product_id,
+        })
+
+    @staticmethod
+    def fetch_planetary_image(url, timeout=35):
+        request = Request(url, headers={"User-Agent": "Hubble-Workbench/2.0 Planetary-Observatory"})
+        with urlopen(request, timeout=timeout) as response:
+            content_type = str(response.headers.get("Content-Type") or "").lower()
+            data = response.read()
+        if not data or ("image" not in content_type and not data.startswith(b"\x89PNG")):
+            raise RuntimeError("NASA PDS did not return a preview image for this product.")
+        return data
+
+    @staticmethod
+    def planetary_footprint_points(product):
+        footprint = str(product.get("Footprint_C0_geometry") or "")
+        if not footprint or "EMPTY" in footprint.upper():
+            return []
+        match = re.search(r"POLYGON\s*\(\((.*?)\)\)", footprint, re.IGNORECASE)
+        if not match:
+            return []
+        points = []
+        for pair in match.group(1).split(","):
+            numbers = pair.strip().split()
+            if len(numbers) < 2:
+                continue
+            try:
+                longitude, latitude = float(numbers[0]), float(numbers[1])
+            except ValueError:
+                continue
+            points.append((latitude, longitude))
+        return points
+
+    @staticmethod
     def planetary_product_details(product, dataset_name=""):
         if not product:
             return "Select a product to see observation details."
@@ -239,6 +293,15 @@ class PlanetaryWorkflowMixin:
         ttk.Button(product_tools, text="Open Product Page", command=lambda: self.open_selected_planetary_url("ProductURL")).pack(side="left")
         ttk.Button(product_tools, text="Open Files", command=lambda: self.open_selected_planetary_url("FilesURL")).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Open Mission Preview", command=lambda: self.open_selected_planetary_url("External_url")).pack(side="left", padx=(6, 0))
+        ttk.Button(product_tools, text="Load Preview", command=lambda: self.load_planetary_preview("browse")).pack(side="left", padx=(6, 0))
+        ttk.Button(product_tools, text="Save Browse Image", command=self.save_planetary_browse_async).pack(side="left", padx=(6, 0))
+        self.enable_responsive_toolbar(product_tools)
+        self.planetary_preview_label = ttk.Label(
+            products_panel,
+            text="Select a product to load its official PDS browse image.",
+            anchor="center",
+        )
+        self.planetary_preview_label.pack(fill="x", pady=(0, 6))
         self.planetary_details_text = tk.Text(products_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.planetary_details_text.pack(fill="both", expand=True)
         self.planetary_details_text.insert("1.0", self.planetary_product_details(None))
@@ -252,6 +315,8 @@ class PlanetaryWorkflowMixin:
 
         self.planetary_products = []
         self.planetary_selected_product = None
+        self.planetary_preview_image = None
+        self.planetary_preview_token = 0
         self.after(100, self.planetary_select_feature)
 
     def planetary_select_feature(self, _event=None):
@@ -295,14 +360,35 @@ class PlanetaryWorkflowMixin:
         dx = radius / 360.0 * (width - 2 * padding) * 2
         dy = radius / 180.0 * (height - 2 * padding) * 2
         canvas.create_rectangle(x - dx, y - dy, x + dx, y + dy, outline="#22d3ee", width=2)
+        selected_product = getattr(self, "planetary_selected_product", None)
         for product in getattr(self, "planetary_products", []):
             try:
+                footprint = self.planetary_footprint_points(product)
+                if footprint:
+                    coordinates = []
+                    for footprint_latitude, footprint_longitude in footprint:
+                        fx, fy = self.planetary_map_point(
+                            footprint_latitude, footprint_longitude, width, height, padding,
+                        )
+                        coordinates.extend((fx, fy))
+                    if len(coordinates) >= 6:
+                        canvas.create_line(
+                            *coordinates,
+                            fill="#facc15" if product is selected_product else "#67e8f9",
+                            width=3 if product is selected_product else 1,
+                        )
                 px, py = self.planetary_map_point(
                     float(product.get("Center_latitude")),
                     float(product.get("Center_longitude")),
                     width, height, padding,
                 )
-                canvas.create_oval(px - 2, py - 2, px + 2, py + 2, fill="#22d3ee", outline="")
+                marker_radius = 5 if product is selected_product else 2
+                canvas.create_oval(
+                    px - marker_radius, py - marker_radius,
+                    px + marker_radius, py + marker_radius,
+                    fill="#facc15" if product is selected_product else "#22d3ee",
+                    outline="#111827" if product is selected_product else "",
+                )
             except (TypeError, ValueError):
                 continue
         canvas.create_text(width / 2, 8, text="Mars — equirectangular feature and product map", anchor="n", fill="#fff7ed", font=("Segoe UI", 10, "bold"))
@@ -356,6 +442,7 @@ class PlanetaryWorkflowMixin:
                 values=(observation_id, date, product.get("Map_scale", ""), product.get("Comment") or product.get("Description") or ""),
             )
         self.planetary_selected_product = None
+        self.clear_planetary_preview("Select a product to load its official PDS browse image.")
         self.draw_planetary_map()
         self.planetary_status_var.set(
             f"Found {len(products)} {dataset} product(s) in the selected region."
@@ -377,6 +464,101 @@ class PlanetaryWorkflowMixin:
                 self.planetary_dataset_var.get(),
             ),
         )
+        self.draw_planetary_map()
+        self.load_planetary_preview("browse")
+
+    def clear_planetary_preview(self, message):
+        self.planetary_preview_token += 1
+        self.planetary_preview_image = None
+        if hasattr(self, "planetary_preview_label"):
+            self.planetary_preview_label.configure(image="", text=message)
+
+    def load_planetary_preview(self, kind="thumbnail"):
+        product = self.planetary_selected_product
+        if not product:
+            self.planetary_status_var.set("Select a PDS product first.")
+            return False
+        try:
+            url = self.build_mars_asset_url(product, kind)
+        except Exception as exc:
+            self.clear_planetary_preview(str(exc))
+            return False
+        self.planetary_preview_token += 1
+        token = self.planetary_preview_token
+        product_id = self.planetary_product_id(product)
+        self.planetary_preview_label.configure(
+            image="", text=f"Loading official PDS {kind} for {product_id}..."
+        )
+
+        def worker():
+            try:
+                data = self.fetch_planetary_image(url)
+                error = None
+            except Exception as exc:
+                data, error = b"", exc
+            self.after(0, lambda: self.finish_planetary_preview(data, product_id, kind, token, error))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_planetary_preview(self, data, product_id, kind, token, error=None):
+        if token != self.planetary_preview_token:
+            return
+        if error:
+            self.planetary_preview_image = None
+            self.planetary_preview_label.configure(
+                image="", text=f"No {kind} is available for {product_id}."
+            )
+            self.planetary_status_var.set(f"Preview unavailable: {error}")
+            return
+        try:
+            with Image.open(BytesIO(data)) as source:
+                preview = source.convert("RGB")
+                preview.thumbnail((520, 210), Image.Resampling.LANCZOS)
+                image = ImageTk.PhotoImage(preview)
+            self.planetary_preview_image = image
+            self.planetary_preview_label.configure(image=image, text="")
+            self.planetary_status_var.set(f"Loaded official PDS {kind} for {product_id}.")
+        except (OSError, tk.TclError) as exc:
+            self.planetary_preview_label.configure(image="", text="The returned preview could not be displayed.")
+            self.planetary_status_var.set(f"Preview display failed: {exc}")
+
+    def save_planetary_browse_async(self):
+        product = self.planetary_selected_product
+        if not product:
+            self.planetary_status_var.set("Select a PDS product first.")
+            return False
+        try:
+            url = self.build_mars_asset_url(product, "lgbrowse")
+            product_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", self.planetary_product_id(product))
+        except Exception as exc:
+            self.planetary_status_var.set(str(exc))
+            return False
+        destination = PLANETARY_DIR / f"{product_id}_browse.png"
+        self.planetary_status_var.set(f"Downloading the best available browse image for {product_id}...")
+
+        def worker():
+            try:
+                try:
+                    data = self.fetch_planetary_image(url)
+                except Exception:
+                    data = self.fetch_planetary_image(self.build_mars_asset_url(product, "browse"))
+                with Image.open(BytesIO(data)) as source:
+                    source.convert("RGB").save(destination, format="PNG")
+                error = None
+            except Exception as exc:
+                error = exc
+            self.after(0, lambda: self.finish_planetary_browse_save(destination, error))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def finish_planetary_browse_save(self, destination, error=None):
+        if error:
+            self.planetary_status_var.set(f"Browse image download failed: {error}")
+            return
+        self.planetary_status_var.set(f"Saved browse image: {destination.name}")
+        self.open_folder(destination.parent)
 
     def open_selected_planetary_url(self, field):
         product = self.planetary_selected_product

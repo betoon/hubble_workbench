@@ -49,12 +49,58 @@ class PlanetaryWorkflowMixin:
         },
     }
 
+    MOON_FEATURES = {
+        "Apollo 11 Landing Site": (0.6741, 23.4730, "Mare Tranquillitatis landing site of Apollo 11."),
+        "Apollo 12 Landing Site": (-3.0128, 336.5780, "Oceanus Procellarum landing site of Apollo 12."),
+        "Apollo 14 Landing Site": (-3.6453, 342.4690, "Fra Mauro landing site of Apollo 14."),
+        "Apollo 15 Landing Site": (26.1322, 3.6339, "Hadley-Apennine landing site of Apollo 15."),
+        "Apollo 16 Landing Site": (-8.9734, 15.5011, "Descartes Highlands landing site of Apollo 16."),
+        "Apollo 17 Landing Site": (20.1908, 30.7717, "Taurus-Littrow landing site of Apollo 17."),
+        "Tycho Crater": (-43.31, 348.80, "Young prominent impact crater with an extensive ray system."),
+        "Copernicus Crater": (9.62, 339.92, "Prominent complex crater in eastern Oceanus Procellarum."),
+        "Aristarchus Plateau": (23.70, 312.50, "High-albedo volcanic region and frequent imaging target."),
+        "Shackleton Crater": (-89.90, 0.00, "South-polar crater with permanently shadowed terrain."),
+    }
+
+    MOON_DATASETS = {
+        "LRO LROC NAC — calibrated high resolution": {
+            "target": "moon", "ihid": "LRO", "iid": "LROC", "pt": "CDRNAC4",
+            "description": "Calibrated narrow-angle images from Lunar Reconnaissance Orbiter.",
+        },
+        "LRO LROC WAC — calibrated color": {
+            "target": "moon", "ihid": "LRO", "iid": "LROC", "pt": "CDRWAC4",
+            "description": "Calibrated wide-angle color observations from Lunar Reconnaissance Orbiter.",
+        },
+        "Clementine UV/VIS — experiment images": {
+            "target": "moon", "ihid": "CLEM", "iid": "UVVIS", "pt": "EDR",
+            "description": "Ultraviolet and visible camera observations from Clementine.",
+        },
+        "Chandrayaan-1 M3 — reflectance": {
+            "target": "moon", "ihid": "CH1-ORB", "iid": "M3", "pt": "REFIMG",
+            "description": "Moon Mineralogy Mapper reflectance image products.",
+        },
+    }
+
+    PLANETARY_FEATURES = {
+        "Mars": MARS_FEATURES,
+        "Moon": MOON_FEATURES,
+    }
+
+    PLANETARY_DATASETS = {
+        "Mars": MARS_DATASETS,
+        "Moon": MOON_DATASETS,
+    }
+
     PLANETARY_SOURCES = (
         ("NASA PDS Mars ODE", "https://ode.rsl.wustl.edu/mars/", "Cross-mission orbital product search and downloads."),
         ("NASA Mars Trek", "https://trek.nasa.gov/mars/", "Interactive global mosaics, elevation, landing sites, and WMTS layers."),
         ("NASA PDS Imaging", "https://pds-imaging.jpl.nasa.gov/", "Mission imaging archives and Planetary Image Atlas."),
         ("ESA Planetary Science Archive", "https://psa.esa.int/", "Mars Express and ExoMars mission archives."),
         ("ESO Science Archive", "https://archive.eso.org/", "Ground-based optical and infrared observations."),
+        ("NASA PDS Lunar ODE", "https://ode.rsl.wustl.edu/moon/", "Cross-mission lunar product search and downloads."),
+        ("LROC QuickMap", "https://quickmap.lroc.asu.edu/", "Interactive LRO imagery, terrain, and Apollo landing sites."),
+        ("NASA Apollo Image Atlas", "https://www.lpi.usra.edu/resources/apollo/", "Original Apollo orbital and lunar-surface photography."),
+        ("NASA PDS Chandrayaan-1", "https://pds-geosciences.wustl.edu/missions/chandrayaan1/", "M3 mineralogy and Mini-RF radar archives."),
     )
 
     @staticmethod
@@ -76,10 +122,21 @@ class PlanetaryWorkflowMixin:
 
     @classmethod
     def build_mars_ode_url(cls, latitude, longitude, radius, dataset_name, limit=25):
-        dataset = cls.MARS_DATASETS[dataset_name]
+        return cls.build_planetary_ode_url(latitude, longitude, radius, dataset_name, limit)
+
+    @classmethod
+    def planetary_dataset_configuration(cls, dataset_name):
+        for planet, datasets in cls.PLANETARY_DATASETS.items():
+            if dataset_name in datasets:
+                return planet, datasets[dataset_name]
+        raise KeyError(dataset_name)
+
+    @classmethod
+    def build_planetary_ode_url(cls, latitude, longitude, radius, dataset_name, limit=25):
+        planet, dataset = cls.planetary_dataset_configuration(dataset_name)
         parameters = {
             "query": "products",
-            "target": "mars",
+            "target": dataset.get("target", planet.lower()),
             "results": "cm",
             "output": "json",
             "loc": "b",
@@ -97,18 +154,29 @@ class PlanetaryWorkflowMixin:
         if str(root.get("Status", "")).lower() != "success":
             message = root.get("Error") or root.get("ErrorMessage") or "NASA PDS ODE returned an error."
             raise RuntimeError(str(message))
-        products = root.get("Products", {}).get("Product", [])
+        product_container = root.get("Products", {})
+        if not isinstance(product_container, dict):
+            return []
+        products = product_container.get("Product", [])
         if isinstance(products, dict):
             products = [products]
         return [dict(product) for product in products or []]
 
     @classmethod
     def query_mars_ode(cls, latitude, longitude, radius, dataset_name, limit=25, timeout=35):
-        url = cls.build_mars_ode_url(latitude, longitude, radius, dataset_name, limit)
+        return cls.query_planetary_ode(latitude, longitude, radius, dataset_name, limit, timeout)
+
+    @classmethod
+    def query_planetary_ode(cls, latitude, longitude, radius, dataset_name, limit=25, timeout=35):
+        planet, dataset = cls.planetary_dataset_configuration(dataset_name)
+        url = cls.build_planetary_ode_url(latitude, longitude, radius, dataset_name, limit)
         request = Request(url, headers={"User-Agent": "Hubble-Workbench/2.0 Planetary-Observatory"})
         with urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read().decode("utf-8", "replace"))
-        return cls.parse_mars_ode_response(payload), url
+        products = cls.parse_mars_ode_response(payload)
+        for product in products:
+            product["_Planetary_target"] = dataset.get("target", planet.lower())
+        return products, url
 
     @classmethod
     def build_mars_files_url(cls, product):
@@ -116,7 +184,7 @@ class PlanetaryWorkflowMixin:
         if not product_id:
             raise ValueError("The selected product does not provide an archive product identifier.")
         return "https://oderest.rsl.wustl.edu/live2?" + urlencode({
-            "target": "mars",
+            "target": str(product.get("_Planetary_target") or "mars").lower(),
             "query": "product",
             "results": "mf",
             "output": "json",
@@ -186,7 +254,7 @@ class PlanetaryWorkflowMixin:
         return max(-90.0, min(90.0, latitude)), longitude % 360.0
 
     @staticmethod
-    def planetary_product_id(product, fallback="Mars product"):
+    def planetary_product_id(product, fallback="Planetary product"):
         direct = product.get("Observation_id") or product.get("Product_id")
         if direct:
             return str(direct)
@@ -207,12 +275,12 @@ class PlanetaryWorkflowMixin:
     @classmethod
     def build_mars_asset_url(cls, product, kind="thumbnail"):
         if kind not in {"thumbnail", "browse", "lgbrowse"}:
-            raise ValueError(f"Unsupported Mars preview type: {kind}")
+            raise ValueError(f"Unsupported planetary preview type: {kind}")
         product_id = cls.planetary_archive_product_id(product, "")
         if not product_id:
             raise ValueError("The selected product does not provide a PDS product identifier.")
         return "https://oderest.rsl.wustl.edu/live2?" + urlencode({
-            "target": "mars",
+            "target": str(product.get("_Planetary_target") or "mars").lower(),
             "query": kind,
             "pdsid": product_id,
         })
@@ -277,22 +345,36 @@ class PlanetaryWorkflowMixin:
         controls.pack(fill="x", pady=(0, 8))
         ttk.Label(controls, text="Planet").pack(side="left")
         self.planetary_planet_var = tk.StringVar(value="Mars")
-        ttk.Combobox(controls, textvariable=self.planetary_planet_var, values=["Mars"], state="readonly", width=8).pack(side="left", padx=(6, 12))
+        planet_combo = ttk.Combobox(
+            controls,
+            textvariable=self.planetary_planet_var,
+            values=list(self.PLANETARY_FEATURES),
+            state="readonly",
+            width=8,
+        )
+        planet_combo.pack(side="left", padx=(6, 12))
+        planet_combo.bind("<<ComboboxSelected>>", self.planetary_select_planet)
         ttk.Label(controls, text="Named feature").pack(side="left")
         self.planetary_feature_var = tk.StringVar(value="Jezero Crater")
-        feature_combo = ttk.Combobox(
+        self.planetary_feature_combo = ttk.Combobox(
             controls, textvariable=self.planetary_feature_var,
             values=list(self.MARS_FEATURES), state="readonly", width=22,
         )
-        feature_combo.pack(side="left", padx=(6, 12))
-        feature_combo.bind("<<ComboboxSelected>>", self.planetary_select_feature)
+        self.planetary_feature_combo.pack(side="left", padx=(6, 12))
+        self.planetary_feature_combo.bind("<<ComboboxSelected>>", self.planetary_select_feature)
         ttk.Label(controls, text="Dataset").pack(side="left")
         self.planetary_dataset_var = tk.StringVar(value=next(iter(self.MARS_DATASETS)))
-        ttk.Combobox(
+        self.planetary_dataset_combo = ttk.Combobox(
             controls, textvariable=self.planetary_dataset_var,
             values=list(self.MARS_DATASETS), state="readonly", width=34,
-        ).pack(side="left", padx=(6, 12))
+        )
+        self.planetary_dataset_combo.pack(side="left", padx=(6, 12))
         ttk.Button(controls, text="Search NASA PDS", command=lambda: self.planetary_search_async()).pack(side="left")
+        ttk.Button(
+            controls,
+            text="Apollo Image Atlas",
+            command=lambda: self.open_file("https://www.lpi.usra.edu/resources/apollo/"),
+        ).pack(side="left", padx=(6, 0))
         self.enable_responsive_toolbar(controls)
 
         coordinates = ttk.Frame(self.planetary_tab)
@@ -378,8 +460,35 @@ class PlanetaryWorkflowMixin:
         self.planetary_preview_token = 0
         self.after(100, self.planetary_select_feature)
 
+    def planetary_current_features(self):
+        planet = self.planetary_planet_var.get() if hasattr(self, "planetary_planet_var") else "Mars"
+        return self.PLANETARY_FEATURES.get(planet, self.MARS_FEATURES)
+
+    def planetary_current_datasets(self):
+        planet = self.planetary_planet_var.get() if hasattr(self, "planetary_planet_var") else "Mars"
+        return self.PLANETARY_DATASETS.get(planet, self.MARS_DATASETS)
+
+    def planetary_select_planet(self, _event=None):
+        planet = self.planetary_planet_var.get()
+        features = self.planetary_current_features()
+        datasets = self.planetary_current_datasets()
+        self.planetary_feature_combo.configure(values=list(features))
+        self.planetary_dataset_combo.configure(values=list(datasets))
+        self.planetary_feature_var.set(next(iter(features)))
+        self.planetary_dataset_var.set(next(iter(datasets)))
+        self.planetary_products = []
+        self.planetary_selected_product = None
+        self.planetary_results_tree.delete(*self.planetary_results_tree.get_children())
+        self.clear_planetary_preview(
+            f"Select a {planet} product to load its official PDS browse image."
+        )
+        self.planetary_status_var.set(
+            f"Choose a {planet} feature or click the map, then search official PDS products."
+        )
+        self.planetary_select_feature()
+
     def planetary_select_feature(self, _event=None):
-        feature = self.MARS_FEATURES.get(self.planetary_feature_var.get())
+        feature = self.planetary_current_features().get(self.planetary_feature_var.get())
         if not feature:
             return
         latitude, longitude, description = feature
@@ -397,16 +506,24 @@ class PlanetaryWorkflowMixin:
         canvas.delete("all")
         width, height = max(420, canvas.winfo_width()), max(260, canvas.winfo_height())
         padding = 28
-        canvas.create_rectangle(padding, padding, width - padding, height - padding, fill="#8f3f24", outline="#f4a261", width=2)
+        planet = self.planetary_planet_var.get()
+        canvas.configure(bg="#171717" if planet == "Moon" else "#2b1510")
+        map_fill = "#78716c" if planet == "Moon" else "#8f3f24"
+        map_outline = "#e7e5e4" if planet == "Moon" else "#f4a261"
+        grid_fill = "#a8a29e" if planet == "Moon" else "#b96542"
+        canvas.create_rectangle(
+            padding, padding, width - padding, height - padding,
+            fill=map_fill, outline=map_outline, width=2,
+        )
         for latitude in range(-60, 61, 30):
             _x, y = self.planetary_map_point(latitude, 0, width, height, padding)
-            canvas.create_line(padding, y, width - padding, y, fill="#b96542")
+            canvas.create_line(padding, y, width - padding, y, fill=grid_fill)
             canvas.create_text(4, y, text=f"{latitude:+d}°", anchor="w", fill="#f4d6c6")
         for longitude in range(-120, 181, 60):
             x, _y = self.planetary_map_point(0, longitude, width, height, padding)
-            canvas.create_line(x, padding, x, height - padding, fill="#b96542")
+            canvas.create_line(x, padding, x, height - padding, fill=grid_fill)
             canvas.create_text(x, height - 4, text=f"{longitude:+d}°", anchor="s", fill="#f4d6c6")
-        for name, (latitude, longitude, _description) in self.MARS_FEATURES.items():
+        for name, (latitude, longitude, _description) in self.planetary_current_features().items():
             x, y = self.planetary_map_point(latitude, longitude, width, height, padding)
             selected = name == self.planetary_feature_var.get()
             canvas.create_oval(x - 4, y - 4, x + 4, y + 4, fill="#facc15" if selected else "#f8fafc", outline="#111827")
@@ -450,7 +567,11 @@ class PlanetaryWorkflowMixin:
                 )
             except (TypeError, ValueError):
                 continue
-        canvas.create_text(width / 2, 8, text="Mars — equirectangular feature and product map", anchor="n", fill="#fff7ed", font=("Segoe UI", 10, "bold"))
+        canvas.create_text(
+            width / 2, 8,
+            text=f"{planet} — equirectangular feature and product map",
+            anchor="n", fill="#fff7ed", font=("Segoe UI", 10, "bold"),
+        )
 
     def planetary_map_click(self, event):
         width = max(420, self.planetary_map_canvas.winfo_width())
@@ -460,7 +581,8 @@ class PlanetaryWorkflowMixin:
         self.planetary_longitude_var.set(round(longitude, 4))
         self.planetary_feature_var.set("")
         self.planetary_feature_description_var.set(
-            f"Custom Mars location: {latitude:.4f}° latitude, {longitude:.4f}° east longitude."
+            f"Custom {self.planetary_planet_var.get()} location: "
+            f"{latitude:.4f}° latitude, {longitude:.4f}° east longitude."
         )
         self.draw_planetary_map()
 
@@ -470,15 +592,18 @@ class PlanetaryWorkflowMixin:
             longitude = float(self.planetary_longitude_var.get())
             radius = float(self.planetary_radius_var.get())
             dataset = self.planetary_dataset_var.get()
-            self.build_mars_ode_url(latitude, longitude, radius, dataset)
+            self.build_planetary_ode_url(latitude, longitude, radius, dataset)
         except Exception as exc:
             self.planetary_status_var.set(f"Search settings need attention: {exc}")
             return
-        self.planetary_status_var.set("Searching NASA PDS Mars ODE...")
+        planet = self.planetary_planet_var.get()
+        self.planetary_status_var.set(f"Searching NASA PDS {planet} ODE...")
 
         def worker():
             try:
-                products, query_url = self.query_mars_ode(latitude, longitude, radius, dataset)
+                products, query_url = self.query_planetary_ode(
+                    latitude, longitude, radius, dataset
+                )
                 error = None
             except Exception as exc:
                 products, query_url, error = [], "", exc
@@ -593,7 +718,13 @@ class PlanetaryWorkflowMixin:
         except Exception as exc:
             self.planetary_status_var.set(str(exc))
             return False
-        destination = PLANETARY_DIR / f"{product_id}_browse.png"
+        target_folder = str(product.get("_Planetary_target") or "mars").lower()
+        browse_folder = PLANETARY_DIR / target_folder
+        browse_folder.mkdir(parents=True, exist_ok=True)
+        destination = self.unique_planetary_destination(
+            browse_folder,
+            f"{product_id}_browse.png",
+        )
         self.planetary_status_var.set(f"Downloading the best available browse image for {product_id}...")
 
         def worker():
@@ -803,10 +934,11 @@ class PlanetaryWorkflowMixin:
             ):
                 return False
 
-        product_folder = PLANETARY_DIR / re.sub(
+        target_folder = str(product.get("_Planetary_target") or "mars").lower()
+        product_folder = PLANETARY_DIR / target_folder / re.sub(
             r"[^A-Za-z0-9_.-]+",
             "_",
-            self.planetary_archive_product_id(product, "mars_product"),
+            self.planetary_archive_product_id(product, "planetary_product"),
         )
         product_folder.mkdir(parents=True, exist_ok=True)
         destination = self.unique_planetary_destination(

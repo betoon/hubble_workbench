@@ -51,6 +51,21 @@ The original image stays unchanged. AI results are placed in
 and quality setting. AI can create convincing details that were not present in
 the telescope data, so use these results for presentation or artwork—not science.
 
+## Moon in the Planetary Observatory
+
+Choose **Moon** from the Planet menu. Pick an Apollo landing site, crater, or
+polar target, then select an LRO, Clementine, or Chandrayaan-1 dataset and click
+**Search NASA PDS**.
+
+Selecting a result loads its official preview and highlights its footprint.
+Use **Browse / Download Files** to see each archive file and its size before
+downloading. Very large products display a confirmation warning and downloads
+can be cancelled.
+
+The six Apollo landing sites act as geographic targets for later orbital
+coverage. Use **Apollo Image Atlas** for the astronauts' original orbital and
+surface photography.
+
 ## Setup Tab
 
 The **Setup** tab checks whether the astronomy tools are installed.

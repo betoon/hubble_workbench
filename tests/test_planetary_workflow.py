@@ -23,6 +23,28 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         self.assertEqual(query["limit"], ["100"])
         self.assertEqual(query["output"], ["json"])
 
+    def test_lunar_url_uses_moon_target_and_lroc_codes(self):
+        dataset = "LRO LROC NAC — calibrated high resolution"
+        url = PlanetaryWorkflowMixin.build_planetary_ode_url(
+            0.6741, 23.4730, 0.25, dataset
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["target"], ["moon"])
+        self.assertEqual(query["ihid"], ["LRO"])
+        self.assertEqual(query["iid"], ["LROC"])
+        self.assertEqual(query["pt"], ["CDRNAC4"])
+
+    def test_lunar_features_include_all_six_apollo_landing_sites(self):
+        features = PlanetaryWorkflowMixin.MOON_FEATURES
+        for mission in ("11", "12", "14", "15", "16", "17"):
+            self.assertIn(f"Apollo {mission} Landing Site", features)
+
+    def test_lunar_datasets_cover_requested_archives(self):
+        names = " ".join(PlanetaryWorkflowMixin.MOON_DATASETS)
+        self.assertIn("LRO", names)
+        self.assertIn("Clementine", names)
+        self.assertIn("Chandrayaan-1", names)
+
     def test_ode_response_accepts_single_product_or_list(self):
         single = {
             "ODEResults": {
@@ -38,6 +60,15 @@ class PlanetaryWorkflowTests(unittest.TestCase):
         }
         self.assertEqual(len(PlanetaryWorkflowMixin.parse_mars_ode_response(single)), 1)
         self.assertEqual(len(PlanetaryWorkflowMixin.parse_mars_ode_response(multiple)), 2)
+
+    def test_ode_response_accepts_empty_product_marker(self):
+        payload = {
+            "ODEResults": {
+                "Status": "Success",
+                "Products": "No Products Found",
+            }
+        }
+        self.assertEqual(PlanetaryWorkflowMixin.parse_mars_ode_response(payload), [])
 
     def test_map_coordinate_round_trip(self):
         x, y = PlanetaryWorkflowMixin.planetary_map_point(18.38, 77.58, 800, 400)

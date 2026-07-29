@@ -71,6 +71,22 @@ surface texture, clouds, nebular structure, and other details. Do not use an AI
 edit as scientific evidence, measurement data, or a faithful record of an
 observation.
 
+## Planetary Observatory
+
+The Planetary Observatory supports location-based NASA PDS searches for both
+Mars and the Moon. Moon mode includes:
+
+- LRO LROC calibrated narrow-angle and wide-angle color observations
+- Clementine ultraviolet/visible observations
+- Chandrayaan-1 Moon Mineralogy Mapper reflectance products
+- All six Apollo landing sites plus prominent craters and polar targets
+- Official previews, footprint overlays, file listings, selective downloads,
+  progress reporting, cancellation, and large-file warnings
+
+Apollo mission photography is supplied through the official Apollo Image Atlas,
+not presented as an ODE spacecraft dataset. Select an Apollo landing site to
+search later orbital coverage from LRO, Clementine, or Chandrayaan-1.
+
 ## Notes
 
 Space telescope FITS processing can be tricky. Different filters and products may have different image sizes, orientations, or artifacts. This workbench keeps the process simple and automatic: it stretches each channel, resizes channels to match, and combines them into RGB.

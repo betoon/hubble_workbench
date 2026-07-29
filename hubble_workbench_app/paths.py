@@ -5,6 +5,7 @@ APP_DIR = Path(__file__).resolve().parents[1]
 DOWNLOAD_DIR = APP_DIR / "downloads"
 OUTPUT_DIR = APP_DIR / "outputs"
 NOTES_DIR = APP_DIR / "notes"
+PLANETARY_DIR = DOWNLOAD_DIR / "planetary"
 SETTINGS_PATH = APP_DIR / "hubble_settings.json"
 MESSIER_LIST_PATH = APP_DIR / "The Complete Messier List.txt"
 

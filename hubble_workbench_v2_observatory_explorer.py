@@ -88,6 +88,7 @@ from hubble_workbench_app.hydrogen_workflow import HydrogenWorkflowMixin
 from hubble_workbench_app.project_workflow import ProjectWorkflowMixin
 from hubble_workbench_app.preview_workflow import PreviewWorkflowMixin
 from hubble_workbench_app.gallery_workflow import GalleryWorkflowMixin
+from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
 from hubble_workbench_app.download_workflow import DownloadWorkflowMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
 from hubble_workbench_app.mast_helpers import MastSearchHelperMixin
@@ -110,7 +111,7 @@ atexit.register(log_shutdown)# -------------------------------------------------
 
 
 
-class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, HydrogenWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, GalleryWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
+class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, HydrogenWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, GalleryWorkflowMixin, PlanetaryWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -191,6 +192,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.setup_tab = ttk.Frame(self.notebook, padding=14)
         self.browser_tab = ttk.Frame(self.notebook, padding=12)
         self.observatory_tab = ttk.Frame(self.notebook, padding=12)
+        self.planetary_tab = ttk.Frame(self.notebook, padding=12)
         self.convert_tab = ttk.Frame(self.notebook, padding=12)
         self.compose_tab = ttk.Frame(self.notebook, padding=12)
         self.hydrogen_tab = ttk.Frame(self.notebook, padding=12)
@@ -200,6 +202,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.notebook.add(self.setup_tab, text="Setup")
         self.notebook.add(self.browser_tab, text="MAST Browser")
         self.notebook.add(self.observatory_tab, text="Observatory Explorer")
+        self.notebook.add(self.planetary_tab, text="Planetary Observatory")
         self.notebook.add(self.convert_tab, text="FITS Preview / Convert")
         self.notebook.add(self.compose_tab, text="Color Composer")
         self.notebook.add(self.hydrogen_tab, text="Hydrogen Enhance")
@@ -211,6 +214,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.build_setup_tab()
         self.build_browser_tab()
         self.build_observatory_tab()
+        self.build_planetary_tab()
         self.build_convert_tab()
         self.build_compose_tab()
         self.build_hydrogen_tab()

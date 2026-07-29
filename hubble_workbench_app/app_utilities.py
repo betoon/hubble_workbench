@@ -47,11 +47,12 @@ def responsive_toolbar_positions(available_width, item_widths, gap=6):
 
 def responsive_tab_titles(available_width):
     if int(available_width) < 1050:
-        return ("Setup", "MAST", "Explorer", "FITS", "Composer", "H-II", "Gallery", "Debug")
+        return ("Setup", "MAST", "Explorer", "Planets", "FITS", "Composer", "H-II", "Gallery", "Debug")
     return (
         "Setup",
         "MAST Browser",
         "Observatory Explorer",
+        "Planetary Observatory",
         "FITS Preview / Convert",
         "Color Composer",
         "Hydrogen Enhance",

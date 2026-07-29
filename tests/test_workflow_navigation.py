@@ -137,7 +137,7 @@ class WorkflowNavigationTests(unittest.TestCase):
     def test_responsive_tab_titles_compact_on_narrow_window(self):
         self.assertEqual(
             responsive_tab_titles(900),
-            ("Setup", "MAST", "Explorer", "FITS", "Composer", "H-II", "Debug"),
+            ("Setup", "MAST", "Explorer", "FITS", "Composer", "H-II", "Gallery", "Debug"),
         )
         self.assertEqual(responsive_tab_titles(1200)[1], "MAST Browser")
 

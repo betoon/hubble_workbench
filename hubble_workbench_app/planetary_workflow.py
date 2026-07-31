@@ -520,6 +520,22 @@ class PlanetaryWorkflowMixin:
         return fallback
 
     @staticmethod
+    def filter_planetary_products(products, search_text=""):
+        query = str(search_text or "").strip().casefold()
+        indexed_products = list(enumerate(products or ()))
+        if not query:
+            return indexed_products
+        fields = (
+            "Observation_id", "Product_id", "Instrument", "Target",
+            "Observation_time", "UTC_start_time", "Comment", "Description",
+        )
+        return [
+            (index, product)
+            for index, product in indexed_products
+            if query in " ".join(str(product.get(field) or "") for field in fields).casefold()
+        ]
+
+    @staticmethod
     def planetary_archive_product_id(product, fallback=""):
         for field in ("ProductURL", "FilesURL"):
             query = parse_qs(urlparse(str(product.get(field) or "")).query)
@@ -714,6 +730,32 @@ class PlanetaryWorkflowMixin:
         ):
             self.planetary_results_tree.heading(column, text=heading)
             self.planetary_results_tree.column(column, width=width, anchor="w")
+        result_filters = ttk.Frame(products_panel)
+        result_filters.pack(fill="x", pady=(0, 6))
+        ttk.Label(result_filters, text="Filter loaded results").pack(side="left")
+        self.planetary_result_filter_var = tk.StringVar(value="")
+        ttk.Entry(
+            result_filters,
+            textvariable=self.planetary_result_filter_var,
+            width=30,
+        ).pack(side="left", padx=(6, 12), fill="x", expand=True)
+        self.planetary_result_count_var = tk.StringVar(value="0 shown")
+        ttk.Label(
+            result_filters,
+            textvariable=self.planetary_result_count_var,
+        ).pack(side="left", padx=(0, 12))
+        ttk.Label(result_filters, text="Results to request").pack(side="left")
+        self.planetary_result_limit_var = tk.IntVar(value=25)
+        ttk.Spinbox(
+            result_filters,
+            textvariable=self.planetary_result_limit_var,
+            values=(10, 25, 50, 100),
+            state="readonly",
+            width=5,
+        ).pack(side="left", padx=(6, 0))
+        self.planetary_result_filter_var.trace_add(
+            "write", lambda *_args: self.refresh_planetary_results()
+        )
         self.planetary_results_tree.pack(fill="x", expand=False)
         self.planetary_results_tree.bind("<<TreeviewSelect>>", self.planetary_result_selected)
         product_tools = ttk.Frame(products_panel)
@@ -969,6 +1011,10 @@ class PlanetaryWorkflowMixin:
             )
             return True
         opus_query = dataset_configuration.get("opus_query")
+        try:
+            result_limit = max(1, min(100, int(self.planetary_result_limit_var.get())))
+        except (AttributeError, TypeError, ValueError, tk.TclError):
+            result_limit = 25
         if opus_query:
             planet = self.planetary_planet_var.get()
             self.planetary_status_var.set(
@@ -978,7 +1024,7 @@ class PlanetaryWorkflowMixin:
             def opus_worker():
                 try:
                     products, query_url = query_opus_products(
-                        opus_query, limit=25, timeout=35
+                        opus_query, limit=result_limit, timeout=35
                     )
                     for product in products:
                         product["_Planetary_target"] = planet.lower()
@@ -1009,7 +1055,7 @@ class PlanetaryWorkflowMixin:
         def worker():
             try:
                 products, query_url = self.query_planetary_ode(
-                    latitude, longitude, radius, dataset
+                    latitude, longitude, radius, dataset, limit=result_limit
                 )
                 error = None
             except Exception as exc:
@@ -1025,20 +1071,37 @@ class PlanetaryWorkflowMixin:
             return
         self.planetary_products = list(products)
         self.planetary_last_query_url = query_url
-        self.planetary_results_tree.delete(*self.planetary_results_tree.get_children())
-        for index, product in enumerate(self.planetary_products):
-            observation_id = self.planetary_product_id(product, f"Product {index + 1}")
-            date = str(product.get("Observation_time") or product.get("UTC_start_time") or "")[:10]
-            self.planetary_results_tree.insert(
-                "", "end", iid=str(index),
-                values=(observation_id, date, product.get("Map_scale", ""), product.get("Comment") or product.get("Description") or ""),
-            )
+        self.refresh_planetary_results()
         self.planetary_selected_product = None
         self.clear_planetary_preview("Select a product to load its official PDS browse image.")
         self.draw_planetary_map()
         self.planetary_status_var.set(
             f"Found {len(products)} {dataset} product(s) in the selected region."
         )
+
+    def refresh_planetary_results(self):
+        if not hasattr(self, "planetary_results_tree"):
+            return 0
+        self.planetary_results_tree.delete(*self.planetary_results_tree.get_children())
+        search_text = (
+            self.planetary_result_filter_var.get()
+            if hasattr(self, "planetary_result_filter_var")
+            else ""
+        )
+        matches = self.filter_planetary_products(
+            getattr(self, "planetary_products", ()), search_text
+        )
+        for index, product in matches:
+            observation_id = self.planetary_product_id(product, f"Product {index + 1}")
+            date = str(product.get("Observation_time") or product.get("UTC_start_time") or "")[:10]
+            self.planetary_results_tree.insert(
+                "", "end", iid=str(index),
+                values=(observation_id, date, product.get("Map_scale", ""), product.get("Comment") or product.get("Description") or ""),
+            )
+        if hasattr(self, "planetary_result_count_var"):
+            total = len(getattr(self, "planetary_products", ()))
+            self.planetary_result_count_var.set(f"{len(matches)} of {total} shown")
+        return len(matches)
 
     def planetary_result_selected(self, _event=None):
         selection = self.planetary_results_tree.selection()

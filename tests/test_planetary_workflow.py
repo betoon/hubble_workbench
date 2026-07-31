@@ -7,6 +7,21 @@ from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
 
 
 class PlanetaryWorkflowTests(unittest.TestCase):
+    def test_planetary_product_filter_searches_science_fields_and_keeps_indexes(self):
+        products = [
+            {"Observation_id": "A", "Instrument": "Voyager ISS", "Target": "Neptune"},
+            {"Observation_id": "B", "Instrument": "Hubble WFC3", "Target": "Uranus"},
+        ]
+        self.assertEqual(
+            PlanetaryWorkflowMixin.filter_planetary_products(products, "wfc3"),
+            [(1, products[1])],
+        )
+        self.assertEqual(
+            PlanetaryWorkflowMixin.filter_planetary_products(products, "neptune"),
+            [(0, products[0])],
+        )
+        self.assertEqual(len(PlanetaryWorkflowMixin.filter_planetary_products(products)), 2)
+
     def test_mars_search_bounds_normalize_longitude_and_clamp_latitude(self):
         bounds = PlanetaryWorkflowMixin.mars_search_bounds(89.9, -133.8, 1.0)
         self.assertEqual(bounds["maxlat"], 90.0)

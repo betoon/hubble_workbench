@@ -21,6 +21,13 @@ class PlanetaryOpusTests(unittest.TestCase):
         self.assertEqual(query["limit"], ["100"])
         self.assertIn("opusid", query["cols"][0])
 
+    def test_search_url_accepts_later_result_page(self):
+        url = build_opus_search_url(
+            {"planet": "Neptune"}, limit=25, start_obs=51
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["startobs"], ["51"])
+
     def test_search_results_join_metadata_and_preview_by_opus_id(self):
         metadata = {
             "page": [[

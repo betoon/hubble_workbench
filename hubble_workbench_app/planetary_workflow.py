@@ -11,7 +11,7 @@ from tkinter import messagebox, ttk
 from PIL import Image, ImageTk
 
 from .paths import PLANETARY_DIR
-from .planetary_opus import query_opus_product_files, query_opus_products
+from .planetary_opus import query_opus_product_files, query_opus_products_page
 
 
 class PlanetaryWorkflowMixin:
@@ -536,6 +536,16 @@ class PlanetaryWorkflowMixin:
         ]
 
     @staticmethod
+    def planetary_opus_page_text(start_obs, count, available):
+        start = max(1, int(start_obs or 1))
+        count = max(0, int(count or 0))
+        available = max(0, int(available or 0))
+        if not available:
+            return "No OPUS results"
+        end = min(available, start + max(0, count - 1))
+        return f"{start:,}-{end:,} of {available:,}"
+
+    @staticmethod
     def planetary_archive_product_id(product, fallback=""):
         for field in ("ProductURL", "FilesURL"):
             query = parse_qs(urlparse(str(product.get(field) or "")).query)
@@ -763,6 +773,25 @@ class PlanetaryWorkflowMixin:
             state="readonly",
             width=5,
         ).pack(side="left", padx=(6, 0))
+        self.planetary_previous_page_button = ttk.Button(
+            result_filters,
+            text="Previous",
+            command=self.planetary_previous_opus_page,
+            state="disabled",
+        )
+        self.planetary_previous_page_button.pack(side="left", padx=(12, 4))
+        self.planetary_page_var = tk.StringVar(value="OPUS page not loaded")
+        ttk.Label(
+            result_filters,
+            textvariable=self.planetary_page_var,
+        ).pack(side="left", padx=4)
+        self.planetary_next_page_button = ttk.Button(
+            result_filters,
+            text="Next",
+            command=self.planetary_next_opus_page,
+            state="disabled",
+        )
+        self.planetary_next_page_button.pack(side="left", padx=(4, 0))
         self.planetary_result_filter_var.trace_add(
             "write", lambda *_args: self.refresh_planetary_results()
         )
@@ -800,6 +829,7 @@ class PlanetaryWorkflowMixin:
         self.planetary_preview_image = None
         self.planetary_preview_token = 0
         self.planetary_preview_cache = {}
+        self.planetary_opus_page_info = {}
         self.after(100, self.planetary_select_feature)
 
     def planetary_current_features(self):
@@ -811,6 +841,8 @@ class PlanetaryWorkflowMixin:
         return self.PLANETARY_DATASETS.get(planet, self.MARS_DATASETS)
 
     def planetary_dataset_changed(self, _event=None):
+        self.planetary_opus_page_info = {}
+        self.refresh_planetary_page_controls()
         dataset = self.planetary_current_datasets().get(
             self.planetary_dataset_var.get(), {}
         )
@@ -1010,7 +1042,7 @@ class PlanetaryWorkflowMixin:
         )
         self.draw_planetary_map()
 
-    def planetary_search_async(self):
+    def planetary_search_async(self, opus_start=1):
         dataset_name = self.planetary_dataset_var.get()
         dataset_configuration = self.planetary_current_datasets().get(
             dataset_name, {}
@@ -1029,24 +1061,30 @@ class PlanetaryWorkflowMixin:
             result_limit = 25
         if opus_query:
             planet = self.planetary_planet_var.get()
+            opus_start = max(1, int(opus_start or 1))
+            self.planetary_previous_page_button.configure(state="disabled")
+            self.planetary_next_page_button.configure(state="disabled")
             self.planetary_status_var.set(
-                f"Searching NASA PDS OPUS for {dataset_name}..."
+                f"Searching NASA PDS OPUS for {dataset_name}, starting at result {opus_start:,}..."
             )
 
             def opus_worker():
                 try:
-                    products, query_url = query_opus_products(
-                        opus_query, limit=result_limit, timeout=35
+                    products, query_url, page_info = query_opus_products_page(
+                        opus_query,
+                        limit=result_limit,
+                        start_obs=opus_start,
+                        timeout=35,
                     )
                     for product in products:
                         product["_Planetary_target"] = planet.lower()
                     error = None
                 except Exception as exc:
-                    products, query_url, error = [], "", exc
+                    products, query_url, page_info, error = [], "", {}, exc
                 self.after(
                     0,
                     lambda: self.finish_planetary_search(
-                        products, query_url, dataset_name, error
+                        products, query_url, dataset_name, error, page_info
                     ),
                 )
 
@@ -1077,19 +1115,66 @@ class PlanetaryWorkflowMixin:
         threading.Thread(target=worker, daemon=True).start()
         return True
 
-    def finish_planetary_search(self, products, query_url, dataset, error=None):
+    def finish_planetary_search(
+        self, products, query_url, dataset, error=None, opus_page_info=None
+    ):
         if error:
             self.planetary_status_var.set(f"NASA PDS search failed: {error}")
             return
+        self.planetary_opus_page_info = dict(opus_page_info or {})
+        self.refresh_planetary_page_controls()
         self.planetary_products = list(products)
         self.planetary_last_query_url = query_url
         self.refresh_planetary_results()
         self.planetary_selected_product = None
         self.clear_planetary_preview("Select a product to load its official PDS browse image.")
         self.draw_planetary_map()
-        self.planetary_status_var.set(
-            f"Found {len(products)} {dataset} product(s) in the selected region."
-        )
+        if self.planetary_opus_page_info:
+            start, count, _limit, available = self.refresh_planetary_page_controls()
+            page_text = self.planetary_opus_page_text(start, count, available)
+            self.planetary_status_var.set(
+                f"Showing OPUS results {page_text} for {dataset}."
+            )
+        else:
+            self.planetary_status_var.set(
+                f"Found {len(products)} {dataset} product(s) in the selected region."
+            )
+
+    def refresh_planetary_page_controls(self):
+        info = getattr(self, "planetary_opus_page_info", {}) or {}
+        start = int(info.get("start_obs") or 1)
+        count = int(info.get("count") or 0)
+        limit = int(info.get("limit") or 25)
+        available = int(info.get("available") or 0)
+        if hasattr(self, "planetary_page_var"):
+            self.planetary_page_var.set(
+                self.planetary_opus_page_text(start, count, available)
+                if info else "OPUS page not loaded"
+            )
+        if hasattr(self, "planetary_previous_page_button"):
+            self.planetary_previous_page_button.configure(
+                state="normal" if info and start > 1 else "disabled"
+            )
+        if hasattr(self, "planetary_next_page_button"):
+            self.planetary_next_page_button.configure(
+                state=(
+                    "normal"
+                    if info and count > 0 and start + count <= available
+                    else "disabled"
+                )
+            )
+        return start, count, limit, available
+
+    def planetary_previous_opus_page(self):
+        start, _count, limit, _available = self.refresh_planetary_page_controls()
+        return self.planetary_search_async(max(1, start - limit))
+
+    def planetary_next_opus_page(self):
+        start, count, _limit, available = self.refresh_planetary_page_controls()
+        next_start = start + count
+        if count <= 0 or next_start > available:
+            return False
+        return self.planetary_search_async(next_start)
 
     def refresh_planetary_results(self):
         if not hasattr(self, "planetary_results_tree"):

@@ -20,11 +20,11 @@ def opus_product_page_url(opus_id):
     return f"{OPUS_ROOT}/#/view=detail&detail={quote(str(opus_id), safe='-')}"
 
 
-def build_opus_search_url(query, endpoint="data.json", limit=25):
+def build_opus_search_url(query, endpoint="data.json", limit=25, start_obs=1):
     parameters = {
         **dict(query or {}),
         "order": "time1,opusid",
-        "startobs": 1,
+        "startobs": max(1, int(start_obs)),
         "limit": max(1, min(100, int(limit))),
     }
     if endpoint == "data.json":
@@ -73,12 +73,30 @@ def parse_opus_search_results(metadata_payload, image_payload):
     return products
 
 
-def query_opus_products(query, limit=25, timeout=35):
-    metadata_url = build_opus_search_url(query, "data.json", limit)
-    image_url = build_opus_search_url(query, "images/med.json", limit)
+def query_opus_products_page(query, limit=25, start_obs=1, timeout=35):
+    metadata_url = build_opus_search_url(
+        query, "data.json", limit, start_obs=start_obs
+    )
+    image_url = build_opus_search_url(
+        query, "images/med.json", limit, start_obs=start_obs
+    )
+    metadata_payload = _read_json(metadata_url, timeout)
     products = parse_opus_search_results(
-        _read_json(metadata_url, timeout),
+        metadata_payload,
         _read_json(image_url, timeout),
+    )
+    page_info = {
+        "start_obs": max(1, int(metadata_payload.get("start_obs") or start_obs)),
+        "limit": max(1, int(metadata_payload.get("limit") or limit)),
+        "count": max(0, int(metadata_payload.get("count") or len(products))),
+        "available": max(0, int(metadata_payload.get("available") or len(products))),
+    }
+    return products, metadata_url, page_info
+
+
+def query_opus_products(query, limit=25, timeout=35):
+    products, metadata_url, _page_info = query_opus_products_page(
+        query, limit=limit, start_obs=1, timeout=timeout
     )
     return products, metadata_url
 

@@ -7,6 +7,16 @@ from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
 
 
 class PlanetaryWorkflowTests(unittest.TestCase):
+    def test_opus_page_text_formats_range_and_empty_results(self):
+        self.assertEqual(
+            PlanetaryWorkflowMixin.planetary_opus_page_text(26, 25, 1234),
+            "26-50 of 1,234",
+        )
+        self.assertEqual(
+            PlanetaryWorkflowMixin.planetary_opus_page_text(1, 0, 0),
+            "No OPUS results",
+        )
+
     def test_planetary_preview_cache_is_bounded_and_refreshes_recent_item(self):
         cache = {}
         for index in range(4):

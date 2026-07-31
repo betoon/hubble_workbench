@@ -7,6 +7,22 @@ from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
 
 
 class PlanetaryWorkflowTests(unittest.TestCase):
+    def test_planetary_product_sort_is_numeric_for_scale_and_keeps_missing_last(self):
+        products = [
+            {"Observation_id": "A", "Map_scale": "10"},
+            {"Observation_id": "B", "Map_scale": "2"},
+            {"Observation_id": "C", "Map_scale": ""},
+        ]
+        indexed = list(enumerate(products))
+        ascending = PlanetaryWorkflowMixin.sort_planetary_products(
+            indexed, "scale"
+        )
+        descending = PlanetaryWorkflowMixin.sort_planetary_products(
+            indexed, "scale", reverse=True
+        )
+        self.assertEqual([index for index, _product in ascending], [1, 0, 2])
+        self.assertEqual([index for index, _product in descending], [0, 1, 2])
+
     def test_planetary_product_row_includes_instrument_target_and_scale(self):
         row = PlanetaryWorkflowMixin.planetary_product_row({
             "Observation_id": "hst-example",

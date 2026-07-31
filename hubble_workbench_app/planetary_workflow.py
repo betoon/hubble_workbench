@@ -560,6 +560,43 @@ class PlanetaryWorkflowMixin:
             str(product.get("Comment") or product.get("Description") or ""),
         )
 
+    @classmethod
+    def planetary_product_sort_value(cls, product, column):
+        if column == "id":
+            return cls.planetary_product_id(product, "").casefold()
+        if column == "date":
+            return str(
+                product.get("Observation_time")
+                or product.get("UTC_start_time")
+                or ""
+            ).casefold()
+        if column == "instrument":
+            return str(product.get("Instrument") or "").casefold()
+        if column == "target":
+            return str(
+                product.get("Target") or product.get("_Planetary_target") or ""
+            ).casefold()
+        if column == "scale":
+            try:
+                return float(product.get("Map_scale"))
+            except (TypeError, ValueError):
+                return None
+        return str(
+            product.get("Comment") or product.get("Description") or ""
+        ).casefold()
+
+    @classmethod
+    def sort_planetary_products(cls, indexed_products, column, reverse=False):
+        items = list(indexed_products or ())
+        if not column:
+            return items
+        present, missing = [], []
+        for item in items:
+            value = cls.planetary_product_sort_value(item[1], column)
+            (missing if value is None or value == "" else present).append((item, value))
+        present.sort(key=lambda entry: entry[1], reverse=bool(reverse))
+        return [item for item, _value in present] + [item for item, _value in missing]
+
     @staticmethod
     def planetary_archive_product_id(product, fallback=""):
         for field in ("ProductURL", "FilesURL"):
@@ -765,12 +802,20 @@ class PlanetaryWorkflowMixin:
             show="headings",
             height=11,
         )
+        self.planetary_result_headings = {}
+        self.planetary_result_sort_column = ""
+        self.planetary_result_sort_reverse = False
         for column, heading, width in (
             ("id", "Observation", 145), ("date", "Date", 105),
             ("instrument", "Instrument", 125), ("target", "Target", 95),
             ("scale", "m/pixel", 70), ("description", "Description", 260),
         ):
-            self.planetary_results_tree.heading(column, text=heading)
+            self.planetary_result_headings[column] = heading
+            self.planetary_results_tree.heading(
+                column,
+                text=heading,
+                command=lambda selected=column: self.sort_planetary_results(selected),
+            )
             self.planetary_results_tree.column(
                 column,
                 width=width,
@@ -1249,6 +1294,11 @@ class PlanetaryWorkflowMixin:
         matches = self.filter_planetary_products(
             getattr(self, "planetary_products", ()), search_text
         )
+        matches = self.sort_planetary_products(
+            matches,
+            getattr(self, "planetary_result_sort_column", ""),
+            getattr(self, "planetary_result_sort_reverse", False),
+        )
         for index, product in matches:
             self.planetary_results_tree.insert(
                 "", "end", iid=str(index),
@@ -1258,6 +1308,26 @@ class PlanetaryWorkflowMixin:
             total = len(getattr(self, "planetary_products", ()))
             self.planetary_result_count_var.set(f"{len(matches)} of {total} shown")
         return len(matches)
+
+    def sort_planetary_results(self, column):
+        if column not in getattr(self, "planetary_result_headings", {}):
+            return False
+        if self.planetary_result_sort_column == column:
+            self.planetary_result_sort_reverse = not self.planetary_result_sort_reverse
+        else:
+            self.planetary_result_sort_column = column
+            self.planetary_result_sort_reverse = False
+        for name, heading in self.planetary_result_headings.items():
+            indicator = ""
+            if name == self.planetary_result_sort_column:
+                indicator = " ▼" if self.planetary_result_sort_reverse else " ▲"
+            self.planetary_results_tree.heading(
+                name,
+                text=heading + indicator,
+                command=lambda selected=name: self.sort_planetary_results(selected),
+            )
+        self.refresh_planetary_results()
+        return True
 
     def planetary_result_selected(self, _event=None):
         selection = self.planetary_results_tree.selection()

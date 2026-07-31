@@ -549,6 +549,17 @@ class PlanetaryWorkflowMixin:
     def planetary_opus_order(label):
         return "-time1,opusid" if str(label).startswith("Newest") else "time1,opusid"
 
+    @classmethod
+    def planetary_product_row(cls, product, fallback="Planetary product"):
+        return (
+            cls.planetary_product_id(product, fallback),
+            str(product.get("Observation_time") or product.get("UTC_start_time") or "")[:10],
+            str(product.get("Instrument") or ""),
+            str(product.get("Target") or product.get("_Planetary_target") or ""),
+            str(product.get("Map_scale") or ""),
+            str(product.get("Comment") or product.get("Description") or ""),
+        )
+
     @staticmethod
     def planetary_archive_product_id(product, fallback=""):
         for field in ("ProductURL", "FilesURL"):
@@ -746,14 +757,27 @@ class PlanetaryWorkflowMixin:
         tabs.add(sources_panel, text="Official Sources")
         sources_content = self.build_scrollable_tab_content(sources_panel)
 
-        result_columns = ("id", "date", "scale", "description")
-        self.planetary_results_tree = ttk.Treeview(products_panel, columns=result_columns, show="headings", height=11)
+        result_columns = ("id", "date", "instrument", "target", "scale", "description")
+        results_table = ttk.Frame(products_panel)
+        self.planetary_results_tree = ttk.Treeview(
+            results_table,
+            columns=result_columns,
+            show="headings",
+            height=11,
+        )
         for column, heading, width in (
             ("id", "Observation", 145), ("date", "Date", 105),
+            ("instrument", "Instrument", 125), ("target", "Target", 95),
             ("scale", "m/pixel", 70), ("description", "Description", 260),
         ):
             self.planetary_results_tree.heading(column, text=heading)
-            self.planetary_results_tree.column(column, width=width, anchor="w")
+            self.planetary_results_tree.column(
+                column,
+                width=width,
+                minwidth=60,
+                anchor="w",
+                stretch=column == "description",
+            )
         result_filters = ttk.Frame(products_panel)
         result_filters.pack(fill="x", pady=(0, 6))
         filter_row = ttk.Frame(result_filters)
@@ -811,7 +835,24 @@ class PlanetaryWorkflowMixin:
         self.planetary_result_filter_var.trace_add(
             "write", lambda *_args: self.refresh_planetary_results()
         )
-        self.planetary_results_tree.pack(fill="x", expand=False)
+        result_scroll_y = ttk.Scrollbar(
+            results_table,
+            orient="vertical",
+            command=self.planetary_results_tree.yview,
+        )
+        result_scroll_x = ttk.Scrollbar(
+            results_table,
+            orient="horizontal",
+            command=self.planetary_results_tree.xview,
+        )
+        self.planetary_results_tree.configure(
+            yscrollcommand=result_scroll_y.set,
+            xscrollcommand=result_scroll_x.set,
+        )
+        results_table.pack(fill="x", expand=False)
+        result_scroll_x.pack(side="bottom", fill="x")
+        result_scroll_y.pack(side="right", fill="y")
+        self.planetary_results_tree.pack(side="left", fill="both", expand=True)
         self.planetary_results_tree.bind("<<TreeviewSelect>>", self.planetary_result_selected)
         product_tools = ttk.Frame(products_panel)
         product_tools.pack(fill="x", pady=6)
@@ -1209,11 +1250,9 @@ class PlanetaryWorkflowMixin:
             getattr(self, "planetary_products", ()), search_text
         )
         for index, product in matches:
-            observation_id = self.planetary_product_id(product, f"Product {index + 1}")
-            date = str(product.get("Observation_time") or product.get("UTC_start_time") or "")[:10]
             self.planetary_results_tree.insert(
                 "", "end", iid=str(index),
-                values=(observation_id, date, product.get("Map_scale", ""), product.get("Comment") or product.get("Description") or ""),
+                values=self.planetary_product_row(product, f"Product {index + 1}"),
             )
         if hasattr(self, "planetary_result_count_var"):
             total = len(getattr(self, "planetary_products", ()))

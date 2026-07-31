@@ -7,6 +7,23 @@ from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
 
 
 class PlanetaryWorkflowTests(unittest.TestCase):
+    def test_planetary_product_row_includes_instrument_target_and_scale(self):
+        row = PlanetaryWorkflowMixin.planetary_product_row({
+            "Observation_id": "hst-example",
+            "Observation_time": "2025-01-02T03:04:05",
+            "Instrument": "Hubble WFC3",
+            "Target": "Uranus",
+            "Map_scale": "0.25",
+            "Comment": "Cloud observation",
+        })
+        self.assertEqual(
+            row,
+            (
+                "hst-example", "2025-01-02", "Hubble WFC3", "Uranus",
+                "0.25", "Cloud observation",
+            ),
+        )
+
     def test_opus_page_text_formats_range_and_empty_results(self):
         self.assertEqual(
             PlanetaryWorkflowMixin.planetary_opus_page_text(26, 25, 1234),

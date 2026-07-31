@@ -383,14 +383,19 @@ from a normal photograph.
 - **HDU List** shows extension names, types, dimensions, bit depth, and header
   card counts.
 - **Publication** can load suitable fields from the FITS header and save AVM 1.2
-  sidecar metadata as XMP and JSON. Review and complete creator, credit, rights,
-  title, and description fields before publication.
+  sidecar metadata as XMP and JSON. Its Core, Observation, and WCS sections
+  include a live completeness report. **Save Creator Template** remembers
+  reusable creator, credit, rights, publisher, and website information; **Apply
+  Creator Template** fills those fields on another image. Review the title,
+  description, subject, filters, color assignments, and coordinates before
+  publication.
 
 ### Save PNG/TIFF
 
-Saves the stretched preview as PNG and TIFF. Choose 8-bit for ordinary display
-files or 16-bit when you want more tonal precision for later editing. Exporting
-does not alter the source FITS file.
+Saves the stretched preview as PNG and TIFF and embeds the current AVM XMP
+packet inside both exported images. Choose 8-bit for ordinary display files or
+16-bit when you want more tonal precision for later editing. Exporting does not
+alter the source FITS file.
 
 ## Color Composer Tab
 
@@ -431,6 +436,9 @@ Saves:
 - PNG image.
 - TIFF image.
 - Notes file with processing settings and filter information.
+- Embedded AVM publication metadata plus matching XMP and JSON sidecars. The
+  metadata records the telescope, instrument, filter, and assigned display
+  color for every available RGB channel.
 
 ### Open Latest Output
 

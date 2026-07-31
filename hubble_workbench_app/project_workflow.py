@@ -10,10 +10,65 @@ except Exception:
     tifffile = None
 
 from .image_processing import float_rgb_to_uint16
-from .paths import APP_DIR, NOTES_DIR, OUTPUT_DIR, PROJECT_DIR
+from .paths import AVM_TEMPLATE_PATH, APP_DIR, NOTES_DIR, OUTPUT_DIR, PROJECT_DIR
 
 
 class ProjectWorkflowMixin:
+    @staticmethod
+    def composite_channel_metadata(headers):
+        channels = []
+        for color, header in zip(("Red", "Green", "Blue"), headers or ()):
+            filters = [
+                str(header.get(key))
+                for key in ("FILTER", "FILTER1", "FILTER2")
+                if header.get(key)
+            ]
+            channels.append({
+                "color": color,
+                "facility": str(header.get("TELESCOP") or ""),
+                "instrument": str(header.get("INSTRUME") or ""),
+                "filters": filters,
+                "observation_date": str(header.get("DATE-OBS") or header.get("DATE-BEG") or ""),
+                "exposure_time": str(header.get("EXPTIME") or header.get("EFFEXPTM") or ""),
+            })
+        return channels
+
+    def composite_avm_metadata(self, output_image):
+        headers = list(getattr(self, "rgb_headers", []) or [])
+        metadata = self.avm_metadata_from_header(headers[0] if headers else {})
+        if AVM_TEMPLATE_PATH.exists():
+            try:
+                template = json.loads(AVM_TEMPLATE_PATH.read_text(encoding="utf-8"))
+                metadata.update(self.avm_creator_template(template))
+            except Exception:
+                pass
+        channels = self.composite_channel_metadata(headers)
+        facilities = sorted({item["facility"] for item in channels if item["facility"]})
+        instruments = sorted({item["instrument"] for item in channels if item["instrument"]})
+        all_filters = []
+        assignments = []
+        for item in channels:
+            all_filters.extend(item["filters"])
+            if item["filters"]:
+                assignments.append(f"{item['color']}: {', '.join(item['filters'])}")
+        target = str(self.target_var.get() or "").strip()
+        metadata.update({
+            "title": target or metadata.get("title", ""),
+            "headline": f"{target} color composite" if target else "Astronomy color composite",
+            "description": f"Color composite of {target} created with Space Telescope Workbench." if target else "Color composite created with Space Telescope Workbench.",
+            "subject": target or metadata.get("subject", ""),
+            "image_type": "Observation",
+            "quality": "Good",
+            "facility": ", ".join(facilities),
+            "instrument": ", ".join(instruments),
+            "spectral_band": ", ".join(dict.fromkeys(all_filters)),
+            "color_assignment": "; ".join(assignments),
+            "image_width": str(output_image.width),
+            "image_height": str(output_image.height),
+            "channels": channels,
+        })
+        return {"avm_version": "1.2", **metadata}
+
     @staticmethod
     def safe_project_name(target):
         name = re.sub(r"[^A-Za-z0-9._-]+", "_", str(target or "").strip())
@@ -240,13 +295,26 @@ class ProjectWorkflowMixin:
         png_path = OUTPUT_DIR / f"{prefix}_rgb_{stamp}.png"
         tif_path = OUTPUT_DIR / f"{prefix}_rgb_{stamp}.tif"
         notes_path = NOTES_DIR / f"{prefix}_rgb_{stamp}_notes.txt"
-        output_image.save(png_path)
+        avm_payload = self.composite_avm_metadata(output_image)
+        self.save_image_with_avm(output_image, png_path, avm_payload)
         saved_16bit = False
         if output_float is not None and tifffile is not None and output_float.shape[:2] == (output_image.height, output_image.width):
-            tifffile.imwrite(str(tif_path), float_rgb_to_uint16(output_float), photometric="rgb")
+            xmp_bytes = self.avm_xmp_packet(avm_payload).encode("utf-8")
+            tifffile.imwrite(
+                str(tif_path),
+                float_rgb_to_uint16(output_float),
+                photometric="rgb",
+                extratags=[(700, "B", len(xmp_bytes), xmp_bytes, False)],
+            )
             saved_16bit = True
         else:
-            output_image.save(tif_path)
+            self.save_image_with_avm(output_image, tif_path, avm_payload)
+        avm_json_path = base.with_suffix(".avm.json")
+        xmp_path = base.with_suffix(".xmp")
+        avm_json_path.write_text(
+            json.dumps(avm_payload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        xmp_path.write_text(self.avm_xmp_packet(avm_payload), encoding="utf-8")
         notes = [
             f"{self.telescope_var.get()} RGB Composite",
             f"Created: {datetime.now().isoformat(timespec='seconds')}",
@@ -293,4 +361,6 @@ class ProjectWorkflowMixin:
         notes_path.write_text("\n".join(notes), encoding="utf-8")
         self.last_output_path = png_path
         bit_note = "16-bit TIFF" if saved_16bit else "8-bit TIFF"
-        self.compose_status.set(f"Saved {png_path.name}, {tif_path.name} ({bit_note}), and notes.")
+        self.compose_status.set(
+            f"Saved {png_path.name}, {tif_path.name} ({bit_note}), notes, and AVM metadata."
+        )

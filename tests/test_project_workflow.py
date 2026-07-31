@@ -7,6 +7,16 @@ from hubble_workbench_app.project_workflow import ProjectWorkflowMixin
 
 
 class ProjectWorkflowTests(unittest.TestCase):
+    def test_composite_channel_metadata_preserves_filter_color_assignments(self):
+        channels = ProjectWorkflowMixin.composite_channel_metadata([
+            {"TELESCOP": "HST", "INSTRUME": "WFC3", "FILTER": "F814W"},
+            {"TELESCOP": "HST", "INSTRUME": "WFC3", "FILTER": "F555W"},
+            {"TELESCOP": "JWST", "INSTRUME": "NIRCAM", "FILTER": "F200W"},
+        ])
+        self.assertEqual([item["color"] for item in channels], ["Red", "Green", "Blue"])
+        self.assertEqual(channels[0]["filters"], ["F814W"])
+        self.assertEqual(channels[2]["facility"], "JWST")
+
     def test_safe_project_name_handles_target_names_and_empty_values(self):
         self.assertEqual(ProjectWorkflowMixin.safe_project_name("M 42 / Orion"), "M_42_Orion")
         self.assertEqual(ProjectWorkflowMixin.safe_project_name(""), "untitled")

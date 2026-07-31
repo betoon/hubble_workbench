@@ -1,20 +1,28 @@
 import threading
 import json
+import math
 from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, PngImagePlugin, TiffImagePlugin
 
 from .fits_io import FITS, _celestial_wcs, first_image_hdu, first_image_hdu_details
 from .image_processing import downsample_array_for_preview, normalize_image, normalize_image_uint16
-from .paths import DOWNLOAD_DIR, OUTPUT_DIR
+from .paths import AVM_TEMPLATE_PATH, DOWNLOAD_DIR, OUTPUT_DIR
 from .settings import SETTINGS, save_settings
 
 
 class PreviewWorkflowMixin:
+    AVM_CREATOR_TEMPLATE_FIELDS = (
+        "creator", "creator_url", "credit", "rights", "publisher_id",
+    )
+    AVM_COMPLETENESS_FIELDS = (
+        "title", "description", "creator", "credit", "rights", "subject",
+        "facility", "instrument", "spectral_band", "image_type",
+    )
     PREVIEW_METADATA_GROUPS = (
         ("File and Image", ("FILENAME", "EXTNAME", "NAXIS1", "NAXIS2", "BITPIX", "BUNIT")),
         ("Target and Observation", ("TARGNAME", "OBJECT", "TELESCOP", "INSTRUME", "DETECTOR", "FILTER", "FILTER1", "FILTER2", "EXPTIME", "DATE-OBS", "TIME-OBS", "PROPOSID", "PROGRAM")),
@@ -840,17 +848,80 @@ class PreviewWorkflowMixin:
 
     @staticmethod
     def avm_metadata_from_header(header):
+        def first(*keys):
+            return next((header.get(key) for key in keys if header.get(key) not in (None, "")), "")
+
+        def number(value):
+            try:
+                return f"{float(value):.10g}"
+            except (TypeError, ValueError):
+                return ""
+
+        def absolute_number(value):
+            try:
+                return number(abs(float(value)))
+            except (TypeError, ValueError):
+                return ""
+
+        scale_x = first("CDELT1")
+        scale_y = first("CDELT2")
+        if scale_x in (None, "") and header.get("CD1_1") is not None:
+            try:
+                scale_x = math.hypot(float(header.get("CD1_1", 0)), float(header.get("CD2_1", 0)))
+                scale_y = math.hypot(float(header.get("CD1_2", 0)), float(header.get("CD2_2", 0)))
+            except (TypeError, ValueError):
+                scale_x = scale_y = ""
+        rotation = ""
+        try:
+            if header.get("CD1_1") is not None and header.get("CD2_1") is not None:
+                rotation = number(math.degrees(math.atan2(float(header["CD2_1"]), float(header["CD1_1"]))))
+        except (TypeError, ValueError):
+            pass
+        filters = [str(header.get(key)) for key in ("FILTER", "FILTER1", "FILTER2") if header.get(key)]
         return {
-            "title": str(header.get("OBJECT") or header.get("TARGNAME") or ""),
+            "title": str(first("OBJECT", "TARGNAME")),
+            "headline": "",
             "description": "",
-            "creator": str(header.get("ORIGIN") or ""),
-            "credit": str(header.get("PI_NAME") or header.get("PR_INV_L") or ""),
+            "creator": str(first("ORIGIN")),
+            "creator_url": "",
+            "credit": str(first("PI_NAME", "PR_INV_L")),
             "rights": "",
-            "subject": str(header.get("OBJECT") or header.get("TARGNAME") or ""),
-            "facility": str(header.get("TELESCOP") or ""),
-            "instrument": str(header.get("INSTRUME") or ""),
-            "spectral_band": str(header.get("FILTER") or header.get("FILTER1") or ""),
+            "publisher_id": "",
+            "subject": str(first("OBJECT", "TARGNAME")),
+            "subject_category": "",
+            "image_type": "Observation",
+            "quality": "Good",
+            "facility": str(first("TELESCOP")),
+            "instrument": str(first("INSTRUME")),
+            "spectral_band": ", ".join(filters),
+            "central_wavelength": number(first("PHOTPLAM", "WAVELEN", "WAVELENGTH")),
+            "color_assignment": "",
+            "observation_date": str(first("DATE-OBS", "DATE-BEG")),
+            "exposure_time": number(first("EXPTIME", "EFFEXPTM", "XPOSURE")),
+            "proposal_id": str(first("PROPOSID", "PROGRAM", "PROGRAMID")),
+            "resource_id": str(first("ROOTNAME", "OBS_ID", "ASN_ID")),
+            "reference_frame": str(first("RADESYS", "RADECSYS") or "ICRS"),
+            "equinox": number(first("EQUINOX")),
+            "ra": number(first("CRVAL1", "RA_TARG", "RA")),
+            "dec": number(first("CRVAL2", "DEC_TARG", "DEC")),
+            "scale_x": absolute_number(scale_x),
+            "scale_y": absolute_number(scale_y),
+            "rotation": rotation,
+            "image_width": str(first("NAXIS1")),
+            "image_height": str(first("NAXIS2")),
         }
+
+    @classmethod
+    def avm_completeness(cls, metadata):
+        missing = [field for field in cls.AVM_COMPLETENESS_FIELDS if not str(metadata.get(field, "") or "").strip()]
+        complete = len(cls.AVM_COMPLETENESS_FIELDS) - len(missing)
+        percent = round(100 * complete / max(1, len(cls.AVM_COMPLETENESS_FIELDS)))
+        wcs_complete = all(str(metadata.get(field, "") or "").strip() for field in ("ra", "dec", "scale_x", "scale_y"))
+        return {"percent": percent, "missing": missing, "wcs_complete": wcs_complete}
+
+    @classmethod
+    def avm_creator_template(cls, metadata):
+        return {key: str(metadata.get(key, "") or "") for key in cls.AVM_CREATOR_TEMPLATE_FIELDS}
 
     @staticmethod
     def avm_xmp_packet(metadata):
@@ -871,26 +942,103 @@ class PreviewWorkflowMixin:
       <avm:Facility>{value("facility")}</avm:Facility>
       <avm:Instrument>{value("instrument")}</avm:Instrument>
       <avm:SpectralBand>{value("spectral_band")}</avm:SpectralBand>
+      <avm:Subject.Category>{value("subject_category")}</avm:Subject.Category>
+      <avm:Type>{value("image_type")}</avm:Type>
+      <avm:Quality>{value("quality")}</avm:Quality>
+      <avm:Observation.Date>{value("observation_date")}</avm:Observation.Date>
+      <avm:Observation.ExposureTime>{value("exposure_time")}</avm:Observation.ExposureTime>
+      <avm:ProposalID>{value("proposal_id")}</avm:ProposalID>
+      <avm:ResourceID>{value("resource_id")}</avm:ResourceID>
+      <avm:Spectral.CentralWavelength>{value("central_wavelength")}</avm:Spectral.CentralWavelength>
+      <avm:Spectral.ColorAssignment>{value("color_assignment")}</avm:Spectral.ColorAssignment>
+      <avm:Spatial.CoordinateFrame>{value("reference_frame")}</avm:Spatial.CoordinateFrame>
+      <avm:Spatial.Equinox>{value("equinox")}</avm:Spatial.Equinox>
+      <avm:Spatial.ReferenceValue>{value("ra")}, {value("dec")}</avm:Spatial.ReferenceValue>
+      <avm:Spatial.Scale>{value("scale_x")}, {value("scale_y")}</avm:Spatial.Scale>
+      <avm:Spatial.Rotation>{value("rotation")}</avm:Spatial.Rotation>
+      <avm:Spatial.ReferenceDimension>{value("image_width")}, {value("image_height")}</avm:Spatial.ReferenceDimension>
+      <avm:CreatorURL>{value("creator_url")}</avm:CreatorURL>
+      <avm:PublisherID>{value("publisher_id")}</avm:PublisherID>
     </rdf:Description>
   </rdf:RDF>
 </x:xmpmeta>
 <?xpacket end="w"?>"""
+
+    @classmethod
+    def save_image_with_avm(cls, image, path, metadata):
+        destination = Path(path)
+        packet = cls.avm_xmp_packet(metadata)
+        suffix = destination.suffix.lower()
+        if suffix == ".png":
+            png_info = PngImagePlugin.PngInfo()
+            png_info.add_itxt("XML:com.adobe.xmp", packet)
+            image.save(destination, pnginfo=png_info)
+        elif suffix in (".tif", ".tiff"):
+            tiff_info = TiffImagePlugin.ImageFileDirectory_v2()
+            tiff_info[700] = packet.encode("utf-8")
+            image.save(destination, tiffinfo=tiff_info)
+        else:
+            image.save(destination)
+        return destination
 
     def load_avm_from_fits(self):
         values = self.avm_metadata_from_header(getattr(self, "preview_header", {}))
         for key, var in getattr(self, "preview_avm_vars", {}).items():
             var.set(values.get(key, ""))
         self.convert_status.set("Loaded available publication metadata from the current FITS header.")
+        self.update_avm_completeness()
+
+    def current_avm_metadata(self):
+        return {
+            "avm_version": "1.2",
+            **{key: var.get().strip() for key, var in getattr(self, "preview_avm_vars", {}).items()},
+        }
+
+    def update_avm_completeness(self, *_args):
+        if not hasattr(self, "preview_avm_completeness_var"):
+            return None
+        result = self.avm_completeness(self.current_avm_metadata())
+        missing = ", ".join(field.replace("_", " ") for field in result["missing"][:4])
+        suffix = "WCS complete" if result["wcs_complete"] else "WCS incomplete"
+        if missing:
+            suffix += f"; add {missing}"
+        self.preview_avm_completeness_var.set(
+            f"Publication metadata: {result['percent']}% complete — {suffix}"
+        )
+        return result
+
+    def save_avm_creator_template(self):
+        payload = self.avm_creator_template(self.current_avm_metadata())
+        try:
+            AVM_TEMPLATE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        except Exception as exc:
+            self.convert_status.set(f"Creator template save failed: {exc}")
+            return False
+        self.convert_status.set(f"Saved creator template: {AVM_TEMPLATE_PATH.name}")
+        return True
+
+    def apply_avm_creator_template(self):
+        if not AVM_TEMPLATE_PATH.exists():
+            self.convert_status.set("No saved AVM creator template was found yet.")
+            return False
+        try:
+            payload = json.loads(AVM_TEMPLATE_PATH.read_text(encoding="utf-8"))
+            for key in self.AVM_CREATOR_TEMPLATE_FIELDS:
+                if key in self.preview_avm_vars:
+                    self.preview_avm_vars[key].set(str(payload.get(key, "") or ""))
+        except Exception as exc:
+            self.convert_status.set(f"Creator template load failed: {exc}")
+            return False
+        self.update_avm_completeness()
+        self.convert_status.set(f"Applied creator template: {AVM_TEMPLATE_PATH.name}")
+        return True
 
     def save_avm_metadata(self):
         path = self.convert_path_var.get().strip()
         if not path:
             messagebox.showinfo("AVM Metadata", "Choose and preview a FITS file first.")
             return
-        payload = {
-            "avm_version": "1.2",
-            **{key: var.get().strip() for key, var in self.preview_avm_vars.items()},
-        }
+        payload = self.current_avm_metadata()
         output = Path(path).with_suffix(".avm.json")
         xmp_output = Path(path).with_suffix(".xmp")
         try:
@@ -917,10 +1065,13 @@ class PreviewWorkflowMixin:
         base = OUTPUT_DIR / f"{self.output_prefix()}_preview_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         png_path = base.with_suffix(".png")
         tif_path = base.with_suffix(".tif")
+        avm_metadata = self.current_avm_metadata()
         if bit_depth == 8:
-            self.preview_image.save(png_path)
-            self.preview_image.save(tif_path)
-            self.convert_status.set(f"Saved 8-bit {png_path.name} and {tif_path.name}")
+            self.save_image_with_avm(self.preview_image, png_path, avm_metadata)
+            self.save_image_with_avm(self.preview_image, tif_path, avm_metadata)
+            self.convert_status.set(
+                f"Saved 8-bit {png_path.name} and {tif_path.name} with AVM metadata"
+            )
             return
         path = self.convert_path_var.get().strip()
         if not path:
@@ -953,8 +1104,8 @@ class PreviewWorkflowMixin:
                     stretch=stretch,
                 )
                 image = Image.fromarray(normalized, mode="I;16")
-                image.save(png_path)
-                image.save(tif_path)
+                self.save_image_with_avm(image, png_path, avm_metadata)
+                self.save_image_with_avm(image, tif_path, avm_metadata)
                 result = (png_path, tif_path, None)
             except Exception as exc:
                 result = (png_path, tif_path, exc)
@@ -967,7 +1118,9 @@ class PreviewWorkflowMixin:
         if error:
             self.convert_status.set(f"{bit_depth}-bit preview export failed: {error}")
             return
-        self.convert_status.set(f"Saved {bit_depth}-bit {png_path.name} and {tif_path.name}")
+        self.convert_status.set(
+            f"Saved {bit_depth}-bit {png_path.name} and {tif_path.name} with AVM metadata"
+        )
 
     def choose_channel(self, var):
         path = filedialog.askopenfilename(

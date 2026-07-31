@@ -1261,26 +1261,30 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         avm_tools = ttk.Frame(avm_panel)
         avm_tools.pack(fill="x", pady=(0, 8))
         ttk.Button(avm_tools, text="Load from FITS", command=self.load_avm_from_fits).pack(side="left")
+        ttk.Button(avm_tools, text="Apply Creator Template", command=self.apply_avm_creator_template).pack(side="left", padx=(6, 0))
+        ttk.Button(avm_tools, text="Save Creator Template", command=self.save_avm_creator_template).pack(side="left", padx=(6, 0))
         ttk.Button(avm_tools, text="Save XMP + JSON", command=self.save_avm_metadata, style="Accent.TButton").pack(side="left", padx=(6, 0))
-        avm_form = ttk.Frame(avm_panel)
-        avm_form.pack(fill="both", expand=True)
+        self.preview_avm_completeness_var = tk.StringVar(value="Publication metadata: 0% complete")
+        self.responsive_wrap_label(avm_panel, textvariable=self.preview_avm_completeness_var, minimum=240).pack(fill="x", pady=(0, 6))
+        avm_fields = ttk.Notebook(avm_panel)
+        avm_fields.pack(fill="both", expand=True)
         self.preview_avm_vars = {}
-        for row, (key, label) in enumerate((
-            ("title", "Title"),
-            ("description", "Description"),
-            ("creator", "Creator"),
-            ("credit", "Credit"),
-            ("rights", "Rights"),
-            ("subject", "Subject"),
-            ("facility", "Facility"),
-            ("instrument", "Instrument"),
-            ("spectral_band", "Spectral band"),
-        )):
-            ttk.Label(avm_form, text=label).grid(row=row, column=0, sticky="w", padx=(4, 8), pady=4)
-            var = tk.StringVar(value="")
-            self.preview_avm_vars[key] = var
-            ttk.Entry(avm_form, textvariable=var).grid(row=row, column=1, sticky="ew", padx=(0, 4), pady=4)
-        avm_form.columnconfigure(1, weight=1)
+        avm_groups = (
+            ("Core", (("title", "Title"), ("headline", "Headline"), ("description", "Description"), ("creator", "Creator"), ("creator_url", "Creator URL"), ("credit", "Credit"), ("rights", "Rights / license"), ("publisher_id", "Publisher ID"), ("subject", "Subject names"), ("subject_category", "Subject category"), ("image_type", "Image type"), ("quality", "Product quality"))),
+            ("Observation", (("facility", "Facility"), ("instrument", "Instrument"), ("spectral_band", "Spectral band / filters"), ("central_wavelength", "Central wavelength"), ("color_assignment", "Color assignment"), ("observation_date", "Observation date"), ("exposure_time", "Exposure time (s)"), ("proposal_id", "Proposal / program ID"), ("resource_id", "Resource ID"))),
+            ("WCS", (("reference_frame", "Reference frame"), ("equinox", "Equinox"), ("ra", "Reference RA (deg)"), ("dec", "Reference Dec (deg)"), ("scale_x", "Scale X (deg/pixel)"), ("scale_y", "Scale Y (deg/pixel)"), ("rotation", "Rotation (deg)"), ("image_width", "Image width"), ("image_height", "Image height"))),
+        )
+        for group_name, fields in avm_groups:
+            form = ttk.Frame(avm_fields)
+            avm_fields.add(form, text=group_name)
+            for row, (key, label) in enumerate(fields):
+                ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(4, 8), pady=3)
+                var = tk.StringVar(value="")
+                var.trace_add("write", self.update_avm_completeness)
+                self.preview_avm_vars[key] = var
+                ttk.Entry(form, textvariable=var).grid(row=row, column=1, sticky="ew", padx=(0, 4), pady=3)
+            form.columnconfigure(1, weight=1)
+        self.update_avm_completeness()
         self.preview_header_search_var.trace_add("write", self.refresh_preview_header_search)
         self.convert_status = tk.StringVar(value="")
         ttk.Label(convert_content, textvariable=self.convert_status).pack(anchor="w", pady=(6, 0))
@@ -1303,6 +1307,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def save_avm_metadata(self):
         return super().save_avm_metadata()
+
+    def apply_avm_creator_template(self):
+        return super().apply_avm_creator_template()
+
+    def save_avm_creator_template(self):
+        return super().save_avm_creator_template()
 
     def preview_canvas_motion(self, event):
         return super().preview_canvas_motion(event)

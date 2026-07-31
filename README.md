@@ -78,6 +78,18 @@ surface texture, clouds, nebular structure, and other details. Do not use an AI
 edit as scientific evidence, measurement data, or a faithful record of an
 observation.
 
+## AVM Publication Metadata
+
+FITS Preview includes an AVM 1.2 Publication Assistant with Core, Observation,
+and WCS sections. It can populate coordinates and observation details from FITS,
+save reusable creator/licensing templates, report metadata completeness, and
+write XMP plus JSON sidecars. PNG and TIFF preview exports embed the XMP packet.
+
+Color Composer also records the facility, instrument, filter, and display-color
+assignment for every available RGB channel. Saved composites include embedded
+XMP and matching AVM sidecars so publication context and credits travel with the
+finished image.
+
 ## Planetary Observatory
 
 The **Planetary Observatory** provides a separate workflow for Solar System

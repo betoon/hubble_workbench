@@ -8,6 +8,7 @@ NOTES_DIR = APP_DIR / "notes"
 PROJECT_DIR = APP_DIR / "projects"
 PLANETARY_DIR = DOWNLOAD_DIR / "planetary"
 SETTINGS_PATH = APP_DIR / "hubble_settings.json"
+AVM_TEMPLATE_PATH = APP_DIR / "avm_creator_template.json"
 MESSIER_LIST_PATH = APP_DIR / "The Complete Messier List.txt"
 
 RGB_WORKING_PREVIEW_MAX_PIXELS = 1200

@@ -1,5 +1,7 @@
 import unittest
 import xml.etree.ElementTree as ET
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -187,6 +189,48 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["instrument"], "NIRCAM")
         self.assertEqual(metadata["spectral_band"], "F200W")
 
+    def test_avm_metadata_prefills_wcs_observation_and_dimensions(self):
+        metadata = PreviewWorkflowMixin.avm_metadata_from_header({
+            "CRVAL1": 83.633,
+            "CRVAL2": -5.391,
+            "CDELT1": -0.00001,
+            "CDELT2": 0.00001,
+            "RADESYS": "ICRS",
+            "NAXIS1": 2048,
+            "NAXIS2": 1024,
+            "DATE-OBS": "2025-01-02",
+            "EXPTIME": 1200.5,
+            "PROPOSID": "12345",
+        })
+        self.assertEqual(metadata["ra"], "83.633")
+        self.assertEqual(metadata["dec"], "-5.391")
+        self.assertEqual(metadata["scale_x"], "1e-05")
+        self.assertEqual(metadata["reference_frame"], "ICRS")
+        self.assertEqual(metadata["image_width"], "2048")
+        self.assertEqual(metadata["exposure_time"], "1200.5")
+        self.assertEqual(metadata["proposal_id"], "12345")
+
+    def test_avm_completeness_reports_missing_fields_and_wcs(self):
+        metadata = {field: "complete" for field in PreviewWorkflowMixin.AVM_COMPLETENESS_FIELDS}
+        metadata.update({"ra": "1", "dec": "2", "scale_x": "0.1", "scale_y": "0.1"})
+        complete = PreviewWorkflowMixin.avm_completeness(metadata)
+        self.assertEqual(complete["percent"], 100)
+        self.assertTrue(complete["wcs_complete"])
+        metadata["rights"] = ""
+        incomplete = PreviewWorkflowMixin.avm_completeness(metadata)
+        self.assertIn("rights", incomplete["missing"])
+        self.assertLess(incomplete["percent"], 100)
+
+    def test_avm_creator_template_only_contains_reusable_identity_fields(self):
+        template = PreviewWorkflowMixin.avm_creator_template({
+            "creator": "Brian",
+            "rights": "CC BY 4.0",
+            "title": "M42",
+        })
+        self.assertEqual(template["creator"], "Brian")
+        self.assertEqual(template["rights"], "CC BY 4.0")
+        self.assertNotIn("title", template)
+
     def test_avm_xmp_packet_is_valid_xml_and_escapes_metadata(self):
         packet = PreviewWorkflowMixin.avm_xmp_packet({
             "title": "M42 & Friends",
@@ -198,6 +242,26 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertTrue(root.tag.endswith("xmpmeta"))
         self.assertIn("M42 &amp; Friends", packet)
         self.assertIn("JWST", packet)
+        self.assertIn("Spatial.ReferenceValue", packet)
+
+    def test_avm_metadata_is_embedded_in_png_and_tiff_exports(self):
+        from PIL import Image
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            png_path = root / "example.png"
+            tif_path = root / "example.tif"
+            metadata = {"title": "M42", "creator": "Workbench"}
+            image = Image.new("L", (8, 8), 127)
+            PreviewWorkflowMixin.save_image_with_avm(image, png_path, metadata)
+            PreviewWorkflowMixin.save_image_with_avm(image, tif_path, metadata)
+            with Image.open(png_path) as png:
+                self.assertIn("M42", png.info.get("XML:com.adobe.xmp", ""))
+            with Image.open(tif_path) as tif:
+                embedded = tif.tag_v2.get(700, b"")
+                if isinstance(embedded, bytes):
+                    embedded = embedded.decode("utf-8", "replace")
+                self.assertIn("Workbench", embedded)
 
 
 if __name__ == "__main__":

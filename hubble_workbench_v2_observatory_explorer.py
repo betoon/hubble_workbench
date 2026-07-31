@@ -1386,8 +1386,43 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Label(controls, text="Two or three channels may be used.").pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Save PNG/TIFF + Notes", command=self.save_composite_outputs).pack(side="left", padx=(8, 0))
         ttk.Button(controls, text="Open Latest Output", command=self.open_latest_output).pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Save Project", command=self.save_project_file).pack(side="left", padx=(8, 0))
-        ttk.Button(controls, text="Open Project", command=self.open_project_file).pack(side="left", padx=(8, 0))
+
+        project_controls = ttk.Frame(compose_content)
+        project_controls.pack(fill="x", pady=(0, 8))
+        ttk.Label(project_controls, text="Project").pack(side="left")
+        ttk.Button(
+            project_controls,
+            text="Quick Save",
+            command=self.quick_save_project,
+            style="Accent.TButton",
+        ).pack(side="left", padx=(6, 0))
+        ttk.Button(
+            project_controls,
+            text="Save Project As",
+            command=self.save_project_file,
+        ).pack(side="left", padx=(6, 0))
+        self.recent_project_var = tk.StringVar(value="")
+        self.recent_project_combo = ttk.Combobox(
+            project_controls,
+            textvariable=self.recent_project_var,
+            state="readonly",
+            width=34,
+        )
+        self.recent_project_combo.pack(
+            side="left", fill="x", expand=True, padx=(10, 6)
+        )
+        ttk.Button(
+            project_controls,
+            text="Open Recent",
+            command=self.open_recent_project,
+        ).pack(side="left")
+        ttk.Button(
+            project_controls,
+            text="Browse Projects",
+            command=self.open_project_file,
+        ).pack(side="left", padx=(6, 0))
+        self.enable_responsive_toolbar(project_controls)
+        self.refresh_recent_projects()
 
         missing_channel_controls = ttk.Frame(compose_content)
         missing_channel_controls.pack(fill="x", pady=(0, 8))
@@ -1722,8 +1757,14 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
     def save_project_file(self):
         return super().save_project_file()
 
+    def quick_save_project(self):
+        return super().quick_save_project()
+
     def open_project_file(self):
         return super().open_project_file()
+
+    def open_recent_project(self):
+        return super().open_recent_project()
 
     def show_image_on_canvas(self, canvas, image, attr_name, zoom=1.0):
         return super().show_image_on_canvas(canvas, image, attr_name, zoom)

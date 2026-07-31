@@ -59,6 +59,7 @@ For testing the newer Observatory Explorer, sensor coverage, sky mosaic, and mix
 - `downloads/` stores downloaded Hubble/JWST products.
 - `outputs/` stores PNG/TIFF exports.
 - `notes/` stores processing notes for RGB composites.
+- `projects/` stores Quick Save project workspaces and recent-project files.
 
 ## Optional AI Creative Edit
 

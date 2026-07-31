@@ -436,9 +436,19 @@ Saves:
 
 Opens the most recently saved output image.
 
-### Save Project / Open Project
+### Project controls
 
-Saves or loads your current channel choices and processing settings.
+- **Quick Save** stores the current target, RGB channel files, stretch,
+  processing quality, presentation cleanup, and color tuning in the dedicated
+  `projects/` folder. Saving again updates the current project.
+- **Save Project As** lets you choose a different project filename or location.
+- Choose a saved file from the recent-project list and click **Open Recent** to
+  restore its workspace without browsing through folders.
+- **Browse Projects** opens any compatible project JSON file manually.
+
+Project files store processing choices and paths to the selected FITS channels.
+Keep or move the referenced FITS files carefully; a project does not duplicate
+the large source files.
 
 ## Color Composer Settings
 

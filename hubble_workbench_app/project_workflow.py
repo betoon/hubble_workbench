@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -9,10 +10,86 @@ except Exception:
     tifffile = None
 
 from .image_processing import float_rgb_to_uint16
-from .paths import APP_DIR, NOTES_DIR, OUTPUT_DIR
+from .paths import APP_DIR, NOTES_DIR, OUTPUT_DIR, PROJECT_DIR
 
 
 class ProjectWorkflowMixin:
+    @staticmethod
+    def safe_project_name(target):
+        name = re.sub(r"[^A-Za-z0-9._-]+", "_", str(target or "").strip())
+        return name.strip("._-") or "untitled"
+
+    @staticmethod
+    def discover_recent_projects(project_dir=PROJECT_DIR, limit=15):
+        root = Path(project_dir)
+        if not root.exists():
+            return []
+        projects = [path for path in root.glob("*.json") if path.is_file()]
+        projects.sort(key=lambda path: path.stat().st_mtime, reverse=True)
+        return projects[:max(1, int(limit))]
+
+    def write_project_file(self, path):
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            json.dumps(self.project_state(), indent=2), encoding="utf-8"
+        )
+        self.current_project_path = destination
+        self.compose_status.set(f"Saved project {destination.name}.")
+        self.refresh_recent_projects(selected=destination)
+        return destination
+
+    def load_project_path(self, path):
+        source = Path(path)
+        data = json.loads(source.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("The project file does not contain a project workspace.")
+        self.apply_project_state(data)
+        self.current_project_path = source
+        self.refresh_recent_projects(selected=source)
+        self.compose_status.set(f"Loaded project {source.name}.")
+        return source
+
+    def quick_save_project(self):
+        PROJECT_DIR.mkdir(parents=True, exist_ok=True)
+        current = getattr(self, "current_project_path", None)
+        if current and Path(current).parent == PROJECT_DIR:
+            path = Path(current)
+        else:
+            path = PROJECT_DIR / f"{self.safe_project_name(self.target_var.get())}_project.json"
+        try:
+            return self.write_project_file(path)
+        except Exception as exc:
+            messagebox.showinfo("Quick Save Project", f"Could not save project: {exc}")
+            return None
+
+    def refresh_recent_projects(self, selected=None):
+        projects = self.discover_recent_projects(PROJECT_DIR)
+        self.recent_project_paths = {path.name: path for path in projects}
+        if hasattr(self, "recent_project_combo"):
+            self.recent_project_combo.configure(values=list(self.recent_project_paths))
+        if hasattr(self, "recent_project_var"):
+            selected_path = Path(selected) if selected else None
+            selected_name = (
+                selected_path.name
+                if selected_path and selected_path.name in self.recent_project_paths
+                else (projects[0].name if projects else "")
+            )
+            self.recent_project_var.set(selected_name)
+        return projects
+
+    def open_recent_project(self):
+        name = self.recent_project_var.get() if hasattr(self, "recent_project_var") else ""
+        path = getattr(self, "recent_project_paths", {}).get(name)
+        if not path:
+            messagebox.showinfo("Open Recent Project", "No recent project is selected.")
+            return None
+        try:
+            return self.load_project_path(path)
+        except Exception as exc:
+            messagebox.showinfo("Open Recent Project", f"Could not open project: {exc}")
+            return None
+
     def auto_save_preview_png(self):
         if not hasattr(self, "rgb_image"):
             return None
@@ -97,30 +174,36 @@ class ProjectWorkflowMixin:
         self.compose_status.set("Project loaded.")
 
     def save_project_file(self):
+        PROJECT_DIR.mkdir(parents=True, exist_ok=True)
         path = filedialog.asksaveasfilename(
             title="Save Space Telescope Project",
-            initialdir=str(APP_DIR),
+            initialdir=str(PROJECT_DIR),
+            initialfile=f"{self.safe_project_name(self.target_var.get())}_project.json",
             defaultextension=".json",
             filetypes=[("Space telescope project", "*.json"), ("All files", "*.*")],
         )
         if not path:
             return
-        Path(path).write_text(json.dumps(self.project_state(), indent=2), encoding="utf-8")
-        self.compose_status.set(f"Saved project {Path(path).name}.")
+        try:
+            return self.write_project_file(path)
+        except Exception as exc:
+            messagebox.showinfo("Save Project", f"Could not save project: {exc}")
+            return None
 
     def open_project_file(self):
+        PROJECT_DIR.mkdir(parents=True, exist_ok=True)
         path = filedialog.askopenfilename(
             title="Open Space Telescope Project",
-            initialdir=str(APP_DIR),
+            initialdir=str(PROJECT_DIR),
             filetypes=[("Space telescope project", "*.json"), ("All files", "*.*")],
         )
         if not path:
             return
         try:
-            data = json.loads(Path(path).read_text(encoding="utf-8"))
-            self.apply_project_state(data)
+            return self.load_project_path(path)
         except Exception as exc:
             messagebox.showinfo("Open Project", f"Could not open project: {exc}")
+            return None
 
     def open_latest_output(self):
         candidates = sorted(

@@ -571,6 +571,16 @@ class PlanetaryWorkflowMixin:
         return data
 
     @staticmethod
+    def store_planetary_preview_cache(cache, key, data, limit=24):
+        if not key or not data:
+            return cache
+        cache.pop(key, None)
+        cache[key] = data
+        while len(cache) > max(1, int(limit)):
+            cache.pop(next(iter(cache)))
+        return cache
+
+    @staticmethod
     def planetary_footprint_points(product):
         footprint = str(product.get("Footprint_C0_geometry") or "")
         if not footprint or "EMPTY" in footprint.upper():
@@ -765,6 +775,7 @@ class PlanetaryWorkflowMixin:
         ttk.Button(product_tools, text="Browse / Download Files", command=self.load_planetary_file_list_async).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Open Mission Preview", command=lambda: self.open_selected_planetary_url("External_url")).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Load Preview", command=lambda: self.load_planetary_preview("browse")).pack(side="left", padx=(6, 0))
+        ttk.Button(product_tools, text="Refresh Preview", command=lambda: self.load_planetary_preview("browse", force=True)).pack(side="left", padx=(6, 0))
         ttk.Button(product_tools, text="Save Browse Image", command=self.save_planetary_browse_async).pack(side="left", padx=(6, 0))
         self.enable_responsive_toolbar(product_tools)
         self.planetary_preview_label = ttk.Label(
@@ -788,6 +799,7 @@ class PlanetaryWorkflowMixin:
         self.planetary_selected_product = None
         self.planetary_preview_image = None
         self.planetary_preview_token = 0
+        self.planetary_preview_cache = {}
         self.after(100, self.planetary_select_feature)
 
     def planetary_current_features(self):
@@ -1128,7 +1140,7 @@ class PlanetaryWorkflowMixin:
         if hasattr(self, "planetary_preview_label"):
             self.planetary_preview_label.configure(image="", text=message)
 
-    def load_planetary_preview(self, kind="thumbnail"):
+    def load_planetary_preview(self, kind="thumbnail", force=False):
         product = self.planetary_selected_product
         if not product:
             self.planetary_status_var.set("Select a PDS product first.")
@@ -1141,8 +1153,20 @@ class PlanetaryWorkflowMixin:
         self.planetary_preview_token += 1
         token = self.planetary_preview_token
         product_id = self.planetary_product_id(product)
+        cache = getattr(self, "planetary_preview_cache", {})
+        if not force and url in cache:
+            self.finish_planetary_preview(
+                cache[url], product_id, kind, token,
+                cache_key=url, from_cache=True,
+            )
+            return True
         self.planetary_preview_label.configure(
-            image="", text=f"Loading official PDS {kind} for {product_id}..."
+            image="",
+            text=(
+                f"Refreshing official PDS {kind} for {product_id}..."
+                if force
+                else f"Loading official PDS {kind} for {product_id}..."
+            ),
         )
 
         def worker():
@@ -1151,12 +1175,20 @@ class PlanetaryWorkflowMixin:
                 error = None
             except Exception as exc:
                 data, error = b"", exc
-            self.after(0, lambda: self.finish_planetary_preview(data, product_id, kind, token, error))
+            self.after(
+                0,
+                lambda: self.finish_planetary_preview(
+                    data, product_id, kind, token, error, cache_key=url
+                ),
+            )
 
         threading.Thread(target=worker, daemon=True).start()
         return True
 
-    def finish_planetary_preview(self, data, product_id, kind, token, error=None):
+    def finish_planetary_preview(
+        self, data, product_id, kind, token, error=None,
+        cache_key="", from_cache=False,
+    ):
         if token != self.planetary_preview_token:
             return
         if error:
@@ -1173,7 +1205,14 @@ class PlanetaryWorkflowMixin:
                 image = ImageTk.PhotoImage(preview)
             self.planetary_preview_image = image
             self.planetary_preview_label.configure(image=image, text="")
-            self.planetary_status_var.set(f"Loaded official PDS {kind} for {product_id}.")
+            if not from_cache:
+                cache = getattr(self, "planetary_preview_cache", None)
+                if cache is not None:
+                    self.store_planetary_preview_cache(cache, cache_key, data)
+            source = "cached " if from_cache else ""
+            self.planetary_status_var.set(
+                f"Loaded {source}official PDS {kind} for {product_id}."
+            )
         except (OSError, tk.TclError) as exc:
             self.planetary_preview_label.configure(image="", text="The returned preview could not be displayed.")
             self.planetary_status_var.set(f"Preview display failed: {exc}")

@@ -7,6 +7,19 @@ from hubble_workbench_app.planetary_workflow import PlanetaryWorkflowMixin
 
 
 class PlanetaryWorkflowTests(unittest.TestCase):
+    def test_planetary_preview_cache_is_bounded_and_refreshes_recent_item(self):
+        cache = {}
+        for index in range(4):
+            PlanetaryWorkflowMixin.store_planetary_preview_cache(
+                cache, f"preview-{index}", bytes([index + 1]), limit=3
+            )
+        self.assertEqual(list(cache), ["preview-1", "preview-2", "preview-3"])
+        PlanetaryWorkflowMixin.store_planetary_preview_cache(
+            cache, "preview-1", b"new", limit=3
+        )
+        self.assertEqual(list(cache), ["preview-2", "preview-3", "preview-1"])
+        self.assertEqual(cache["preview-1"], b"new")
+
     def test_planetary_product_filter_searches_science_fields_and_keeps_indexes(self):
         products = [
             {"Observation_id": "A", "Instrument": "Voyager ISS", "Target": "Neptune"},

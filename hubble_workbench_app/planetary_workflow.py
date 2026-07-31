@@ -546,6 +546,10 @@ class PlanetaryWorkflowMixin:
         return f"{start:,}-{end:,} of {available:,}"
 
     @staticmethod
+    def planetary_opus_order(label):
+        return "-time1,opusid" if str(label).startswith("Newest") else "time1,opusid"
+
+    @staticmethod
     def planetary_archive_product_id(product, fallback=""):
         for field in ("ProductURL", "FilesURL"):
             query = parse_qs(urlparse(str(product.get(field) or "")).query)
@@ -752,29 +756,41 @@ class PlanetaryWorkflowMixin:
             self.planetary_results_tree.column(column, width=width, anchor="w")
         result_filters = ttk.Frame(products_panel)
         result_filters.pack(fill="x", pady=(0, 6))
-        ttk.Label(result_filters, text="Filter loaded results").pack(side="left")
+        filter_row = ttk.Frame(result_filters)
+        filter_row.pack(fill="x")
+        ttk.Label(filter_row, text="Filter loaded results").pack(side="left")
         self.planetary_result_filter_var = tk.StringVar(value="")
         ttk.Entry(
-            result_filters,
+            filter_row,
             textvariable=self.planetary_result_filter_var,
             width=30,
         ).pack(side="left", padx=(6, 12), fill="x", expand=True)
         self.planetary_result_count_var = tk.StringVar(value="0 shown")
         ttk.Label(
-            result_filters,
+            filter_row,
             textvariable=self.planetary_result_count_var,
         ).pack(side="left", padx=(0, 12))
-        ttk.Label(result_filters, text="Results to request").pack(side="left")
+        page_row = ttk.Frame(result_filters)
+        page_row.pack(fill="x", pady=(5, 0))
+        ttk.Label(page_row, text="Results to request").pack(side="left")
         self.planetary_result_limit_var = tk.IntVar(value=25)
         ttk.Spinbox(
-            result_filters,
+            page_row,
             textvariable=self.planetary_result_limit_var,
             values=(10, 25, 50, 100),
             state="readonly",
             width=5,
         ).pack(side="left", padx=(6, 0))
+        self.planetary_result_order_var = tk.StringVar(value="Newest first")
+        ttk.Combobox(
+            page_row,
+            textvariable=self.planetary_result_order_var,
+            values=("Newest first", "Oldest first"),
+            state="readonly",
+            width=12,
+        ).pack(side="left", padx=(8, 0))
         self.planetary_previous_page_button = ttk.Button(
-            result_filters,
+            page_row,
             text="Previous",
             command=self.planetary_previous_opus_page,
             state="disabled",
@@ -782,11 +798,11 @@ class PlanetaryWorkflowMixin:
         self.planetary_previous_page_button.pack(side="left", padx=(12, 4))
         self.planetary_page_var = tk.StringVar(value="OPUS page not loaded")
         ttk.Label(
-            result_filters,
+            page_row,
             textvariable=self.planetary_page_var,
         ).pack(side="left", padx=4)
         self.planetary_next_page_button = ttk.Button(
-            result_filters,
+            page_row,
             text="Next",
             command=self.planetary_next_opus_page,
             state="disabled",
@@ -1062,6 +1078,9 @@ class PlanetaryWorkflowMixin:
         if opus_query:
             planet = self.planetary_planet_var.get()
             opus_start = max(1, int(opus_start or 1))
+            opus_order = self.planetary_opus_order(
+                self.planetary_result_order_var.get()
+            )
             self.planetary_previous_page_button.configure(state="disabled")
             self.planetary_next_page_button.configure(state="disabled")
             self.planetary_status_var.set(
@@ -1074,6 +1093,7 @@ class PlanetaryWorkflowMixin:
                         opus_query,
                         limit=result_limit,
                         start_obs=opus_start,
+                        order=opus_order,
                         timeout=35,
                     )
                     for product in products:

@@ -28,6 +28,13 @@ class PlanetaryOpusTests(unittest.TestCase):
         query = parse_qs(urlparse(url).query)
         self.assertEqual(query["startobs"], ["51"])
 
+    def test_search_url_accepts_newest_first_order(self):
+        url = build_opus_search_url(
+            {"planet": "Uranus"}, order="-time1,opusid"
+        )
+        query = parse_qs(urlparse(url).query)
+        self.assertEqual(query["order"], ["-time1,opusid"])
+
     def test_search_results_join_metadata_and_preview_by_opus_id(self):
         metadata = {
             "page": [[

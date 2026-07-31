@@ -20,10 +20,13 @@ def opus_product_page_url(opus_id):
     return f"{OPUS_ROOT}/#/view=detail&detail={quote(str(opus_id), safe='-')}"
 
 
-def build_opus_search_url(query, endpoint="data.json", limit=25, start_obs=1):
+def build_opus_search_url(
+    query, endpoint="data.json", limit=25, start_obs=1,
+    order="time1,opusid",
+):
     parameters = {
         **dict(query or {}),
-        "order": "time1,opusid",
+        "order": str(order or "time1,opusid"),
         "startobs": max(1, int(start_obs)),
         "limit": max(1, min(100, int(limit))),
     }
@@ -73,12 +76,14 @@ def parse_opus_search_results(metadata_payload, image_payload):
     return products
 
 
-def query_opus_products_page(query, limit=25, start_obs=1, timeout=35):
+def query_opus_products_page(
+    query, limit=25, start_obs=1, order="time1,opusid", timeout=35
+):
     metadata_url = build_opus_search_url(
-        query, "data.json", limit, start_obs=start_obs
+        query, "data.json", limit, start_obs=start_obs, order=order
     )
     image_url = build_opus_search_url(
-        query, "images/med.json", limit, start_obs=start_obs
+        query, "images/med.json", limit, start_obs=start_obs, order=order
     )
     metadata_payload = _read_json(metadata_url, timeout)
     products = parse_opus_search_results(

@@ -17,6 +17,16 @@ class PlanetaryWorkflowTests(unittest.TestCase):
             "No OPUS results",
         )
 
+    def test_opus_order_maps_user_labels_to_api_order(self):
+        self.assertEqual(
+            PlanetaryWorkflowMixin.planetary_opus_order("Newest first"),
+            "-time1,opusid",
+        )
+        self.assertEqual(
+            PlanetaryWorkflowMixin.planetary_opus_order("Oldest first"),
+            "time1,opusid",
+        )
+
     def test_planetary_preview_cache_is_bounded_and_refreshes_recent_item(self):
         cache = {}
         for index in range(4):

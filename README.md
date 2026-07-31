@@ -20,6 +20,12 @@ install_dependencies.bat
 
 Then restart the workbench.
 
+The installer and launcher use the same Python-selection order. If Miniconda is
+installed at `C:\miniconda3`, both scripts prefer that environment; otherwise
+they check the current user's Miniconda/Anaconda folders and then Python on PATH.
+This prevents packages from being installed into one Python while Workbench
+starts with another.
+
 The required packages are:
 
 - astroquery
@@ -73,19 +79,27 @@ observation.
 
 ## Planetary Observatory
 
-The Planetary Observatory supports location-based NASA PDS searches for both
-Mars and the Moon. Moon mode includes:
+The **Planetary Observatory** provides a separate workflow for Solar System
+imagery. It currently covers Mars, the Moon, Mercury, Venus, Jupiter, Saturn,
+Uranus, and Neptune.
 
-- LRO LROC calibrated narrow-angle and wide-angle color observations
-- Clementine ultraviolet/visible observations
-- Chandrayaan-1 Moon Mineralogy Mapper reflectance products
-- All six Apollo landing sites plus prominent craters and polar targets
-- Official previews, footprint overlays, file listings, selective downloads,
-  progress reporting, cancellation, and large-file warnings
+- Mars, Moon, Mercury, and Venus provide location-based NASA PDS ODE searches
+  with named features and clickable latitude/longitude maps.
+- Jupiter through Neptune provide in-app NASA PDS OPUS searches for supported
+  Voyager, Galileo, Cassini, and Hubble observations.
+- Official JunoCam, Webb, NASA gallery, ESA, and mission-archive pages are linked
+  where a collection is better explored in its own archive.
+- NASA Trek or Eyes on the Solar System provides full-planet views.
+- Search results support filtering, sortable columns, newest/oldest ordering,
+  configurable result counts, OPUS page navigation, and preview caching.
+- Selecting a product loads its official preview and provides product pages,
+  file listings, selective downloads, progress reporting, cancellation, and
+  large-file warnings.
 
-Apollo mission photography is supplied through the official Apollo Image Atlas,
-not presented as an ODE spacecraft dataset. Select an Apollo landing site to
-search later orbital coverage from LRO, Clementine, or Chandrayaan-1.
+Moon mode includes all six Apollo landing sites, LRO LROC, Clementine, and
+Chandrayaan-1 coverage. Apollo astronaut photography remains available through
+the official Apollo Image Atlas rather than being presented as an ODE spacecraft
+dataset.
 
 ## Notes
 

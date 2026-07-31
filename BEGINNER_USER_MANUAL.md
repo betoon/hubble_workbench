@@ -51,20 +51,60 @@ The original image stays unchanged. AI results are placed in
 and quality setting. AI can create convincing details that were not present in
 the telescope data, so use these results for presentation or artwork—not science.
 
-## Moon in the Planetary Observatory
+## Planetary Observatory
 
-Choose **Moon** from the Planet menu. Pick an Apollo landing site, crater, or
-polar target, then select an LRO, Clementine, or Chandrayaan-1 dataset and click
-**Search NASA PDS**.
+Use this tab for Solar System imagery from planetary missions, Hubble, and
+official NASA or ESA archives. It supports:
 
-Selecting a result loads its official preview and highlights its footprint.
-Use **Browse / Download Files** to see each archive file and its size before
-downloading. Very large products display a confirmation warning and downloads
-can be cancelled.
+- **Mars**: MRO HiRISE and CTX, Mars Odyssey THEMIS, Mars Express HRSC, and
+  ExoMars CaSSIS.
+- **Moon**: LRO LROC, Clementine, Chandrayaan-1, and all six Apollo landing
+  sites.
+- **Mercury**: MESSENGER MDIS, with official BepiColombo resources.
+- **Venus**: Magellan radar mosaics.
+- **Jupiter**: Galileo, Cassini, Voyager, and JunoCam resources.
+- **Saturn**: Cassini, Voyager, and Hubble observations.
+- **Uranus and Neptune**: Voyager and Hubble observations, plus official Webb
+  imagery and NASA galleries.
 
-The six Apollo landing sites act as geographic targets for later orbital
-coverage. Use **Apollo Image Atlas** for the astronauts' original orbital and
-surface photography.
+### Search surface or atmospheric detail
+
+1. Choose a **Planet**.
+2. Keep **View** set to **Surface Detail**.
+3. Choose a named feature, or click the map to set a custom position.
+4. Choose a dataset.
+5. For Mars, Moon, Mercury, or Venus, set the search radius and click
+   **Search NASA PDS**.
+6. For an outer-planet collection, click **Search OPUS**.
+
+Some datasets use **Open Mission Archive** instead. These open the official
+mission or telescope collection in your browser because that source is not
+available through the in-app archive search.
+
+### Browse results
+
+- Choose 10, 25, 50, or 100 results per request.
+- Choose **Newest first** or **Oldest first** before searching OPUS.
+- Use **Previous** and **Next** to move through large OPUS collections.
+- Type in **Filter loaded results** to narrow the current page by observation,
+  instrument, target, date, or description.
+- Click a column heading to sort the loaded page; click it again to reverse the
+  order.
+- Select a row to load its official preview. Previously viewed previews are
+  cached during the current Workbench session; use **Refresh Preview** to fetch
+  a fresh copy.
+- Use **Open Product Page** for the archive record or **Browse / Download Files**
+  to inspect and selectively download the associated files. Very large products
+  display a confirmation warning, and active downloads can be cancelled.
+
+### View the full planet
+
+Choose **Full Planet / Mission View**, then **Open View**. Workbench opens the
+official NASA Trek or Eyes on the Solar System globe for that world.
+
+The Apollo landing sites act as geographic targets for later orbital coverage.
+Use **Apollo Image Atlas** for the astronauts' original orbital and surface
+photography.
 
 ## Setup Tab
 
@@ -83,7 +123,10 @@ If something is missing, run:
 
 `install_dependencies.bat`
 
-Then restart the app.
+Then restart the app. The installer displays the exact Python it is updating.
+The launcher uses the same selection order, preferring `C:\miniconda3` when it
+exists, so Astropy and the other packages are installed into the environment
+that actually runs Workbench.
 
 ### Open Downloads Folder
 
@@ -270,7 +313,8 @@ Copies the selected RGB product details to the clipboard.
 
 ## FITS Preview / Convert Tab
 
-Use this to inspect one FITS file.
+Use this to inspect one FITS file, its extensions, image statistics, sky
+coordinates, header, histogram, and publication metadata.
 
 ### Choose FITS
 
@@ -290,9 +334,63 @@ Loads the FITS file and displays it.
 
 The display is scaled to fit the app window. The status line shows the real pixel size.
 
+Use **Recent FITS** to reopen a recently downloaded or viewed file. **Refresh
+Files** rescans the Workbench folders.
+
+### Image extension and cube plane
+
+Open the **HDU List** panel to inspect every FITS extension. Choose an image
+extension such as `SCI`, `ERR`, or `DQ` from **Image extension**. If the selected
+extension is a data cube, use **Cube plane** to choose which two-dimensional
+plane to display.
+
+`SCI` normally contains the science image. `ERR` shows estimated uncertainty,
+and `DQ` contains data-quality flags, so those extensions can look very different
+from a normal photograph.
+
+### Stretch and histogram
+
+- Set **Black percentile** and **White percentile**, then choose **Apply
+  Stretch**.
+- **Auto Points** restores automatic black and white points.
+- Drag the blue and green markers under the image to adjust the black and white
+  points directly on the histogram.
+- **Pick Background** and **Pick Peak** let you click representative pixels in
+  the image and use their values as stretch references.
+- **Blue Shadows** marks pixels clipped at the black point. **Green Highlights**
+  marks pixels clipped at the white point.
+- **Save Settings** remembers the stretch controls; **Restore Saved** reapplies
+  them later.
+
+### Zoom, pan, and pixel inspection
+
+- Use the mouse wheel or **Zoom + / Zoom -** to magnify the image.
+- Drag with the middle or right mouse button to pan.
+- Choose **Fit** to return to the full-image view.
+- Move over the image to see its pixel value and, when WCS information is
+  available, its sky coordinates.
+- Turn on **Crosshair** for a more precise pointer.
+- Click the image to freeze a measurement in **Pixel Probe**; use **Copy Probe**
+  to copy it.
+- **Flip Vertical** changes the displayed orientation without changing the
+  original FITS data.
+
+### Science information and publication metadata
+
+- **Science Summary** shows dimensions, statistics, telescope/instrument
+  information, WCS center, pixel scale, and field of view when available.
+- **Full Header** supports keyword/value searching and copying.
+- **HDU List** shows extension names, types, dimensions, bit depth, and header
+  card counts.
+- **Publication** can load suitable fields from the FITS header and save AVM 1.2
+  sidecar metadata as XMP and JSON. Review and complete creator, credit, rights,
+  title, and description fields before publication.
+
 ### Save PNG/TIFF
 
-Saves a preview image from the FITS file.
+Saves the stretched preview as PNG and TIFF. Choose 8-bit for ordinary display
+files or 16-bit when you want more tonal precision for later editing. Exporting
+does not alter the source FITS file.
 
 ## Color Composer Tab
 

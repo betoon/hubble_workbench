@@ -35,6 +35,6 @@ exit /b 0
 :try_python
 if defined PYTHON_EXE exit /b 0
 if not exist "%~1" exit /b 0
-"%~1" -c "import astropy, astroquery" >nul 2>nul
+"%~1" -c "import astropy, astroquery, numpy, PIL, tifffile" >nul 2>nul
 if not errorlevel 1 set "PYTHON_EXE=%~1"
 exit /b 0

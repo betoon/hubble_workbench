@@ -7,6 +7,16 @@ from hubble_workbench_app.project_workflow import ProjectWorkflowMixin
 
 
 class ProjectWorkflowTests(unittest.TestCase):
+    def test_composite_output_paths_include_avm_sidecars(self):
+        paths = ProjectWorkflowMixin.composite_output_paths(
+            Path("outputs"), Path("notes"), "m42", "20260731_214447"
+        )
+        self.assertEqual(paths["png"], Path("outputs/m42_rgb_20260731_214447.png"))
+        self.assertEqual(paths["tiff"], Path("outputs/m42_rgb_20260731_214447.tif"))
+        self.assertEqual(paths["notes"], Path("notes/m42_rgb_20260731_214447_notes.txt"))
+        self.assertEqual(paths["avm_json"], Path("outputs/m42_rgb_20260731_214447.avm.json"))
+        self.assertEqual(paths["xmp"], Path("outputs/m42_rgb_20260731_214447.xmp"))
+
     def test_composite_channel_metadata_preserves_filter_color_assignments(self):
         channels = ProjectWorkflowMixin.composite_channel_metadata([
             {"TELESCOP": "HST", "INSTRUME": "WFC3", "FILTER": "F814W"},

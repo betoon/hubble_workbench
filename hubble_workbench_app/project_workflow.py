@@ -15,6 +15,18 @@ from .paths import AVM_TEMPLATE_PATH, APP_DIR, NOTES_DIR, OUTPUT_DIR, PROJECT_DI
 
 class ProjectWorkflowMixin:
     @staticmethod
+    def composite_output_paths(output_dir, notes_dir, prefix, stamp):
+        """Return the complete, consistently named set of composite output paths."""
+        base = Path(output_dir) / f"{prefix}_rgb_{stamp}"
+        return {
+            "png": base.with_suffix(".png"),
+            "tiff": base.with_suffix(".tif"),
+            "notes": Path(notes_dir) / f"{prefix}_rgb_{stamp}_notes.txt",
+            "avm_json": base.with_suffix(".avm.json"),
+            "xmp": base.with_suffix(".xmp"),
+        }
+
+    @staticmethod
     def composite_channel_metadata(headers):
         channels = []
         for color, header in zip(("Red", "Green", "Blue"), headers or ()):
@@ -292,9 +304,10 @@ class ProjectWorkflowMixin:
             )
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         prefix = self.output_prefix()
-        png_path = OUTPUT_DIR / f"{prefix}_rgb_{stamp}.png"
-        tif_path = OUTPUT_DIR / f"{prefix}_rgb_{stamp}.tif"
-        notes_path = NOTES_DIR / f"{prefix}_rgb_{stamp}_notes.txt"
+        output_paths = self.composite_output_paths(OUTPUT_DIR, NOTES_DIR, prefix, stamp)
+        png_path = output_paths["png"]
+        tif_path = output_paths["tiff"]
+        notes_path = output_paths["notes"]
         avm_payload = self.composite_avm_metadata(output_image)
         self.save_image_with_avm(output_image, png_path, avm_payload)
         saved_16bit = False
@@ -309,8 +322,8 @@ class ProjectWorkflowMixin:
             saved_16bit = True
         else:
             self.save_image_with_avm(output_image, tif_path, avm_payload)
-        avm_json_path = base.with_suffix(".avm.json")
-        xmp_path = base.with_suffix(".xmp")
+        avm_json_path = output_paths["avm_json"]
+        xmp_path = output_paths["xmp"]
         avm_json_path.write_text(
             json.dumps(avm_payload, indent=2, ensure_ascii=False), encoding="utf-8"
         )

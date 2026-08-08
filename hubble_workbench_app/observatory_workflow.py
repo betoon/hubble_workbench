@@ -10,7 +10,7 @@ from tkinter import messagebox
 from hubble_workbench_app.paths import DSS_CONTEXT_DIR, ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
 from hubble_workbench_app.fits_io import OBSERVATIONS
-from hubble_workbench_app.dss_context import download_dss_context
+from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -117,6 +117,49 @@ class ObservatoryWorkflowMixin:
                 f"DSS reference ready: {image_path.name}. It is for framing and is not yet WCS-registered."
             )
         self.open_file(image_path)
+        return metadata
+
+    def observatory_fetch_dss_fits_async(self):
+        request = self.observatory_dss_context_request()
+        if request is None:
+            message = "Run a MAST search first so DSS FITS can use the target sky coordinates."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        operation_id = self.start_browser_activity("Fetching DSS FITS layer with WCS metadata...")
+        destination = DSS_CONTEXT_DIR / f"{self.current_target_for_log()}_dss_context.fits"
+
+        def worker():
+            try:
+                metadata = download_dss_fits(
+                    request["ra"], request["dec"], request["size_degrees"], destination
+                )
+                result = (metadata, None)
+            except Exception as exc:
+                result = (None, exc)
+            self.after(0, lambda: self.observatory_finish_dss_fits(operation_id, result))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def observatory_finish_dss_fits(self, operation_id, result):
+        if operation_id != self.browser_operation_id:
+            return None
+        metadata, error = result
+        if error:
+            self.stop_browser_activity(f"DSS FITS retrieval failed: {self.format_error_message(error)}")
+            return None
+        self.dss_fits_layer = metadata
+        path = Path(metadata["fits_path"])
+        self.stop_browser_activity(f"Saved DSS FITS layer: {path.name}")
+        self.convert_path_var.set(str(path))
+        try:
+            self.notebook.select(self.convert_tab)
+        except Exception:
+            pass
+        self.preview_fits_async()
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"DSS FITS layer loaded in FITS Preview: {path.name}")
         return metadata
     def set_easy_all_sensors_status(self, stage, message, mirror=True):
         stage_label = str(stage or "ready").replace("_", " ").title()
@@ -2097,7 +2140,10 @@ class ObservatoryWorkflowMixin:
             "composition_strategy": composition_strategy_lines(summary),
             "composition_readiness": composition_readiness_state(summary),
             "project_plan": self.observatory_project_plan_text(),
-            "context_layers": {"dss": getattr(self, "dss_context_layer", None)},
+            "context_layers": {
+                "dss_jpeg": getattr(self, "dss_context_layer", None),
+                "dss_fits": getattr(self, "dss_fits_layer", None),
+            },
         }
 
     def observatory_copy_project_plan(self):

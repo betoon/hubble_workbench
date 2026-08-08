@@ -34,7 +34,7 @@ Initial sources:
 
 - Hubble / HST: active
 - James Webb / JWST: active
-- DSS reference imagery: preview integration active (retrieval/framing); WCS registration planned
+- DSS reference imagery: JPEG framing and FITS/WCS retrieval active; mosaic registration planned
 - Pan-STARRS context imagery: planned
 - Chandra: planned X-ray context layer
 
@@ -76,6 +76,7 @@ Planned capabilities:
 - Added selected marker highlighting and marker-detail clipboard copy.
 - Planned sources are visible for project tracking but are not searched yet.
 - Added MAST/STScI DSS reference-image retrieval with saved provenance and project-plan continuity.
+- Added DSS FITS retrieval and direct handoff to FITS Preview for WCS inspection.
 
 ## Current Implementation Notes
 

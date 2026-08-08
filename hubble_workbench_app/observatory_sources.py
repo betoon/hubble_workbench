@@ -37,7 +37,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "preview",
         "role": "Broad reference imagery for target identification and framing.",
-        "activation": "reference image retrieval and framing are available; WCS registration is the next step.",
+        "activation": "reference image framing and FITS/WCS retrieval are available; mosaic registration is the next step.",
     },
 ]
 

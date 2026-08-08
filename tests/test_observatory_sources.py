@@ -4,7 +4,7 @@ import urllib.parse
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
-from hubble_workbench_app.dss_context import dss_jpeg_url
+from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, ra_degrees_to_hms
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -31,6 +31,46 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(query["ISIZE"], ["1200"])
         with self.assertRaises(ValueError):
             dss_jpeg_url(10.0, 91.0, 0.2)
+
+    def test_dss_fits_url_uses_archive_sexagesimal_parameters(self):
+        self.assertEqual(ra_degrees_to_hms(10.0), "00:40:00.000")
+        self.assertEqual(dec_degrees_to_dms(-20.5), "-20:30:00.00")
+        url = dss_fits_url(10.0, -20.5, 0.2)
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        self.assertEqual(query["r"], ["00:40:00.000"])
+        self.assertEqual(query["d"], ["-20:30:00.00"])
+        self.assertEqual(query["h"], ["12.0000"])
+        self.assertEqual(query["w"], ["12.0000"])
+        self.assertEqual(query["f"], ["fits"])
+
+    def test_finished_dss_fits_opens_existing_preview_workflow(self):
+        class Variable:
+            def set(self, value):
+                self.value = value
+
+        class Notebook:
+            def select(self, tab):
+                self.selected = tab
+
+        class Dummy(ObservatoryWorkflowMixin):
+            browser_operation_id = 7
+            convert_path_var = Variable()
+            notebook = Notebook()
+            convert_tab = object()
+            mosaic_status_var = Variable()
+
+            def stop_browser_activity(self, message):
+                self.stopped = message
+
+            def preview_fits_async(self):
+                self.previewed = True
+
+        app = Dummy()
+        metadata = {"fits_path": "target_dss_context.fits"}
+        self.assertEqual(app.observatory_finish_dss_fits(7, (metadata, None)), metadata)
+        self.assertTrue(app.previewed)
+        self.assertEqual(app.convert_path_var.value, "target_dss_context.fits")
+        self.assertIs(app.notebook.selected, app.convert_tab)
 
     def test_dss_context_request_uses_loaded_coordinates_and_radius(self):
         class Variable:

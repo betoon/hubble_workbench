@@ -1,6 +1,7 @@
 import threading
 import json
 import math
+import csv
 from xml.sax.saxutils import escape
 from datetime import datetime
 from pathlib import Path
@@ -212,7 +213,7 @@ class PreviewWorkflowMixin:
         return "\n".join(rows) if rows else "No FITS header fields match the current search."
 
     @staticmethod
-    def preview_header_rows(header, query="", cards=None):
+    def preview_header_rows(header, query="", cards=None, type_filter="All types", show_commentary=True):
         query = str(query or "").strip().lower()
         source = list(cards or (
             {"keyword": key, "value": value, "type": type(value).__name__, "comment": ""}
@@ -228,6 +229,19 @@ class PreviewWorkflowMixin:
             # 80-column dump but become distracting empty rows in a data grid.
             if not keyword:
                 continue
+            is_commentary = keyword.upper() in {"COMMENT", "HISTORY"}
+            if not show_commentary and is_commentary:
+                continue
+            normalized_type = value_type.lower()
+            selected_type = str(type_filter or "All types")
+            if selected_type == "Text" and normalized_type not in {"str", "string"}:
+                continue
+            if selected_type == "Numbers" and normalized_type not in {"int", "integer", "float", "float32", "float64"}:
+                continue
+            if selected_type == "Boolean" and normalized_type not in {"bool", "boolean"}:
+                continue
+            if selected_type == "Commentary" and not is_commentary:
+                continue
             searchable = " ".join((keyword, value, value_type, comment)).lower()
             if query and query not in searchable:
                 continue
@@ -239,6 +253,14 @@ class PreviewWorkflowMixin:
                 "comment": comment,
             })
         return rows
+
+    @staticmethod
+    def preview_header_rows_text(rows):
+        return "\n".join(
+            f"{row['keyword']:<10} = {row['value']} [{row['type']}]"
+            + (f" / {row['comment']}" if row["comment"] else "")
+            for row in rows
+        )
 
     @staticmethod
     def preview_hdu_inventory_text(inventory):
@@ -864,12 +886,16 @@ class PreviewWorkflowMixin:
             getattr(self, "preview_header", {}),
             query,
             cards=getattr(self, "preview_header_cards", None),
+            type_filter=self.preview_header_type_var.get() if hasattr(self, "preview_header_type_var") else "All types",
+            show_commentary=self.preview_header_show_commentary_var.get() if hasattr(self, "preview_header_show_commentary_var") else True,
         )
         self.preview_header_tree_rows = rows
         tree = self.preview_header_tree
         tree.delete(*tree.get_children())
         for row in rows:
             tree.insert("", "end", values=(row["number"], row["keyword"], row["value"], row["type"], row["comment"]))
+        if hasattr(self, "preview_header_count_var"):
+            self.preview_header_count_var.set(f"{len(rows):,} card{'s' if len(rows) != 1 else ''} visible")
 
     def sort_preview_header_tree(self, column):
         tree = getattr(self, "preview_header_tree", None)
@@ -896,16 +922,51 @@ class PreviewWorkflowMixin:
     def copy_preview_metadata(self, full_header=False):
         if full_header:
             rows = list(getattr(self, "preview_header_tree_rows", []) or [])
-            text = "\n".join(
-                f"{row['keyword']:<10} = {row['value']} [{row['type']}]"
-                + (f" / {row['comment']}" if row["comment"] else "")
-                for row in rows
-            )
+            text = self.preview_header_rows_text(rows)
         else:
             text = self.preview_summary_text.get("1.0", "end-1c")
         self.clipboard_clear()
         self.clipboard_append(text)
         self.convert_status.set("Copied FITS header." if full_header else "Copied FITS science summary.")
+
+    def copy_selected_preview_headers(self):
+        tree = getattr(self, "preview_header_tree", None)
+        if tree is None:
+            return ""
+        rows = []
+        for item in tree.selection():
+            number, keyword, value, value_type, comment = tree.item(item, "values")
+            rows.append({"number": number, "keyword": keyword, "value": value, "type": value_type, "comment": comment})
+        if not rows:
+            self.convert_status.set("Select one or more header cards to copy.")
+            return ""
+        text = self.preview_header_rows_text(rows)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.convert_status.set(f"Copied {len(rows)} selected header card(s).")
+        return text
+
+    def export_preview_header_csv(self):
+        rows = list(getattr(self, "preview_header_tree_rows", []) or [])
+        if not rows:
+            self.convert_status.set("No visible header cards to export.")
+            return None
+        default_name = f"{Path(getattr(self, 'preview_loaded_path', '') or 'fits').stem}_header.csv"
+        path = filedialog.asksaveasfilename(
+            title="Export visible FITS header cards",
+            initialdir=str(OUTPUT_DIR),
+            initialfile=default_name,
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv")],
+        )
+        if not path:
+            return None
+        with Path(path).open("w", newline="", encoding="utf-8-sig") as handle:
+            writer = csv.DictWriter(handle, fieldnames=("number", "keyword", "value", "type", "comment"))
+            writer.writeheader()
+            writer.writerows(rows)
+        self.convert_status.set(f"Exported {len(rows)} visible header card(s) to {Path(path).name}.")
+        return Path(path)
 
     @staticmethod
     def avm_metadata_from_header(header):

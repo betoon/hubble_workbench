@@ -82,6 +82,18 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(rows[0]["comment"], "Observatory name")
         self.assertEqual(PreviewWorkflowMixin.preview_header_rows({}, "description", cards), [rows[1]])
 
+    def test_header_rows_filter_types_and_commentary(self):
+        cards = [
+            {"keyword": "OBJECT", "value": "M42", "type": "str", "comment": "Target"},
+            {"keyword": "EXPTIME", "value": 1200.5, "type": "float", "comment": "Seconds"},
+            {"keyword": "EXTEND", "value": True, "type": "bool", "comment": "Extensions"},
+            {"keyword": "COMMENT", "value": "Processing note", "type": "str", "comment": ""},
+        ]
+        self.assertEqual([row["keyword"] for row in PreviewWorkflowMixin.preview_header_rows({}, cards=cards, type_filter="Numbers")], ["EXPTIME"])
+        self.assertEqual([row["keyword"] for row in PreviewWorkflowMixin.preview_header_rows({}, cards=cards, type_filter="Boolean")], ["EXTEND"])
+        self.assertEqual([row["keyword"] for row in PreviewWorkflowMixin.preview_header_rows({}, cards=cards, type_filter="Commentary")], ["COMMENT"])
+        self.assertNotIn("COMMENT", [row["keyword"] for row in PreviewWorkflowMixin.preview_header_rows({}, cards=cards, show_commentary=False)])
+
     def test_hdu_inventory_marks_preview_extension(self):
         text = PreviewWorkflowMixin.preview_hdu_inventory_text([
             {"index": 0, "name": "PRIMARY", "type": "PrimaryHDU", "shape": (), "bitpix": 8, "cards": 5, "selected": False},

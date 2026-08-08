@@ -1230,12 +1230,38 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_summary_text.pack(fill="both", expand=True)
         header_tools = ttk.Frame(header_panel)
         header_tools.pack(fill="x", pady=(0, 4))
-        ttk.Label(header_tools, text="Search header").pack(side="left")
+        header_filter_row = ttk.Frame(header_tools)
+        header_filter_row.pack(fill="x")
+        header_action_row = ttk.Frame(header_tools)
+        header_action_row.pack(fill="x", pady=(4, 0))
+        ttk.Label(header_filter_row, text="Search").pack(side="left")
         self.preview_header_search_var = tk.StringVar(value="")
-        header_search = ttk.Entry(header_tools, textvariable=self.preview_header_search_var)
+        header_search = ttk.Entry(header_filter_row, textvariable=self.preview_header_search_var)
         header_search.pack(side="left", fill="x", expand=True, padx=(6, 6))
-        ttk.Button(header_tools, text="Clear", command=lambda: self.preview_header_search_var.set("")).pack(side="left")
-        ttk.Button(header_tools, text="Copy Visible", command=lambda: self.copy_preview_metadata(full_header=True)).pack(side="left", padx=(6, 0))
+        ttk.Label(header_filter_row, text="Type").pack(side="left", padx=(6, 4))
+        self.preview_header_type_var = tk.StringVar(value="All types")
+        preview_header_type_combo = ttk.Combobox(
+            header_filter_row,
+            textvariable=self.preview_header_type_var,
+            values=["All types", "Text", "Numbers", "Boolean", "Commentary"],
+            state="readonly",
+            width=11,
+        )
+        preview_header_type_combo.pack(side="left")
+        preview_header_type_combo.bind("<<ComboboxSelected>>", self.refresh_preview_header_search)
+        self.preview_header_show_commentary_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            header_filter_row,
+            text="Show commentary",
+            variable=self.preview_header_show_commentary_var,
+            command=self.refresh_preview_header_search,
+        ).pack(side="left", padx=(8, 0))
+        ttk.Button(header_filter_row, text="Clear", command=lambda: self.preview_header_search_var.set("")).pack(side="left", padx=(6, 0))
+        self.preview_header_count_var = tk.StringVar(value="0 cards visible")
+        ttk.Label(header_action_row, textvariable=self.preview_header_count_var).pack(side="left")
+        ttk.Button(header_action_row, text="Copy Selected", command=self.copy_selected_preview_headers).pack(side="right")
+        ttk.Button(header_action_row, text="Copy Visible", command=lambda: self.copy_preview_metadata(full_header=True)).pack(side="right", padx=(0, 6))
+        ttk.Button(header_action_row, text="Export CSV", command=self.export_preview_header_csv).pack(side="right", padx=(0, 6))
         header_table = ttk.Frame(header_panel)
         header_table.pack(fill="both", expand=True)
         self.preview_header_tree = ttk.Treeview(
@@ -1377,6 +1403,12 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def sort_preview_header_tree(self, column):
         return super().sort_preview_header_tree(column)
+
+    def copy_selected_preview_headers(self):
+        return super().copy_selected_preview_headers()
+
+    def export_preview_header_csv(self):
+        return super().export_preview_header_csv()
 
     def redraw_fits_preview(self, event=None):
         return super().redraw_fits_preview(event)

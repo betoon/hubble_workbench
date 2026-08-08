@@ -120,6 +120,16 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertIn("30 x 20", text)
         self.assertIn("Total extensions: 2", text)
 
+    def test_hdu_rows_include_dimensions_planes_and_selected_state(self):
+        rows = PreviewWorkflowMixin.preview_hdu_rows([
+            {"index": 0, "name": "PRIMARY", "type": "PrimaryHDU", "shape": (), "bitpix": 8, "cards": 5, "selected": False},
+            {"index": 1, "name": "SCI", "type": "ImageHDU", "shape": (4, 20, 30), "bitpix": -32, "cards": 12, "selected": True},
+        ])
+        self.assertEqual(rows[0]["dimensions"], "No image data")
+        self.assertEqual(rows[1]["dimensions"], "30 × 20 × 4")
+        self.assertEqual(rows[1]["planes"], 4)
+        self.assertEqual(rows[1]["selected"], "Yes")
+
     def test_canvas_point_maps_centered_scaled_preview_to_full_image(self):
         point = PreviewWorkflowMixin.preview_canvas_to_image_point(
             500,

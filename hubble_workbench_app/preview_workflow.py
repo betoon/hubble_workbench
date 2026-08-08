@@ -359,6 +359,25 @@ class PreviewWorkflowMixin:
         return "\n".join(lines)
 
     @staticmethod
+    def preview_hdu_rows(inventory):
+        rows = []
+        for item in inventory:
+            shape = tuple(item.get("shape", ()) or ())
+            dimensions = " × ".join(str(value) for value in reversed(shape)) if shape else "No image data"
+            planes = max(1, int(np.prod(shape[:-2]))) if len(shape) >= 2 else 0
+            rows.append({
+                "selected": "Yes" if item.get("selected") else "",
+                "index": int(item.get("index", 0)),
+                "name": str(item.get("name", "") or "PRIMARY"),
+                "type": str(item.get("type", "") or "Unknown"),
+                "dimensions": dimensions,
+                "bitpix": str(item.get("bitpix", "")),
+                "cards": int(item.get("cards", 0) or 0),
+                "planes": planes,
+            })
+        return rows
+
+    @staticmethod
     def preview_canvas_to_image_point(
         canvas_x,
         canvas_y,
@@ -557,8 +576,19 @@ class PreviewWorkflowMixin:
         if hasattr(self, "preview_statistics_status_var"):
             self.preview_statistics_status_var.set(f"{self.preview_image.width:,} × {self.preview_image.height:,} pixels")
         self.refresh_preview_header_search()
-        self.preview_hdu_text.delete("1.0", "end")
-        self.preview_hdu_text.insert("1.0", self.preview_hdu_inventory_text(inventory))
+        hdu_rows = self.preview_hdu_rows(inventory)
+        self.preview_hdu_rows_data = hdu_rows
+        hdu_tree = getattr(self, "preview_hdu_tree", None)
+        if hdu_tree is not None:
+            hdu_tree.delete(*hdu_tree.get_children())
+            for row in hdu_rows:
+                hdu_tree.insert("", "end", values=(
+                    row["selected"], row["index"], row["name"], row["type"],
+                    row["dimensions"], row["bitpix"], row["cards"], row["planes"],
+                ))
+        if hasattr(self, "preview_hdu_status_var"):
+            image_count = sum(1 for row in hdu_rows if row["planes"])
+            self.preview_hdu_status_var.set(f"{len(hdu_rows)} extension(s), {image_count} image extension(s)")
         self.clear_preview_probe(update_status=False)
         self.convert_status.set(f"Preview loaded at {self.preview_image.width} x {self.preview_image.height}px. Display is scaled to fit the canvas.")
 
@@ -610,6 +640,17 @@ class PreviewWorkflowMixin:
 
     def select_preview_plane(self):
         self.preview_fits_async()
+
+    def copy_preview_hdu_inventory(self):
+        inventory = list(getattr(self, "preview_hdu_inventory", []) or [])
+        if not inventory:
+            self.convert_status.set("No HDU inventory is loaded yet.")
+            return ""
+        text = self.preview_hdu_inventory_text(inventory)
+        self.clipboard_clear()
+        self.clipboard_append(text)
+        self.convert_status.set(f"Copied {len(inventory)} HDU inventory row(s).")
+        return text
 
     @staticmethod
     def preview_histogram_x(value, lower, upper, left, right):

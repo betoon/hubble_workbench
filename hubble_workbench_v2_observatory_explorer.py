@@ -1335,9 +1335,34 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         )
         self.preview_plane_spin.pack(side="left", padx=(6, 0))
         self.preview_plane_spin.bind("<Return>", lambda _event: self.select_preview_plane())
-        self.preview_hdu_text = tk.Text(hdu_panel, wrap="none", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
-        self.preview_hdu_text.pack(fill="both", expand=True)
-        self.preview_hdu_text.insert("1.0", "HDU information appears after a FITS preview is loaded.")
+        ttk.Button(hdu_tools, text="Copy Inventory", command=self.copy_preview_hdu_inventory).pack(side="right")
+        self.preview_hdu_status_var = tk.StringVar(value="HDU information appears after a FITS preview is loaded.")
+        ttk.Label(hdu_tools, textvariable=self.preview_hdu_status_var).pack(side="right", padx=(0, 10))
+        hdu_table = ttk.Frame(hdu_panel)
+        hdu_table.pack(fill="both", expand=True)
+        self.preview_hdu_tree = ttk.Treeview(
+            hdu_table,
+            columns=("selected", "index", "name", "type", "dimensions", "bitpix", "cards", "planes"),
+            show="headings",
+            selectmode="browse",
+        )
+        hdu_columns = (
+            ("selected", "Used", 55, "center"), ("index", "HDU", 55, "center"),
+            ("name", "Name", 105, "w"), ("type", "Type", 120, "w"),
+            ("dimensions", "Dimensions", 150, "w"), ("bitpix", "BITPIX", 65, "center"),
+            ("cards", "Cards", 60, "center"), ("planes", "Planes", 65, "center"),
+        )
+        for column, label, width, anchor in hdu_columns:
+            self.preview_hdu_tree.heading(column, text=label)
+            self.preview_hdu_tree.column(column, width=width, minwidth=45, anchor=anchor, stretch=column in ("type", "dimensions"))
+        hdu_y_scroll = ttk.Scrollbar(hdu_table, orient="vertical", command=self.preview_hdu_tree.yview)
+        hdu_x_scroll = ttk.Scrollbar(hdu_table, orient="horizontal", command=self.preview_hdu_tree.xview)
+        self.preview_hdu_tree.configure(yscrollcommand=hdu_y_scroll.set, xscrollcommand=hdu_x_scroll.set)
+        self.preview_hdu_tree.grid(row=0, column=0, sticky="nsew")
+        hdu_y_scroll.grid(row=0, column=1, sticky="ns")
+        hdu_x_scroll.grid(row=1, column=0, sticky="ew")
+        hdu_table.rowconfigure(0, weight=1)
+        hdu_table.columnconfigure(0, weight=1)
         probe_tools = ttk.Frame(probe_panel)
         probe_tools.pack(fill="x", pady=(0, 4))
         ttk.Button(probe_tools, text="Copy Probe", command=self.copy_preview_probe).pack(side="right")
@@ -1446,6 +1471,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def sort_preview_header_tree(self, column):
         return super().sort_preview_header_tree(column)
+
+    def copy_preview_hdu_inventory(self):
+        return super().copy_preview_hdu_inventory()
 
     def copy_selected_preview_headers(self):
         return super().copy_selected_preview_headers()

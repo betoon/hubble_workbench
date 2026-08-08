@@ -71,6 +71,17 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertIn("[str]", text)
         self.assertIn("Observatory name", text)
 
+    def test_header_rows_hide_blank_separator_cards_and_keep_comments(self):
+        cards = [
+            {"keyword": "", "value": "", "type": "str", "comment": ""},
+            {"keyword": "TELESCOP", "value": "HST", "type": "str", "comment": "Observatory name"},
+            {"keyword": "COMMENT", "value": "Data description", "type": "str", "comment": ""},
+        ]
+        rows = PreviewWorkflowMixin.preview_header_rows({}, cards=cards)
+        self.assertEqual([row["keyword"] for row in rows], ["TELESCOP", "COMMENT"])
+        self.assertEqual(rows[0]["comment"], "Observatory name")
+        self.assertEqual(PreviewWorkflowMixin.preview_header_rows({}, "description", cards), [rows[1]])
+
     def test_hdu_inventory_marks_preview_extension(self):
         text = PreviewWorkflowMixin.preview_hdu_inventory_text([
             {"index": 0, "name": "PRIMARY", "type": "PrimaryHDU", "shape": (), "bitpix": 8, "cards": 5, "selected": False},

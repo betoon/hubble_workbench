@@ -212,6 +212,35 @@ class PreviewWorkflowMixin:
         return "\n".join(rows) if rows else "No FITS header fields match the current search."
 
     @staticmethod
+    def preview_header_rows(header, query="", cards=None):
+        query = str(query or "").strip().lower()
+        source = list(cards or (
+            {"keyword": key, "value": value, "type": type(value).__name__, "comment": ""}
+            for key, value in header.items()
+        ))
+        rows = []
+        for original_index, card in enumerate(source, start=1):
+            keyword = str(card.get("keyword", "") or "").strip()
+            value = str(card.get("value", "") if card.get("value", "") is not None else "")
+            value_type = str(card.get("type", "") or "")
+            comment = str(card.get("comment", "") or "")
+            # FITS uses blank cards as visual separators. They are useful in an
+            # 80-column dump but become distracting empty rows in a data grid.
+            if not keyword:
+                continue
+            searchable = " ".join((keyword, value, value_type, comment)).lower()
+            if query and query not in searchable:
+                continue
+            rows.append({
+                "number": original_index,
+                "keyword": keyword,
+                "value": value,
+                "type": value_type,
+                "comment": comment,
+            })
+        return rows
+
+    @staticmethod
     def preview_hdu_inventory_text(inventory):
         if not inventory:
             return "No HDU information is available."
@@ -828,20 +857,52 @@ class PreviewWorkflowMixin:
             self.preview_cursor_var.set("Move over the image to inspect pixel and sky coordinates.")
 
     def refresh_preview_header_search(self, *_args):
-        if not hasattr(self, "header_text"):
+        if not hasattr(self, "preview_header_tree"):
             return
         query = self.preview_header_search_var.get() if hasattr(self, "preview_header_search_var") else ""
-        text = self.preview_header_text(
+        rows = self.preview_header_rows(
             getattr(self, "preview_header", {}),
             query,
             cards=getattr(self, "preview_header_cards", None),
         )
-        self.header_text.delete("1.0", "end")
-        self.header_text.insert("1.0", text)
+        self.preview_header_tree_rows = rows
+        tree = self.preview_header_tree
+        tree.delete(*tree.get_children())
+        for row in rows:
+            tree.insert("", "end", values=(row["number"], row["keyword"], row["value"], row["type"], row["comment"]))
+
+    def sort_preview_header_tree(self, column):
+        tree = getattr(self, "preview_header_tree", None)
+        if tree is None:
+            return
+        state = getattr(self, "preview_header_sort_state", {})
+        reverse = state.get("column") == column and not state.get("reverse", False)
+        items = list(tree.get_children())
+
+        def key(item):
+            value = tree.set(item, column)
+            if column == "number":
+                try:
+                    return int(value)
+                except ValueError:
+                    return 0
+            return str(value).lower()
+
+        items.sort(key=key, reverse=reverse)
+        for index, item in enumerate(items):
+            tree.move(item, "", index)
+        self.preview_header_sort_state = {"column": column, "reverse": reverse}
 
     def copy_preview_metadata(self, full_header=False):
-        widget = self.header_text if full_header else self.preview_summary_text
-        text = widget.get("1.0", "end-1c")
+        if full_header:
+            rows = list(getattr(self, "preview_header_tree_rows", []) or [])
+            text = "\n".join(
+                f"{row['keyword']:<10} = {row['value']} [{row['type']}]"
+                + (f" / {row['comment']}" if row["comment"] else "")
+                for row in rows
+            )
+        else:
+            text = self.preview_summary_text.get("1.0", "end-1c")
         self.clipboard_clear()
         self.clipboard_append(text)
         self.convert_status.set("Copied FITS header." if full_header else "Copied FITS science summary.")

@@ -1235,9 +1235,33 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         header_search = ttk.Entry(header_tools, textvariable=self.preview_header_search_var)
         header_search.pack(side="left", fill="x", expand=True, padx=(6, 6))
         ttk.Button(header_tools, text="Clear", command=lambda: self.preview_header_search_var.set("")).pack(side="left")
-        ttk.Button(header_tools, text="Copy", command=lambda: self.copy_preview_metadata(full_header=True)).pack(side="left", padx=(6, 0))
-        self.header_text = tk.Text(header_panel, wrap="none", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
-        self.header_text.pack(fill="both", expand=True)
+        ttk.Button(header_tools, text="Copy Visible", command=lambda: self.copy_preview_metadata(full_header=True)).pack(side="left", padx=(6, 0))
+        header_table = ttk.Frame(header_panel)
+        header_table.pack(fill="both", expand=True)
+        self.preview_header_tree = ttk.Treeview(
+            header_table,
+            columns=("number", "keyword", "value", "type", "comment"),
+            show="headings",
+            selectmode="extended",
+        )
+        header_columns = (
+            ("number", "#", 48, "center"),
+            ("keyword", "Keyword", 110, "w"),
+            ("value", "Value", 250, "w"),
+            ("type", "Type", 80, "center"),
+            ("comment", "Comment", 360, "w"),
+        )
+        for column, label, width, anchor in header_columns:
+            self.preview_header_tree.heading(column, text=label, command=lambda name=column: self.sort_preview_header_tree(name))
+            self.preview_header_tree.column(column, width=width, minwidth=40, anchor=anchor, stretch=column in ("value", "comment"))
+        header_y_scroll = ttk.Scrollbar(header_table, orient="vertical", command=self.preview_header_tree.yview)
+        header_x_scroll = ttk.Scrollbar(header_table, orient="horizontal", command=self.preview_header_tree.xview)
+        self.preview_header_tree.configure(yscrollcommand=header_y_scroll.set, xscrollcommand=header_x_scroll.set)
+        self.preview_header_tree.grid(row=0, column=0, sticky="nsew")
+        header_y_scroll.grid(row=0, column=1, sticky="ns")
+        header_x_scroll.grid(row=1, column=0, sticky="ew")
+        header_table.rowconfigure(0, weight=1)
+        header_table.columnconfigure(0, weight=1)
         hdu_tools = ttk.Frame(hdu_panel)
         hdu_tools.pack(fill="x", pady=(0, 4))
         ttk.Label(hdu_tools, text="Image extension").pack(side="left")
@@ -1350,6 +1374,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
 
     def copy_preview_metadata(self, full_header=False):
         return super().copy_preview_metadata(full_header=full_header)
+
+    def sort_preview_header_tree(self, column):
+        return super().sort_preview_header_tree(column)
 
     def redraw_fits_preview(self, event=None):
         return super().redraw_fits_preview(event)

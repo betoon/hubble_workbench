@@ -188,6 +188,7 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["facility"], "JWST")
         self.assertEqual(metadata["instrument"], "NIRCAM")
         self.assertEqual(metadata["spectral_band"], "F200W")
+        self.assertEqual(metadata["avm_version_display"], "1.2")
 
     def test_avm_metadata_prefills_wcs_observation_and_dimensions(self):
         metadata = PreviewWorkflowMixin.avm_metadata_from_header({
@@ -209,6 +210,20 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["image_width"], "2048")
         self.assertEqual(metadata["exposure_time"], "1200.5")
         self.assertEqual(metadata["proposal_id"], "12345")
+
+    def test_avm_metadata_prefills_technical_identity_fields(self):
+        metadata = PreviewWorkflowMixin.avm_metadata_from_header({
+            "ROOTNAME": "jw01234-o001",
+            "BIBCODE": "2026ApJ...123..456A",
+            "PI_NAME": "A. Researcher",
+            "PI_EMAIL": "astronomer@example.org",
+            "DATE": "2026-07-25T11:50:00",
+        })
+        self.assertEqual(metadata["asset_id"], "jw01234-o001")
+        self.assertEqual(metadata["resource_id"], "jw01234-o001")
+        self.assertEqual(metadata["publication_id"], "2026ApJ...123..456A")
+        self.assertEqual(metadata["contact_name"], "A. Researcher")
+        self.assertEqual(metadata["contact_email"], "astronomer@example.org")
 
     def test_avm_completeness_reports_missing_fields_and_wcs(self):
         metadata = {field: "complete" for field in PreviewWorkflowMixin.AVM_COMPLETENESS_FIELDS}

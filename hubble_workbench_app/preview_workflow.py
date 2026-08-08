@@ -900,6 +900,14 @@ class PreviewWorkflowMixin:
             "exposure_time": number(first("EXPTIME", "EFFEXPTM", "XPOSURE")),
             "proposal_id": str(first("PROPOSID", "PROGRAM", "PROGRAMID")),
             "resource_id": str(first("ROOTNAME", "OBS_ID", "ASN_ID")),
+            "resource_url": str(first("REFERENC", "ARCHIVE", "DATAURL")),
+            "asset_id": str(first("FILENAME", "ROOTNAME", "OBS_ID")),
+            "publication_id": str(first("BIBCODE", "DOI")),
+            "contact_name": str(first("CONTACT", "PI_NAME", "PR_INV_L")),
+            "contact_email": str(first("EMAIL", "PI_EMAIL")),
+            "date_created": str(first("DATE", "DATE-OBS", "DATE-BEG")),
+            "metadata_date": datetime.now().isoformat(timespec="seconds"),
+            "avm_version_display": "1.2",
             "reference_frame": str(first("RADESYS", "RADECSYS") or "ICRS"),
             "equinox": number(first("EQUINOX")),
             "ra": number(first("CRVAL1", "RA_TARG", "RA")),
@@ -949,6 +957,11 @@ class PreviewWorkflowMixin:
       <avm:Observation.ExposureTime>{value("exposure_time")}</avm:Observation.ExposureTime>
       <avm:ProposalID>{value("proposal_id")}</avm:ProposalID>
       <avm:ResourceID>{value("resource_id")}</avm:ResourceID>
+      <avm:ResourceURL>{value("resource_url")}</avm:ResourceURL>
+      <avm:ID>{value("asset_id")}</avm:ID>
+      <avm:PublicationID>{value("publication_id")}</avm:PublicationID>
+      <avm:Contact.Name>{value("contact_name")}</avm:Contact.Name>
+      <avm:Contact.Email>{value("contact_email")}</avm:Contact.Email>
       <avm:Spectral.CentralWavelength>{value("central_wavelength")}</avm:Spectral.CentralWavelength>
       <avm:Spectral.ColorAssignment>{value("color_assignment")}</avm:Spectral.ColorAssignment>
       <avm:Spatial.CoordinateFrame>{value("reference_frame")}</avm:Spatial.CoordinateFrame>
@@ -983,6 +996,14 @@ class PreviewWorkflowMixin:
 
     def load_avm_from_fits(self):
         values = self.avm_metadata_from_header(getattr(self, "preview_header", {}))
+        loaded_path = Path(getattr(self, "preview_loaded_path", "") or "")
+        if loaded_path.name:
+            values["asset_id"] = values.get("asset_id") or loaded_path.stem
+            values["resource_id"] = values.get("resource_id") or loaded_path.stem
+            try:
+                values["date_created"] = datetime.fromtimestamp(loaded_path.stat().st_mtime).isoformat(timespec="seconds")
+            except OSError:
+                pass
         for key, var in getattr(self, "preview_avm_vars", {}).items():
             var.set(values.get(key, ""))
         self.convert_status.set("Loaded available publication metadata from the current FITS header.")

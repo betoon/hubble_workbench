@@ -1218,11 +1218,11 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         probe_panel = ttk.Frame(metadata_tabs)
         avm_panel = ttk.Frame(metadata_tabs)
         self.preview_probe_panel = probe_panel
-        metadata_tabs.add(summary_panel, text="Science Summary")
-        metadata_tabs.add(header_panel, text="Full Header")
-        metadata_tabs.add(hdu_panel, text="HDU List")
-        metadata_tabs.add(probe_panel, text="Pixel Probe")
-        metadata_tabs.add(avm_panel, text="Publication")
+        metadata_tabs.add(summary_panel, text="Statistics")
+        metadata_tabs.add(header_panel, text="Header")
+        metadata_tabs.add(hdu_panel, text="HDUs")
+        metadata_tabs.add(probe_panel, text="Pixel Data")
+        metadata_tabs.add(avm_panel, text="Metadata")
         summary_tools = ttk.Frame(summary_panel)
         summary_tools.pack(fill="x", pady=(0, 4))
         ttk.Button(summary_tools, text="Copy Summary", command=self.copy_preview_metadata).pack(side="right")
@@ -1273,32 +1273,72 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.preview_probe_text = tk.Text(probe_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
         self.preview_probe_text.pack(fill="both", expand=True)
         self.preview_probe_text.insert("1.0", "Click a point in the FITS preview to freeze its pixel and sky-coordinate data.")
+        ttk.Label(avm_panel, text="Metadata Editor (AVM 1.2)", style="Section.TLabel").pack(anchor="w", pady=(2, 6))
         avm_tools = ttk.Frame(avm_panel)
         avm_tools.pack(fill="x", pady=(0, 8))
         ttk.Button(avm_tools, text="Load from FITS", command=self.load_avm_from_fits).pack(side="left")
         ttk.Button(avm_tools, text="Apply Creator Template", command=self.apply_avm_creator_template).pack(side="left", padx=(6, 0))
         ttk.Button(avm_tools, text="Save Creator Template", command=self.save_avm_creator_template).pack(side="left", padx=(6, 0))
-        ttk.Button(avm_tools, text="Save XMP + JSON", command=self.save_avm_metadata, style="Accent.TButton").pack(side="left", padx=(6, 0))
+        ttk.Button(avm_tools, text="Save Metadata", command=self.save_avm_metadata, style="Accent.TButton").pack(side="left", padx=(6, 0))
         self.preview_avm_completeness_var = tk.StringVar(value="Publication metadata: 0% complete")
         self.responsive_wrap_label(avm_panel, textvariable=self.preview_avm_completeness_var, minimum=240).pack(fill="x", pady=(0, 6))
         avm_fields = ttk.Notebook(avm_panel)
         avm_fields.pack(fill="both", expand=True)
         self.preview_avm_vars = {}
         avm_groups = (
-            ("Core", (("title", "Title"), ("headline", "Headline"), ("description", "Description"), ("creator", "Creator"), ("creator_url", "Creator URL"), ("credit", "Credit"), ("rights", "Rights / license"), ("publisher_id", "Publisher ID"), ("subject", "Subject names"), ("subject_category", "Subject category"), ("image_type", "Image type"), ("quality", "Product quality"))),
-            ("Observation", (("facility", "Facility"), ("instrument", "Instrument"), ("spectral_band", "Spectral band / filters"), ("central_wavelength", "Central wavelength"), ("color_assignment", "Color assignment"), ("observation_date", "Observation date"), ("exposure_time", "Exposure time (s)"), ("proposal_id", "Proposal / program ID"), ("resource_id", "Resource ID"))),
-            ("WCS", (("reference_frame", "Reference frame"), ("equinox", "Equinox"), ("ra", "Reference RA (deg)"), ("dec", "Reference Dec (deg)"), ("scale_x", "Scale X (deg/pixel)"), ("scale_y", "Scale Y (deg/pixel)"), ("rotation", "Rotation (deg)"), ("image_width", "Image width"), ("image_height", "Image height"))),
+            ("Core", (
+                ("Content Information", (("title", "Title"), ("headline", "Headline"), ("description", "Description"))),
+                ("Creator / Publisher", (("creator", "Creator"), ("creator_url", "Creator URL"), ("publisher_id", "Publisher ID"))),
+                ("Rights Attribution", (("credit", "Credit"), ("rights", "Rights / license"))),
+                ("Image Classification", (("image_type", "Image type"), ("quality", "Product quality"))),
+            )),
+            ("WCS", (
+                ("Coordinate System", (("reference_frame", "Reference frame"), ("equinox", "Equinox"))),
+                ("Reference Coordinates", (("ra", "RA (degrees)"), ("dec", "Dec (degrees)"))),
+                ("Scale / Orientation", (("scale_x", "Scale X (deg/pixel)"), ("scale_y", "Scale Y (deg/pixel)"), ("rotation", "Rotation (degrees)"))),
+                ("Image Dimensions", (("image_width", "Width (pixels)"), ("image_height", "Height (pixels)"))),
+            )),
+            ("Observation", (
+                ("Subject Information", (("subject", "Subject names"), ("subject_category", "Subject category"))),
+                ("Observation Details", (("facility", "Facility"), ("instrument", "Instrument"))),
+                ("Spectral Information", (("spectral_band", "Spectral band / filters"), ("central_wavelength", "Central wavelength"), ("color_assignment", "Color assignment"))),
+                ("Temporal Information", (("observation_date", "Observation date"), ("exposure_time", "Exposure time (seconds)"))),
+            )),
+            ("Technical", (
+                ("Identifiers / References", (("resource_id", "Resource ID"), ("resource_url", "Resource URL"), ("asset_id", "Asset ID"))),
+                ("Publications / Proposals", (("publication_id", "Publication ID"), ("proposal_id", "Proposal / program ID"))),
+                ("Contact Information", (("contact_name", "Contact name"), ("contact_email", "Contact email"))),
+                ("File Information", (("date_created", "Date created"), ("metadata_date", "Metadata date"), ("avm_version_display", "AVM version"))),
+            )),
         )
-        for group_name, fields in avm_groups:
-            form = ttk.Frame(avm_fields)
+        avm_placeholders = {
+            "title": "e.g., The Whirlpool Galaxy",
+            "creator": "e.g., NASA, ESA, STScI",
+            "rights": "e.g., Creative Commons Attribution 4.0",
+            "subject": "e.g., M51; NGC 5194; Whirlpool Galaxy",
+            "facility": "e.g., Hubble; James Webb; DSS",
+            "instrument": "e.g., ACS/WFC; WFC3; NIRCam",
+            "spectral_band": "e.g., Optical; Infrared; F555W",
+            "resource_url": "Direct URL or archive reference",
+        }
+        for group_name, sections in avm_groups:
+            form = ttk.Frame(avm_fields, padding=6)
             avm_fields.add(form, text=group_name)
-            for row, (key, label) in enumerate(fields):
-                ttk.Label(form, text=label).grid(row=row, column=0, sticky="w", padx=(4, 8), pady=3)
-                var = tk.StringVar(value="")
-                var.trace_add("write", self.update_avm_completeness)
-                self.preview_avm_vars[key] = var
-                ttk.Entry(form, textvariable=var).grid(row=row, column=1, sticky="ew", padx=(0, 4), pady=3)
-            form.columnconfigure(1, weight=1)
+            for section_name, fields in sections:
+                section = ttk.LabelFrame(form, text=section_name, padding=7)
+                section.pack(fill="x", pady=(0, 7))
+                section.columnconfigure(1, weight=1)
+                for row, (key, label) in enumerate(fields):
+                    ttk.Label(section, text=label).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=3)
+                    default = "1.2" if key == "avm_version_display" else ""
+                    var = tk.StringVar(value=default)
+                    var.trace_add("write", self.update_avm_completeness)
+                    self.preview_avm_vars[key] = var
+                    entry = ttk.Entry(section, textvariable=var)
+                    entry.grid(row=row, column=1, sticky="ew", pady=3)
+                    placeholder = avm_placeholders.get(key)
+                    if placeholder:
+                        entry.configure(width=max(24, min(48, len(placeholder))))
         self.update_avm_completeness()
         self.preview_header_search_var.trace_add("write", self.refresh_preview_header_search)
         self.convert_status = tk.StringVar(value="")

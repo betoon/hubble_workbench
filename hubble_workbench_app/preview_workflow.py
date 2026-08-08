@@ -922,15 +922,20 @@ class PreviewWorkflowMixin:
 
     def freeze_preview_probe(self, event):
         point = self.preview_canvas_motion(event)
-        details = getattr(self, "preview_last_cursor_text", "") if point is not None else ""
-        if not details:
+        if point is None:
             return None
-        text = self.preview_frozen_probe_text(
-            details,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        )
-        self.preview_probe_text.delete("1.0", "end")
-        self.preview_probe_text.insert("1.0", text)
+        captured_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        sections = self.preview_probe_sections(point, captured_at)
+        self.preview_probe_sections_data = sections
+        tree = getattr(self, "preview_probe_tree", None)
+        if tree is not None:
+            tree.delete(*tree.get_children())
+            for title, rows in sections:
+                parent = tree.insert("", "end", text=title, open=True, values=("", ""))
+                for label, value in rows:
+                    tree.insert(parent, "end", text="", values=(label, value))
+        if hasattr(self, "preview_probe_status_var"):
+            self.preview_probe_status_var.set(f"Frozen at X {point[0]:,}, Y {point[1]:,} — {captured_at}")
         try:
             self.preview_metadata_tabs.select(self.preview_probe_panel)
         except Exception:
@@ -938,17 +943,70 @@ class PreviewWorkflowMixin:
         self.convert_status.set(f"Frozen pixel probe at X {point[0]:,}, Y {point[1]:,}.")
         return point
 
+    def preview_probe_sections(self, point, captured_at=""):
+        x, y = point
+        coordinate_rows = [("Pixel X", f"{x:,}"), ("Pixel Y", f"{y:,}")]
+        wcs = getattr(self, "preview_wcs", None)
+        if wcs is not None:
+            try:
+                ra, dec = wcs.pixel_to_world_values(x, y)
+                coordinate_rows.extend((
+                    ("RA", f"{float(ra):.8f} degrees"),
+                    ("Dec", f"{float(dec):.8f} degrees"),
+                    ("Sky position", self.preview_format_sky_position(float(ra), float(dec)).replace("\n", " | ")),
+                ))
+            except Exception:
+                coordinate_rows.append(("Sky position", "WCS conversion unavailable"))
+        else:
+            coordinate_rows.append(("Sky position", "No celestial WCS loaded"))
+
+        intensity_rows = []
+        source = getattr(self, "preview_source_data", None)
+        try:
+            intensity_rows.append(("Input value", f"{float(source[y, x]):.10g}"))
+        except Exception:
+            intensity_rows.append(("Input value", "Not available"))
+        try:
+            intensity_rows.append(("Stretched value", str(self.preview_image.getpixel((x, y)))))
+        except Exception:
+            intensity_rows.append(("Stretched value", "Not available"))
+
+        statistics = getattr(self, "preview_statistics", {}) or {}
+        statistic_rows = []
+        for label, key in (("Mean", "mean"), ("Median", "median"), ("Minimum", "minimum"), ("Maximum", "maximum"), ("Standard deviation", "stddev")):
+            value = statistics.get(key)
+            statistic_rows.append((label, f"{value:.10g}" if isinstance(value, (int, float)) else "Not calculated"))
+
+        context_rows = [
+            ("Captured", captured_at or "Not recorded"),
+            ("HDU", self.preview_hdu_var.get() if hasattr(self, "preview_hdu_var") and self.preview_hdu_var.get() else "Current image HDU"),
+            ("Cube plane", str(self.preview_plane_var.get()) if hasattr(self, "preview_plane_var") else "0"),
+        ]
+        return (
+            ("Coordinates", coordinate_rows),
+            ("Intensity", intensity_rows),
+            ("Image Statistics", statistic_rows),
+            ("Capture Context", context_rows),
+        )
+
     def copy_preview_probe(self):
-        text = self.preview_probe_text.get("1.0", "end-1c")
+        sections = getattr(self, "preview_probe_sections_data", ()) or ()
+        if not sections:
+            self.convert_status.set("Click the FITS preview to freeze pixel data before copying.")
+            return ""
+        text = self.preview_statistics_text(sections)
         self.clipboard_clear()
         self.clipboard_append(text)
         self.convert_status.set("Copied frozen pixel probe data.")
+        return text
 
     def clear_preview_probe(self, update_status=True):
-        if not hasattr(self, "preview_probe_text"):
-            return
-        self.preview_probe_text.delete("1.0", "end")
-        self.preview_probe_text.insert("1.0", self.preview_frozen_probe_text(""))
+        self.preview_probe_sections_data = ()
+        tree = getattr(self, "preview_probe_tree", None)
+        if tree is not None:
+            tree.delete(*tree.get_children())
+        if hasattr(self, "preview_probe_status_var"):
+            self.preview_probe_status_var.set("Click a point in the FITS preview to freeze its pixel and sky-coordinate data.")
         if update_status:
             self.convert_status.set("Cleared frozen pixel probe data.")
 

@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+from PIL import Image
 
 from hubble_workbench_app.preview_workflow import PreviewWorkflowMixin
 from hubble_workbench_app.image_processing import normalize_image, normalize_image_uint16
@@ -154,6 +155,25 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertIn("FROZEN PIXEL PROBE", text)
         self.assertIn("2026-07-26 12:00:00", text)
         self.assertIn("Pixel X 12, Y 34", text)
+
+    def test_probe_sections_group_coordinates_intensity_statistics_and_context(self):
+        class Variable:
+            def get(self):
+                return "HDU 1 SCI"
+
+        class Dummy(PreviewWorkflowMixin):
+            preview_wcs = None
+            preview_source_data = np.array([[1.5, 2.5], [3.5, 4.5]])
+            preview_image = Image.fromarray(np.array([[10, 20], [30, 40]], dtype=np.uint8))
+            preview_statistics = {"mean": 2.5, "median": 2.5, "minimum": 1.5, "maximum": 4.5, "stddev": 1.1}
+            preview_hdu_var = Variable()
+
+        sections = Dummy().preview_probe_sections((1, 0), "2026-08-08 12:00:00")
+        self.assertEqual([title for title, _rows in sections], ["Coordinates", "Intensity", "Image Statistics", "Capture Context"])
+        text = PreviewWorkflowMixin.preview_statistics_text(sections)
+        self.assertIn("Input value: 2.5", text)
+        self.assertIn("Stretched value: 20", text)
+        self.assertIn("No celestial WCS loaded", text)
 
     def test_sky_position_formats_degrees_and_sexagesimal(self):
         text = PreviewWorkflowMixin.preview_format_sky_position(83.633, -5.391)

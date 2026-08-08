@@ -1342,9 +1342,30 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         probe_tools.pack(fill="x", pady=(0, 4))
         ttk.Button(probe_tools, text="Copy Probe", command=self.copy_preview_probe).pack(side="right")
         ttk.Button(probe_tools, text="Clear", command=self.clear_preview_probe).pack(side="right", padx=(0, 6))
-        self.preview_probe_text = tk.Text(probe_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
-        self.preview_probe_text.pack(fill="both", expand=True)
-        self.preview_probe_text.insert("1.0", "Click a point in the FITS preview to freeze its pixel and sky-coordinate data.")
+        self.preview_probe_status_var = tk.StringVar(value="Click a point in the FITS preview to freeze its pixel and sky-coordinate data.")
+        ttk.Label(probe_tools, textvariable=self.preview_probe_status_var).pack(side="left")
+        probe_table = ttk.Frame(probe_panel)
+        probe_table.pack(fill="both", expand=True)
+        self.preview_probe_tree = ttk.Treeview(
+            probe_table,
+            columns=("metric", "value"),
+            show="tree headings",
+            selectmode="browse",
+        )
+        self.preview_probe_tree.heading("#0", text="Section")
+        self.preview_probe_tree.heading("metric", text="Metric")
+        self.preview_probe_tree.heading("value", text="Value")
+        self.preview_probe_tree.column("#0", width=140, minwidth=100, stretch=False)
+        self.preview_probe_tree.column("metric", width=155, minwidth=90, stretch=False)
+        self.preview_probe_tree.column("value", width=320, minwidth=140, stretch=True)
+        probe_y_scroll = ttk.Scrollbar(probe_table, orient="vertical", command=self.preview_probe_tree.yview)
+        probe_x_scroll = ttk.Scrollbar(probe_table, orient="horizontal", command=self.preview_probe_tree.xview)
+        self.preview_probe_tree.configure(yscrollcommand=probe_y_scroll.set, xscrollcommand=probe_x_scroll.set)
+        self.preview_probe_tree.grid(row=0, column=0, sticky="nsew")
+        probe_y_scroll.grid(row=0, column=1, sticky="ns")
+        probe_x_scroll.grid(row=1, column=0, sticky="ew")
+        probe_table.rowconfigure(0, weight=1)
+        probe_table.columnconfigure(0, weight=1)
         ttk.Label(avm_panel, text="Metadata Editor (AVM 1.2)", style="Section.TLabel").pack(anchor="w", pady=(2, 6))
         avm_tools = ttk.Frame(avm_panel)
         avm_tools.pack(fill="x", pady=(0, 8))

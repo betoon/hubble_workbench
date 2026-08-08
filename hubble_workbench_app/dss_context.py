@@ -110,7 +110,7 @@ def download_dss_fits(ra, dec, size_degrees, destination, timeout=180):
         "field_size_degrees": min(2.0, max(1.0 / 60.0, float(size_degrees))),
         "retrieved_utc": datetime.now(timezone.utc).isoformat(),
         "fits_path": str(destination),
-        "usage_note": "DSS reference FITS with archive WCS metadata; registration should be verified in FITS Preview.",
+        "usage_note": "DSS reference FITS with archive WCS metadata; pixel-accurate mosaic reprojection is supported.",
     }
     metadata_path = destination.with_suffix(".fits.json")
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
@@ -152,7 +152,8 @@ def load_dss_fits_overlay(path, max_dimension=1200):
         high = low + 1.0
     display = np.clip((data - low) / (high - low), 0.0, 1.0)
     display = np.nan_to_num(display, nan=0.0)
-    display = np.flipud((display * 255.0).astype(np.uint8))
+    source_display = (display * 255.0).astype(np.uint8)
+    display = np.flipud(source_display)
     image = Image.fromarray(display, mode="L").convert("RGBA")
     # After flipud, display corners are FITS corners 3, 2, 1, 0. Orient the
     # raster to the mosaic convention: RA grows rightward and Dec grows upward.
@@ -172,4 +173,57 @@ def load_dss_fits_overlay(path, max_dimension=1200):
         "bounds": (min(ras), max(ras), min(decs), max(decs)),
         "corners": list(zip(ras, decs)),
         "shape": (height, width),
+        "source_display": source_display,
+        "wcs": wcs,
+    }
+
+
+def reproject_dss_fits_overlay(overlay, world_bounds, output_size, alpha=150):
+    """Inverse-map a DSS FITS raster onto a linear RA/Dec mosaic grid."""
+    import numpy as np
+    from PIL import Image
+
+    output_width, output_height = (max(1, int(value)) for value in output_size)
+    ra_min, ra_max, dec_min, dec_max = (float(value) for value in world_bounds)
+    source = np.asarray(overlay["source_display"], dtype=np.float32)
+    wcs = overlay["wcs"]
+    source_height, source_width = source.shape
+
+    ra_axis = np.linspace(ra_min, ra_max, output_width, dtype=np.float64)
+    dec_axis = np.linspace(dec_max, dec_min, output_height, dtype=np.float64)
+    ra_grid, dec_grid = np.meshgrid(np.mod(ra_axis, 360.0), dec_axis)
+    world = np.column_stack((ra_grid.ravel(), dec_grid.ravel()))
+    pixels = np.asarray(wcs.all_world2pix(world, 0), dtype=np.float64)
+    pixel_x = pixels[:, 0]
+    pixel_y = pixels[:, 1]
+    valid = (
+        np.isfinite(pixel_x) & np.isfinite(pixel_y)
+        & (pixel_x >= 0) & (pixel_x <= source_width - 1)
+        & (pixel_y >= 0) & (pixel_y <= source_height - 1)
+    )
+
+    sampled = np.zeros(pixel_x.shape, dtype=np.float32)
+    if np.any(valid):
+        x = pixel_x[valid]
+        y = pixel_y[valid]
+        x0 = np.floor(x).astype(int)
+        y0 = np.floor(y).astype(int)
+        x1 = np.minimum(x0 + 1, source_width - 1)
+        y1 = np.minimum(y0 + 1, source_height - 1)
+        dx = x - x0
+        dy = y - y0
+        sampled[valid] = (
+            source[y0, x0] * (1.0 - dx) * (1.0 - dy)
+            + source[y0, x1] * dx * (1.0 - dy)
+            + source[y1, x0] * (1.0 - dx) * dy
+            + source[y1, x1] * dx * dy
+        )
+
+    gray = np.clip(sampled.reshape(output_height, output_width), 0, 255).astype(np.uint8)
+    rgba = np.zeros((output_height, output_width, 4), dtype=np.uint8)
+    rgba[..., :3] = gray[..., None]
+    rgba[..., 3] = valid.reshape(output_height, output_width).astype(np.uint8) * min(255, max(0, int(alpha)))
+    return {
+        "image": Image.fromarray(rgba, mode="RGBA"),
+        "coverage_fraction": float(np.count_nonzero(valid) / max(1, valid.size)),
     }

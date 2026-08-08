@@ -34,7 +34,7 @@ Initial sources:
 
 - Hubble / HST: active
 - James Webb / JWST: active
-- DSS reference imagery: JPEG framing, FITS/WCS retrieval, and approximate mosaic background registration active
+- DSS reference imagery: JPEG framing, FITS/WCS retrieval, and pixel-accurate inverse-WCS mosaic reprojection active
 - Pan-STARRS context imagery: planned
 - Chandra: planned X-ray context layer
 
@@ -78,6 +78,7 @@ Planned capabilities:
 - Added MAST/STScI DSS reference-image retrieval with saved provenance and project-plan continuity.
 - Added DSS FITS retrieval and direct handoff to FITS Preview for WCS inspection.
 - Added an optional DSS FITS/WCS background beneath the interactive sky mosaic.
+- Replaced corner-based DSS placement with cached inverse-WCS reprojection and bilinear pixel sampling for rotated/distorted fields.
 
 ## Current Implementation Notes
 

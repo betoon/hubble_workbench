@@ -8,7 +8,7 @@ import numpy as np
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
-from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, load_dss_fits_overlay, ra_degrees_to_hms
+from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, load_dss_fits_overlay, ra_degrees_to_hms, reproject_dss_fits_overlay
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -96,6 +96,37 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertGreater(ra_max, 10.0)
         self.assertLess(dec_min, 20.0)
         self.assertGreater(dec_max, 20.0)
+
+    def test_dss_reprojection_inverse_maps_rotated_wcs_pixels(self):
+        from astropy.wcs import Sip, WCS
+
+        wcs = WCS(naxis=2)
+        wcs.wcs.crpix = [20.0, 20.0]
+        angle = np.deg2rad(27.0)
+        scale = 0.002
+        wcs.wcs.cd = np.array([
+            [-scale * np.cos(angle), scale * np.sin(angle)],
+            [scale * np.sin(angle), scale * np.cos(angle)],
+        ])
+        wcs.wcs.crval = [10.0, 20.0]
+        wcs.wcs.ctype = ["RA---TAN-SIP", "DEC--TAN-SIP"]
+        a = np.zeros((3, 3)); b = np.zeros((3, 3))
+        ap = np.zeros((3, 3)); bp = np.zeros((3, 3))
+        a[2, 0] = 2e-5; b[0, 2] = -2e-5
+        wcs.sip = Sip(a, b, ap, bp, wcs.wcs.crpix)
+        source = np.arange(1600, dtype=np.uint8).reshape(40, 40)
+        overlay = {"source_display": source, "wcs": wcs}
+        projected = reproject_dss_fits_overlay(
+            overlay,
+            (9.94, 10.06, 19.94, 20.06),
+            (120, 100),
+        )
+        rgba = np.asarray(projected["image"])
+        self.assertEqual(projected["image"].size, (120, 100))
+        self.assertGreater(projected["coverage_fraction"], 0.1)
+        self.assertLess(projected["coverage_fraction"], 1.0)
+        self.assertGreater(np.count_nonzero(rgba[..., 3]), 0)
+        self.assertGreater(len(np.unique(rgba[..., 0][rgba[..., 3] > 0])), 20)
 
     def test_dss_context_request_uses_loaded_coordinates_and_radius(self):
         class Variable:

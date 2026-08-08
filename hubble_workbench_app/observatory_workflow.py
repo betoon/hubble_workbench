@@ -10,7 +10,7 @@ from tkinter import messagebox
 from hubble_workbench_app.paths import DSS_CONTEXT_DIR, ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
 from hubble_workbench_app.fits_io import OBSERVATIONS
-from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits, load_dss_fits_overlay
+from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits, load_dss_fits_overlay, reproject_dss_fits_overlay
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -151,6 +151,7 @@ class ObservatoryWorkflowMixin:
             return None
         self.dss_fits_layer = metadata
         self.mosaic_dss_overlay = None
+        self.mosaic_dss_reprojection_cache = None
         path = Path(metadata["fits_path"])
         self.stop_browser_activity(f"Saved DSS FITS layer: {path.name}")
         self.convert_path_var.set(str(path))
@@ -193,27 +194,32 @@ class ObservatoryWorkflowMixin:
             return False
         from PIL import ImageTk
 
-        ra_min, ra_max, dec_min, dec_max = overlay["bounds"]
-        x0, y_bottom = map_point(ra_min, dec_min)
-        x1, y_top = map_point(ra_max, dec_max)
-        left, right = sorted((x0, x1))
-        top, bottom = sorted((y_top, y_bottom))
         plot_x0, plot_y0, plot_x1, plot_y1 = plot_bounds
-        visible_left, visible_right = max(left, plot_x0), min(right, plot_x1)
-        visible_top, visible_bottom = max(top, plot_y0), min(bottom, plot_y1)
-        if visible_right <= visible_left or visible_bottom <= visible_top:
+        render = getattr(self, "mosaic_render_state", {}) or {}
+        world_bounds = tuple(render.get("bounds", ()))
+        if len(world_bounds) != 4:
             return False
-        image = overlay["image"]
-        source_left = int((visible_left - left) / max(right - left, 1) * image.width)
-        source_right = int((visible_right - left) / max(right - left, 1) * image.width)
-        source_top = int((visible_top - top) / max(bottom - top, 1) * image.height)
-        source_bottom = int((visible_bottom - top) / max(bottom - top, 1) * image.height)
-        cropped = image.crop((source_left, source_top, max(source_left + 1, source_right), max(source_top + 1, source_bottom)))
-        cropped = cropped.resize((max(1, int(visible_right - visible_left)), max(1, int(visible_bottom - visible_top))))
-        self.mosaic_dss_photo = ImageTk.PhotoImage(cropped)
-        canvas.create_image(visible_left, visible_top, anchor="nw", image=self.mosaic_dss_photo, tags="dss_background")
-        canvas.create_rectangle(left, top, right, bottom, outline="#fbbf24", width=2, dash=(5, 3))
-        canvas.create_text(max(plot_x0 + 6, left + 6), max(plot_y0 + 10, top + 10), anchor="w", text="DSS FITS/WCS background", fill="#fbbf24", font=("Segoe UI", 8, "bold"))
+        output_size = (max(1, int(plot_x1 - plot_x0)), max(1, int(plot_y1 - plot_y0)))
+        cache_key = (overlay.get("path"), tuple(round(value, 10) for value in world_bounds), output_size)
+        cache = getattr(self, "mosaic_dss_reprojection_cache", None)
+        if not cache or cache.get("key") != cache_key:
+            projected = reproject_dss_fits_overlay(overlay, world_bounds, output_size)
+            cache = {"key": cache_key, **projected}
+            self.mosaic_dss_reprojection_cache = cache
+        if cache["coverage_fraction"] <= 0:
+            return False
+        self.mosaic_dss_photo = ImageTk.PhotoImage(cache["image"])
+        canvas.create_image(plot_x0, plot_y0, anchor="nw", image=self.mosaic_dss_photo, tags="dss_background")
+        footprint_points = [map_point(ra, dec) for ra, dec in overlay["corners"]]
+        canvas.create_polygon(
+            [coordinate for point in footprint_points for coordinate in point],
+            fill="", outline="#fbbf24", width=2, dash=(5, 3),
+        )
+        canvas.create_text(
+            plot_x0 + 8, plot_y0 + 10, anchor="w",
+            text=f"DSS pixel-WCS reprojection ({cache['coverage_fraction']:.0%} of view)",
+            fill="#fbbf24", font=("Segoe UI", 8, "bold"),
+        )
         return True
     def set_easy_all_sensors_status(self, stage, message, mirror=True):
         stage_label = str(stage or "ready").replace("_", " ").title()

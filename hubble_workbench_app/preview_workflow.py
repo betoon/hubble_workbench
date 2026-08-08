@@ -192,6 +192,78 @@ class PreviewWorkflowMixin:
             lines.append(f"Finite sample: {statistics['finite']:,} of {statistics['sampled']:,} values")
         return "\n".join(lines)
 
+    @classmethod
+    def preview_statistics_sections(cls, header, shape, statistics=None, path=""):
+        height, width = shape
+        file_rows = []
+        if path:
+            source = Path(path)
+            file_rows.extend((("File", source.name), ("Location", str(source.parent))))
+            try:
+                file_rows.append(("File size", f"{source.stat().st_size / (1024 * 1024):,.2f} MB"))
+            except OSError:
+                pass
+        file_rows.extend((
+            ("Dimensions", f"{width:,} × {height:,} pixels"),
+            ("Total pixels", f"{width * height:,}"),
+            ("BITPIX", str(header.get("BITPIX", "Not listed"))),
+            ("Data unit", str(header.get("BUNIT", "Not listed"))),
+        ))
+        filters = ", ".join(str(header.get(key)) for key in ("FILTER", "FILTER1", "FILTER2") if header.get(key))
+        observation_rows = [
+            ("Target", str(header.get("TARGNAME") or header.get("OBJECT") or "Not listed")),
+            ("Facility", str(header.get("TELESCOP") or "Not listed")),
+            ("Instrument", str(header.get("INSTRUME") or "Not listed")),
+            ("Detector", str(header.get("DETECTOR") or "Not listed")),
+            ("Filters", filters or "Not listed"),
+            ("Exposure", f"{header.get('EXPTIME')} seconds" if header.get("EXPTIME") not in (None, "") else "Not listed"),
+            ("Observation date", str(header.get("DATE-OBS") or header.get("DATE-BEG") or "Not listed")),
+        ]
+        scale = cls.preview_pixel_scale_arcsec(header)
+        wcs_rows = [
+            ("Reference frame", str(header.get("RADESYS") or header.get("RADECSYS") or "Not listed")),
+            ("Center RA", str(header.get("CRVAL1") or header.get("RA_TARG") or "Not listed")),
+            ("Center Dec", str(header.get("CRVAL2") or header.get("DEC_TARG") or "Not listed")),
+        ]
+        if scale:
+            wcs_rows.extend((
+                ("Pixel scale", f"{scale[0]:.4f} × {scale[1]:.4f} arcsec/pixel"),
+                ("Field of view", f"{width * scale[0] / 60:.2f} × {height * scale[1] / 60:.2f} arcmin"),
+            ))
+        else:
+            wcs_rows.append(("Pixel scale", "Not available"))
+        pixel_rows = []
+        if statistics and statistics.get("finite"):
+            pixel_rows.extend((
+                ("Minimum", f"{statistics['minimum']:.7g}"),
+                ("Maximum", f"{statistics['maximum']:.7g}"),
+                ("Mean", f"{statistics['mean']:.7g}"),
+                ("Median", f"{statistics['median']:.7g}"),
+                ("Standard deviation", f"{statistics['stddev']:.7g}"),
+                ("1st percentile", f"{statistics['percentile_1']:.7g}"),
+                ("99th percentile", f"{statistics['percentile_99']:.7g}"),
+                ("Finite sample", f"{statistics['finite']:,} of {statistics['sampled']:,} values"),
+            ))
+        else:
+            pixel_rows.append(("Statistics", "Not calculated"))
+        return (
+            ("File & Image", file_rows),
+            ("Observation", observation_rows),
+            ("WCS", wcs_rows),
+            ("Pixel Statistics", pixel_rows),
+        )
+
+    @staticmethod
+    def preview_statistics_text(sections):
+        lines = []
+        for title, rows in sections:
+            if lines:
+                lines.append("")
+            lines.append(title.upper())
+            lines.append("-" * len(title))
+            lines.extend(f"{label}: {value}" for label, value in rows)
+        return "\n".join(lines)
+
     @staticmethod
     def preview_header_text(header, query="", cards=None):
         query = str(query or "").strip().lower()
@@ -473,9 +545,17 @@ class PreviewWorkflowMixin:
             self.preview_wcs = None
         self.redraw_fits_preview()
         self.draw_preview_histogram()
-        summary = self.preview_metadata_summary(header, self.preview_image.size[::-1], statistics, path)
-        self.preview_summary_text.delete("1.0", "end")
-        self.preview_summary_text.insert("1.0", summary)
+        sections = self.preview_statistics_sections(header, self.preview_image.size[::-1], statistics, path)
+        self.preview_statistics_sections_data = sections
+        tree = getattr(self, "preview_statistics_tree", None)
+        if tree is not None:
+            tree.delete(*tree.get_children())
+            for title, rows in sections:
+                parent = tree.insert("", "end", text=title, open=True, values=("", ""))
+                for label, value in rows:
+                    tree.insert(parent, "end", text="", values=(label, value))
+        if hasattr(self, "preview_statistics_status_var"):
+            self.preview_statistics_status_var.set(f"{self.preview_image.width:,} × {self.preview_image.height:,} pixels")
         self.refresh_preview_header_search()
         self.preview_hdu_text.delete("1.0", "end")
         self.preview_hdu_text.insert("1.0", self.preview_hdu_inventory_text(inventory))
@@ -924,7 +1004,7 @@ class PreviewWorkflowMixin:
             rows = list(getattr(self, "preview_header_tree_rows", []) or [])
             text = self.preview_header_rows_text(rows)
         else:
-            text = self.preview_summary_text.get("1.0", "end-1c")
+            text = self.preview_statistics_text(getattr(self, "preview_statistics_sections_data", ()) or ())
         self.clipboard_clear()
         self.clipboard_append(text)
         self.convert_status.set("Copied FITS header." if full_header else "Copied FITS science summary.")

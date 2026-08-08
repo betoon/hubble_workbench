@@ -1226,8 +1226,30 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         summary_tools = ttk.Frame(summary_panel)
         summary_tools.pack(fill="x", pady=(0, 4))
         ttk.Button(summary_tools, text="Copy Summary", command=self.copy_preview_metadata).pack(side="right")
-        self.preview_summary_text = tk.Text(summary_panel, wrap="word", bg="#ffffff", fg="#1f1f1f", relief="flat", padx=10, pady=10)
-        self.preview_summary_text.pack(fill="both", expand=True)
+        self.preview_statistics_status_var = tk.StringVar(value="Load a FITS preview to see image statistics.")
+        ttk.Label(summary_tools, textvariable=self.preview_statistics_status_var).pack(side="left")
+        summary_table = ttk.Frame(summary_panel)
+        summary_table.pack(fill="both", expand=True)
+        self.preview_statistics_tree = ttk.Treeview(
+            summary_table,
+            columns=("metric", "value"),
+            show="tree headings",
+            selectmode="browse",
+        )
+        self.preview_statistics_tree.heading("#0", text="Section")
+        self.preview_statistics_tree.heading("metric", text="Metric")
+        self.preview_statistics_tree.heading("value", text="Value")
+        self.preview_statistics_tree.column("#0", width=150, minwidth=110, stretch=False)
+        self.preview_statistics_tree.column("metric", width=170, minwidth=100, stretch=False)
+        self.preview_statistics_tree.column("value", width=300, minwidth=140, stretch=True)
+        summary_y_scroll = ttk.Scrollbar(summary_table, orient="vertical", command=self.preview_statistics_tree.yview)
+        summary_x_scroll = ttk.Scrollbar(summary_table, orient="horizontal", command=self.preview_statistics_tree.xview)
+        self.preview_statistics_tree.configure(yscrollcommand=summary_y_scroll.set, xscrollcommand=summary_x_scroll.set)
+        self.preview_statistics_tree.grid(row=0, column=0, sticky="nsew")
+        summary_y_scroll.grid(row=0, column=1, sticky="ns")
+        summary_x_scroll.grid(row=1, column=0, sticky="ew")
+        summary_table.rowconfigure(0, weight=1)
+        summary_table.columnconfigure(0, weight=1)
         header_tools = ttk.Frame(header_panel)
         header_tools.pack(fill="x", pady=(0, 4))
         header_filter_row = ttk.Frame(header_tools)

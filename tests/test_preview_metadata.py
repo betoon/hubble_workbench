@@ -59,6 +59,22 @@ class PreviewMetadataTests(unittest.TestCase):
         self.assertIn("Pixel scale", summary)
         self.assertIn("field of view", summary)
 
+    def test_statistics_sections_group_file_observation_wcs_and_pixels(self):
+        statistics = {
+            "finite": 100, "sampled": 100, "minimum": 1.0, "maximum": 9.0,
+            "mean": 5.0, "median": 5.0, "stddev": 2.0,
+            "percentile_1": 1.1, "percentile_99": 8.9,
+        }
+        sections = PreviewWorkflowMixin.preview_statistics_sections(
+            {"TARGNAME": "M42", "TELESCOP": "HST", "INSTRUME": "ACS", "CDELT1": -0.001, "CDELT2": 0.001},
+            (100, 200), statistics,
+        )
+        self.assertEqual([title for title, _rows in sections], ["File & Image", "Observation", "WCS", "Pixel Statistics"])
+        text = PreviewWorkflowMixin.preview_statistics_text(sections)
+        self.assertIn("Target: M42", text)
+        self.assertIn("Mean: 5", text)
+        self.assertIn("Pixel scale", text)
+
     def test_header_search_matches_keys_and_values(self):
         header = {"TELESCOP": "JWST", "INSTRUME": "NIRCAM", "FILTER": "F150W2"}
         self.assertIn("INSTRUME", PreviewWorkflowMixin.preview_header_text(header, "nircam"))

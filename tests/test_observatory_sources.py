@@ -1,8 +1,10 @@
 import unittest
+import urllib.parse
 
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
+from hubble_workbench_app.dss_context import dss_jpeg_url
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -21,6 +23,34 @@ from hubble_workbench_app.observatory_sources import (
 
 
 class ObservatorySourceTests(unittest.TestCase):
+    def test_dss_context_url_uses_mast_parameters_and_bounds(self):
+        url = dss_jpeg_url(370.0, 20.0, 0.2, image_pixels=1200)
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        self.assertEqual(query["POS"], ["10.00000000,20.00000000"])
+        self.assertEqual(query["SIZE"], ["0.200000"])
+        self.assertEqual(query["ISIZE"], ["1200"])
+        with self.assertRaises(ValueError):
+            dss_jpeg_url(10.0, 91.0, 0.2)
+
+    def test_dss_context_request_uses_loaded_coordinates_and_radius(self):
+        class Variable:
+            def get(self):
+                return "0.1 deg"
+
+        class Dummy(ObservatoryWorkflowMixin):
+            search_results = [{"s_ra": 10.0, "s_dec": 20.0}, {"s_ra": 12.0, "s_dec": 22.0}]
+            radius_var = Variable()
+
+            @staticmethod
+            def numeric_row_value(row, *names):
+                return next((float(row[name]) for name in names if name in row), None)
+
+            @staticmethod
+            def parse_degrees_radius(_value):
+                return 0.1
+
+        self.assertEqual(Dummy().observatory_dss_context_request(), {"ra": 11.0, "dec": 21.0, "size_degrees": 0.2})
+
     def test_mosaic_hover_highlights_nearby_marker(self):
         class Variable:
             value = ""

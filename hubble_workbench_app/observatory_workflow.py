@@ -7,9 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
-from hubble_workbench_app.paths import ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
+from hubble_workbench_app.paths import DSS_CONTEXT_DIR, ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
 from hubble_workbench_app.fits_io import OBSERVATIONS
+from hubble_workbench_app.dss_context import download_dss_context
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -60,6 +61,63 @@ SENSOR_FAMILIES = [
 
 
 class ObservatoryWorkflowMixin:
+
+    def observatory_dss_context_request(self):
+        coordinates = []
+        for row in list(getattr(self, "search_results", []) or []):
+            ra = self.numeric_row_value(row, "s_ra", "ra", "RA")
+            dec = self.numeric_row_value(row, "s_dec", "dec", "DEC")
+            if ra is not None and dec is not None:
+                coordinates.append((ra, dec))
+        if not coordinates:
+            return None
+        ra = sum(item[0] for item in coordinates) / len(coordinates)
+        dec = sum(item[1] for item in coordinates) / len(coordinates)
+        try:
+            radius = self.parse_degrees_radius(self.radius_var.get())
+        except Exception:
+            radius = 0.05
+        return {"ra": ra, "dec": dec, "size_degrees": min(2.0, max(0.05, radius * 2.0))}
+
+    def observatory_fetch_dss_context_async(self):
+        request = self.observatory_dss_context_request()
+        if request is None:
+            message = "Run a MAST search first so DSS can use the target sky coordinates."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        operation_id = self.start_browser_activity("Fetching DSS reference image from MAST/STScI...")
+        destination = DSS_CONTEXT_DIR / f"{self.current_target_for_log()}_dss_context.jpg"
+
+        def worker():
+            try:
+                metadata = download_dss_context(
+                    request["ra"], request["dec"], request["size_degrees"], destination
+                )
+                result = (metadata, None)
+            except Exception as exc:
+                result = (None, exc)
+            self.after(0, lambda: self.observatory_finish_dss_context(operation_id, result))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def observatory_finish_dss_context(self, operation_id, result):
+        if operation_id != self.browser_operation_id:
+            return None
+        metadata, error = result
+        if error:
+            self.stop_browser_activity(f"DSS context retrieval failed: {self.format_error_message(error)}")
+            return None
+        self.dss_context_layer = metadata
+        image_path = Path(metadata["image_path"])
+        self.stop_browser_activity(f"Saved DSS reference image: {image_path.name}")
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(
+                f"DSS reference ready: {image_path.name}. It is for framing and is not yet WCS-registered."
+            )
+        self.open_file(image_path)
+        return metadata
     def set_easy_all_sensors_status(self, stage, message, mirror=True):
         stage_label = str(stage or "ready").replace("_", " ").title()
         text = f"Easy All Sensors: {stage_label} - {message}" if message else f"Easy All Sensors: {stage_label}."
@@ -1950,7 +2008,7 @@ class ObservatoryWorkflowMixin:
         lines.append("")
         lines.append(
             f"Phase 3 foundation: {len(active_sources())} active source(s), "
-            f"{len(planned_sources())} planned source layer(s). Planned sources are visible for project tracking and are not searched yet."
+            f"{len(planned_sources())} preview/planned context layer(s). DSS preview retrieval is available; other planned sources remain project placeholders."
         )
         return "\n".join(lines)
 
@@ -2039,6 +2097,7 @@ class ObservatoryWorkflowMixin:
             "composition_strategy": composition_strategy_lines(summary),
             "composition_readiness": composition_readiness_state(summary),
             "project_plan": self.observatory_project_plan_text(),
+            "context_layers": {"dss": getattr(self, "dss_context_layer", None)},
         }
 
     def observatory_copy_project_plan(self):

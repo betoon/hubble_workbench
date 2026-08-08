@@ -35,9 +35,9 @@ MULTI_TELESCOPE_SOURCES = [
         "name": "DSS",
         "code": "DSS",
         "kind": "survey",
-        "status": "planned",
+        "status": "preview",
         "role": "Broad reference imagery for target identification and framing.",
-        "activation": "Needs reference image retrieval, registration, and framing controls.",
+        "activation": "reference image retrieval and framing are available; WCS registration is the next step.",
     },
 ]
 
@@ -60,7 +60,7 @@ def planned_activation_lines():
 def source_status_lines():
     lines = []
     for source in MULTI_TELESCOPE_SOURCES:
-        status = "active" if source["status"] == "active" else "planned"
+        status = source["status"]
         lines.append(f"- {source['name']} ({source['code']}): {status} - {source['role']}")
     return lines
 
@@ -347,7 +347,7 @@ def project_plan_lines(summary=None):
 
     lines.append("Planned context layers:")
     for source in state["planned_sources"]:
-        lines.append(f"- {source['name']} ({source['code']}): {source['role']} [planned]")
+        lines.append(f"- {source['name']} ({source['code']}): {source['role']} [{source['status']}]")
         if source.get("activation"):
             lines.append(f"  Activation needed: {source['activation']}")
 
@@ -360,7 +360,7 @@ def project_plan_lines(summary=None):
         lines.append("- One active telescope source is loaded. Search the other active source when the target needs broader wavelength coverage.")
     else:
         lines.append("- Observations are loaded, but they do not match the active source registry yet. Review mission names before composing.")
-    lines.append("- Keep planned context layers visible here until their search/download workflows are added.")
+    lines.append("- Preview layers can be retrieved for framing; planned layers remain visible until their workflows are added.")
 
     lines.append("Project checklist:")
     lines.extend(project_checklist_lines(summary))

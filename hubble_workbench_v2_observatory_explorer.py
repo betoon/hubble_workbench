@@ -112,6 +112,9 @@ atexit.register(log_shutdown)# -------------------------------------------------
 
 
 class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, HydrogenWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, GalleryWorkflowMixin, PlanetaryWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
+    def observatory_fetch_dss_context_async(self):
+        return ObservatoryWorkflowMixin.observatory_fetch_dss_context_async(self)
+
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -693,6 +696,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(controls_secondary, text="Find Better Sources", command=self.better_sources_async).pack(side="left", padx=(8, 0))
         ttk.Button(controls_secondary, text="Completeness Check", command=self.completeness_check_async).pack(side="left", padx=(8, 0))
         ttk.Button(controls_secondary, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
+        ttk.Button(controls_secondary, text="Fetch DSS Context", command=self.observatory_fetch_dss_context_async).pack(side="left", padx=(8, 0))
 
         sensor_panel = ttk.LabelFrame(observatory_content, text="Sensor / Instrument Coverage", padding=8)
         sensor_panel.pack(fill="x", pady=(0, 8))

@@ -1,10 +1,14 @@
 import unittest
 import urllib.parse
+import tempfile
+from pathlib import Path
+
+import numpy as np
 
 from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
-from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, ra_degrees_to_hms
+from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, load_dss_fits_overlay, ra_degrees_to_hms
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -71,6 +75,27 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertTrue(app.previewed)
         self.assertEqual(app.convert_path_var.value, "target_dss_context.fits")
         self.assertIs(app.notebook.selected, app.convert_tab)
+
+    def test_dss_fits_overlay_uses_wcs_bounds_and_stretched_image(self):
+        from astropy.io import fits
+        from astropy.wcs import WCS
+
+        wcs = WCS(naxis=2)
+        wcs.wcs.crpix = [6.0, 5.0]
+        wcs.wcs.cdelt = np.array([-0.01, 0.01])
+        wcs.wcs.crval = [10.0, 20.0]
+        wcs.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "dss.fits"
+            fits.PrimaryHDU(np.arange(120, dtype=np.float32).reshape(10, 12), header=wcs.to_header()).writeto(path)
+            overlay = load_dss_fits_overlay(path)
+        self.assertEqual(overlay["shape"], (10, 12))
+        self.assertEqual(overlay["image"].mode, "RGBA")
+        ra_min, ra_max, dec_min, dec_max = overlay["bounds"]
+        self.assertLess(ra_min, 10.0)
+        self.assertGreater(ra_max, 10.0)
+        self.assertLess(dec_min, 20.0)
+        self.assertGreater(dec_max, 20.0)
 
     def test_dss_context_request_uses_loaded_coordinates_and_radius(self):
         class Variable:

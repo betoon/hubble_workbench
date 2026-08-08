@@ -10,7 +10,7 @@ from tkinter import messagebox
 from hubble_workbench_app.paths import DSS_CONTEXT_DIR, ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
 from hubble_workbench_app.fits_io import OBSERVATIONS
-from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits
+from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits, load_dss_fits_overlay
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -150,6 +150,7 @@ class ObservatoryWorkflowMixin:
             self.stop_browser_activity(f"DSS FITS retrieval failed: {self.format_error_message(error)}")
             return None
         self.dss_fits_layer = metadata
+        self.mosaic_dss_overlay = None
         path = Path(metadata["fits_path"])
         self.stop_browser_activity(f"Saved DSS FITS layer: {path.name}")
         self.convert_path_var.set(str(path))
@@ -161,6 +162,59 @@ class ObservatoryWorkflowMixin:
         if hasattr(self, "mosaic_status_var"):
             self.mosaic_status_var.set(f"DSS FITS layer loaded in FITS Preview: {path.name}")
         return metadata
+
+    def observatory_mosaic_show_dss(self):
+        variable = getattr(self, "mosaic_dss_background_var", None)
+        return bool(variable.get()) if variable is not None else False
+
+    def observatory_dss_overlay(self):
+        metadata = getattr(self, "dss_fits_layer", None) or {}
+        path = metadata.get("fits_path")
+        if not path or not Path(path).exists():
+            return None
+        cached = getattr(self, "mosaic_dss_overlay", None)
+        if cached and cached.get("path") == str(path):
+            return cached
+        overlay = load_dss_fits_overlay(path)
+        overlay["path"] = str(path)
+        self.mosaic_dss_overlay = overlay
+        return overlay
+
+    def observatory_draw_dss_background(self, canvas, map_point, plot_bounds):
+        if not self.observatory_mosaic_show_dss():
+            return False
+        try:
+            overlay = self.observatory_dss_overlay()
+        except Exception as exc:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(f"Could not register DSS background: {self.format_error_message(exc)}")
+            return False
+        if not overlay:
+            return False
+        from PIL import ImageTk
+
+        ra_min, ra_max, dec_min, dec_max = overlay["bounds"]
+        x0, y_bottom = map_point(ra_min, dec_min)
+        x1, y_top = map_point(ra_max, dec_max)
+        left, right = sorted((x0, x1))
+        top, bottom = sorted((y_top, y_bottom))
+        plot_x0, plot_y0, plot_x1, plot_y1 = plot_bounds
+        visible_left, visible_right = max(left, plot_x0), min(right, plot_x1)
+        visible_top, visible_bottom = max(top, plot_y0), min(bottom, plot_y1)
+        if visible_right <= visible_left or visible_bottom <= visible_top:
+            return False
+        image = overlay["image"]
+        source_left = int((visible_left - left) / max(right - left, 1) * image.width)
+        source_right = int((visible_right - left) / max(right - left, 1) * image.width)
+        source_top = int((visible_top - top) / max(bottom - top, 1) * image.height)
+        source_bottom = int((visible_bottom - top) / max(bottom - top, 1) * image.height)
+        cropped = image.crop((source_left, source_top, max(source_left + 1, source_right), max(source_top + 1, source_bottom)))
+        cropped = cropped.resize((max(1, int(visible_right - visible_left)), max(1, int(visible_bottom - visible_top))))
+        self.mosaic_dss_photo = ImageTk.PhotoImage(cropped)
+        canvas.create_image(visible_left, visible_top, anchor="nw", image=self.mosaic_dss_photo, tags="dss_background")
+        canvas.create_rectangle(left, top, right, bottom, outline="#fbbf24", width=2, dash=(5, 3))
+        canvas.create_text(max(plot_x0 + 6, left + 6), max(plot_y0 + 10, top + 10), anchor="w", text="DSS FITS/WCS background", fill="#fbbf24", font=("Segoe UI", 8, "bold"))
+        return True
     def set_easy_all_sensors_status(self, stage, message, mirror=True):
         stage_label = str(stage or "ready").replace("_", " ").title()
         text = f"Easy All Sensors: {stage_label} - {message}" if message else f"Easy All Sensors: {stage_label}."
@@ -4177,6 +4231,9 @@ class ObservatoryWorkflowMixin:
             return x, y
 
         canvas.create_rectangle(plot_x0, plot_y0, plot_x1, plot_y1, outline="#6b7280")
+        dss_background_drawn = self.observatory_draw_dss_background(
+            canvas, map_point, (plot_x0, plot_y0, plot_x1, plot_y1)
+        )
         for i in range(6):
             x = plot_x0 + plot_w * i / 5
             y = plot_y0 + plot_h * i / 5

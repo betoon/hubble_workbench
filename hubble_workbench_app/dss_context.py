@@ -116,3 +116,60 @@ def download_dss_fits(ra, dec, size_degrees, destination, timeout=180):
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     metadata["metadata_path"] = str(metadata_path)
     return metadata
+
+
+def load_dss_fits_overlay(path, max_dimension=1200):
+    import numpy as np
+    from PIL import Image
+    from astropy.io import fits
+    from astropy.wcs import WCS
+
+    with fits.open(path, memmap=False) as hdul:
+        hdu = next((item for item in hdul if getattr(item, "data", None) is not None), None)
+        if hdu is None:
+            raise ValueError("DSS FITS contains no image data.")
+        data = np.asarray(hdu.data, dtype=np.float32)
+        header = hdu.header.copy()
+    while data.ndim > 2:
+        data = data[0]
+    if data.ndim != 2:
+        raise ValueError("DSS FITS image is not two-dimensional.")
+    height, width = data.shape
+    wcs = WCS(header, relax=True).celestial
+    if not wcs.has_celestial:
+        raise ValueError("DSS FITS does not contain celestial WCS metadata.")
+    pixel_corners = np.array([[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]], dtype=float)
+    world_corners = wcs.all_pix2world(pixel_corners, 0)
+    ras = [float(value) % 360.0 for value in world_corners[:, 0]]
+    decs = [float(value) for value in world_corners[:, 1]]
+    if max(ras) - min(ras) > 180.0:
+        ras = [value + 360.0 if value < 180.0 else value for value in ras]
+    finite = data[np.isfinite(data)]
+    if not finite.size:
+        raise ValueError("DSS FITS image contains no finite pixels.")
+    low, high = np.percentile(finite, (1.0, 99.5))
+    if high <= low:
+        high = low + 1.0
+    display = np.clip((data - low) / (high - low), 0.0, 1.0)
+    display = np.nan_to_num(display, nan=0.0)
+    display = np.flipud((display * 255.0).astype(np.uint8))
+    image = Image.fromarray(display, mode="L").convert("RGBA")
+    # After flipud, display corners are FITS corners 3, 2, 1, 0. Orient the
+    # raster to the mosaic convention: RA grows rightward and Dec grows upward.
+    top_left_ra, top_right_ra = ras[3], ras[2]
+    top_dec = (decs[3] + decs[2]) / 2.0
+    bottom_dec = (decs[0] + decs[1]) / 2.0
+    if top_right_ra < top_left_ra:
+        image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    if top_dec < bottom_dec:
+        image = image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+    image.putalpha(150)
+    if max(image.size) > max_dimension:
+        scale = max_dimension / max(image.size)
+        image = image.resize((max(1, int(image.width * scale)), max(1, int(image.height * scale))), Image.Resampling.LANCZOS)
+    return {
+        "image": image,
+        "bounds": (min(ras), max(ras), min(decs), max(decs)),
+        "corners": list(zip(ras, decs)),
+        "shape": (height, width),
+    }

@@ -35,7 +35,7 @@ Initial sources:
 - Hubble / HST: active
 - James Webb / JWST: active
 - DSS reference imagery: JPEG framing, FITS/WCS retrieval, and pixel-accurate inverse-WCS mosaic reprojection active
-- Pan-STARRS context imagery: color-reference cutout retrieval active; FITS/WCS registration planned
+- Pan-STARRS context imagery: color-reference and FITS/WCS cutout retrieval with mosaic reprojection active
 - Chandra: planned X-ray context layer
 
 Later sources:
@@ -80,6 +80,7 @@ Planned capabilities:
 - Added an optional DSS FITS/WCS background beneath the interactive sky mosaic.
 - Replaced corner-based DSS placement with cached inverse-WCS reprojection and bilinear pixel sampling for rotated/distorted fields.
 - Added Pan-STARRS1 stacked-image color cutouts through the official MAST/STScI service with saved filter/provenance metadata.
+- Added single-filter Pan-STARRS FITS cutouts, FITS Preview handoff, and optional pixel-accurate WCS reprojection beneath the sky mosaic.
 
 ## Current Implementation Notes
 

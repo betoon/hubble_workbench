@@ -11,9 +11,11 @@ from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, load_dss_fits_overlay, ra_degrees_to_hms, reproject_dss_fits_overlay
 from hubble_workbench_app.panstarrs_context import (
     panstarrs_color_cutout_url,
+    panstarrs_fits_cutout_url,
     panstarrs_filenames_url,
     parse_panstarrs_filename_table,
     select_panstarrs_color_files,
+    select_panstarrs_fits_file,
 )
 
 from hubble_workbench_app.observatory_sources import (
@@ -58,6 +60,20 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(query["green"], ["/data/i.fits"])
         self.assertEqual(query["blue"], ["/data/g.fits"])
 
+    def test_panstarrs_fits_selection_prefers_i_stack(self):
+        rows = [
+            {"filter": "g", "filename": "/data/g.fits"},
+            {"filter": "i", "filename": "/data/i.fits"},
+            {"filter": "y", "filename": "/data/y.fits"},
+        ]
+        fits_file = select_panstarrs_fits_file(rows)
+        self.assertEqual(fits_file, {"filter": "i", "filename": "/data/i.fits"})
+        url = panstarrs_fits_cutout_url(10.0, 20.0, 0.1, fits_file)
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        self.assertEqual(query["format"], ["fits"])
+        self.assertEqual(query["red"], ["/data/i.fits"])
+        self.assertEqual(query["size"], ["1440"])
+
     def test_finished_panstarrs_context_opens_color_reference(self):
         class Variable:
             def set(self, value):
@@ -81,6 +97,38 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertEqual(app.observatory_finish_panstarrs_context(8, (metadata, None)), metadata)
         self.assertEqual(str(app.opened), "target_panstarrs_context.jpg")
         self.assertIn("g/i/y", app.mosaic_status_var.value)
+
+    def test_finished_panstarrs_fits_opens_preview_and_resets_overlay(self):
+        class Variable:
+            def set(self, value):
+                self.value = value
+
+        class Notebook:
+            def select(self, tab):
+                self.selected = tab
+
+        class Dummy(ObservatoryWorkflowMixin):
+            browser_operation_id = 9
+            convert_path_var = Variable()
+            notebook = Notebook()
+            convert_tab = object()
+            mosaic_status_var = Variable()
+
+            def stop_browser_activity(self, message):
+                self.stopped = message
+
+            def preview_fits_async(self):
+                self.previewed = True
+
+        app = Dummy()
+        app.mosaic_panstarrs_overlay = {"old": True}
+        app.mosaic_panstarrs_reprojection_cache = {"old": True}
+        metadata = {"fits_path": "target_panstarrs_context.fits", "filter": "i"}
+        self.assertEqual(app.observatory_finish_panstarrs_fits(9, (metadata, None)), metadata)
+        self.assertTrue(app.previewed)
+        self.assertEqual(app.convert_path_var.value, "target_panstarrs_context.fits")
+        self.assertIsNone(app.mosaic_panstarrs_overlay)
+        self.assertIsNone(app.mosaic_panstarrs_reprojection_cache)
 
     def test_dss_context_url_uses_mast_parameters_and_bounds(self):
         url = dss_jpeg_url(370.0, 20.0, 0.2, image_pixels=1200)

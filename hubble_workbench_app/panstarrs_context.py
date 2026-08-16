@@ -58,6 +58,20 @@ def select_panstarrs_color_files(rows):
     }
 
 
+def select_panstarrs_fits_file(rows, preferred_filter="i"):
+    available = {}
+    for row in rows:
+        filter_name = str(row.get("filter", "")).strip().lower()
+        filename = str(row.get("filename", "")).strip()
+        if filter_name in "grizy" and filename and filter_name not in available:
+            available[filter_name] = filename
+    if not available:
+        return None
+    preference = [str(preferred_filter).lower(), "i", "r", "g", "z", "y"]
+    filter_name = next((token for token in preference if token in available), next(iter(available)))
+    return {"filter": filter_name, "filename": available[filter_name]}
+
+
 def panstarrs_color_cutout_url(ra, dec, size_degrees, color_files, max_pixels=2400):
     size_pixels = int(round(float(size_degrees) * 3600.0 / PS1_PIXEL_SCALE_ARCSEC))
     size_pixels = min(int(max_pixels), max(240, size_pixels))
@@ -69,6 +83,19 @@ def panstarrs_color_cutout_url(ra, dec, size_degrees, color_files, max_pixels=24
         "red": color_files["red"],
         "green": color_files["green"],
         "blue": color_files["blue"],
+    })
+    return f"{PS1_FITSCUT_ENDPOINT}?{query}"
+
+
+def panstarrs_fits_cutout_url(ra, dec, size_degrees, fits_file, max_pixels=2400):
+    size_pixels = int(round(float(size_degrees) * 3600.0 / PS1_PIXEL_SCALE_ARCSEC))
+    size_pixels = min(int(max_pixels), max(240, size_pixels))
+    query = urllib.parse.urlencode({
+        "ra": f"{float(ra) % 360.0:.8f}",
+        "dec": f"{float(dec):.8f}",
+        "size": str(size_pixels),
+        "format": "fits",
+        "red": fits_file["filename"],
     })
     return f"{PS1_FITSCUT_ENDPOINT}?{query}"
 
@@ -104,6 +131,43 @@ def download_panstarrs_context(ra, dec, size_degrees, destination, timeout=120):
         "usage_note": "Optical color-reference image; not yet WCS-registered as a science layer.",
     }
     metadata_path = destination.with_suffix(".json")
+    metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
+    metadata["metadata_path"] = str(metadata_path)
+    return metadata
+
+
+def download_panstarrs_fits(ra, dec, size_degrees, destination, timeout=180, preferred_filter="i"):
+    destination = Path(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    filenames_url = panstarrs_filenames_url(ra, dec, filters="grizy")
+    request = urllib.request.Request(filenames_url, headers={"User-Agent": "Hubble-Workbench/2 Pan-STARRS-FITS"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        table_text = response.read().decode("utf-8", "replace")
+    fits_file = select_panstarrs_fits_file(parse_panstarrs_filename_table(table_text), preferred_filter)
+    if not fits_file:
+        raise RuntimeError("Pan-STARRS did not return a stacked FITS image at this position.")
+    fits_url = panstarrs_fits_cutout_url(ra, dec, size_degrees, fits_file)
+    request = urllib.request.Request(fits_url, headers={"User-Agent": "Hubble-Workbench/2 Pan-STARRS-FITS"})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        data = response.read()
+        content_type = str(response.headers.get("Content-Type", ""))
+    if not data.startswith(b"SIMPLE  ="):
+        raise RuntimeError(f"Pan-STARRS did not return a FITS image (content type: {content_type or 'unknown'}).")
+    destination.write_bytes(data)
+    metadata = {
+        "source": "Pan-STARRS1 via MAST/STScI",
+        "service_url": fits_url,
+        "filenames_service_url": filenames_url,
+        "format": "FITS",
+        "filter": fits_file["filter"],
+        "ra_degrees": float(ra) % 360.0,
+        "dec_degrees": float(dec),
+        "field_size_degrees": float(size_degrees),
+        "retrieved_utc": datetime.now(timezone.utc).isoformat(),
+        "fits_path": str(destination),
+        "usage_note": "Pan-STARRS stacked-image FITS cutout with WCS; pixel-accurate mosaic reprojection is supported.",
+    }
+    metadata_path = destination.with_suffix(".fits.json")
     metadata_path.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     metadata["metadata_path"] = str(metadata_path)
     return metadata

@@ -11,7 +11,7 @@ from hubble_workbench_app.paths import DSS_CONTEXT_DIR, PANSTARRS_CONTEXT_DIR, E
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
 from hubble_workbench_app.fits_io import OBSERVATIONS
 from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits, load_dss_fits_overlay, reproject_dss_fits_overlay
-from hubble_workbench_app.panstarrs_context import download_panstarrs_context
+from hubble_workbench_app.panstarrs_context import download_panstarrs_context, download_panstarrs_fits
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -162,6 +162,51 @@ class ObservatoryWorkflowMixin:
         self.open_file(image_path)
         return metadata
 
+    def observatory_fetch_panstarrs_fits_async(self):
+        request = self.observatory_dss_context_request()
+        if request is None:
+            message = "Run a MAST search first so Pan-STARRS FITS can use the target sky coordinates."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        operation_id = self.start_browser_activity("Fetching Pan-STARRS FITS layer with WCS metadata...")
+        destination = PANSTARRS_CONTEXT_DIR / f"{self.current_target_for_log()}_panstarrs_context.fits"
+
+        def worker():
+            try:
+                metadata = download_panstarrs_fits(
+                    request["ra"], request["dec"], request["size_degrees"], destination
+                )
+                result = (metadata, None)
+            except Exception as exc:
+                result = (None, exc)
+            self.after(0, lambda: self.observatory_finish_panstarrs_fits(operation_id, result))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def observatory_finish_panstarrs_fits(self, operation_id, result):
+        if operation_id != self.browser_operation_id:
+            return None
+        metadata, error = result
+        if error:
+            self.stop_browser_activity(f"Pan-STARRS FITS retrieval failed: {self.format_error_message(error)}")
+            return None
+        self.panstarrs_fits_layer = metadata
+        self.mosaic_panstarrs_overlay = None
+        self.mosaic_panstarrs_reprojection_cache = None
+        path = Path(metadata["fits_path"])
+        self.stop_browser_activity(f"Saved Pan-STARRS {metadata.get('filter', '?')}-filter FITS layer: {path.name}")
+        self.convert_path_var.set(str(path))
+        try:
+            self.notebook.select(self.convert_tab)
+        except Exception:
+            pass
+        self.preview_fits_async()
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(f"Pan-STARRS FITS layer loaded in FITS Preview: {path.name}")
+        return metadata
+
     def observatory_fetch_dss_fits_async(self):
         request = self.observatory_dss_context_request()
         if request is None:
@@ -262,6 +307,65 @@ class ObservatoryWorkflowMixin:
             plot_x0 + 8, plot_y0 + 10, anchor="w",
             text=f"DSS pixel-WCS reprojection ({cache['coverage_fraction']:.0%} of view)",
             fill="#fbbf24", font=("Segoe UI", 8, "bold"),
+        )
+        return True
+
+    def observatory_mosaic_show_panstarrs(self):
+        variable = getattr(self, "mosaic_panstarrs_background_var", None)
+        return bool(variable.get()) if variable is not None else False
+
+    def observatory_panstarrs_overlay(self):
+        metadata = getattr(self, "panstarrs_fits_layer", None) or {}
+        path = metadata.get("fits_path")
+        if not path or not Path(path).exists():
+            return None
+        cached = getattr(self, "mosaic_panstarrs_overlay", None)
+        if cached and cached.get("path") == str(path):
+            return cached
+        overlay = load_dss_fits_overlay(path)
+        overlay["path"] = str(path)
+        self.mosaic_panstarrs_overlay = overlay
+        return overlay
+
+    def observatory_draw_panstarrs_background(self, canvas, map_point, plot_bounds):
+        if not self.observatory_mosaic_show_panstarrs():
+            return False
+        try:
+            overlay = self.observatory_panstarrs_overlay()
+        except Exception as exc:
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(f"Could not register Pan-STARRS background: {self.format_error_message(exc)}")
+            return False
+        if not overlay:
+            return False
+        from PIL import ImageTk
+
+        plot_x0, plot_y0, plot_x1, plot_y1 = plot_bounds
+        render = getattr(self, "mosaic_render_state", {}) or {}
+        world_bounds = tuple(render.get("bounds", ()))
+        if len(world_bounds) != 4:
+            return False
+        output_size = (max(1, int(plot_x1 - plot_x0)), max(1, int(plot_y1 - plot_y0)))
+        cache_key = (overlay.get("path"), tuple(round(value, 10) for value in world_bounds), output_size)
+        cache = getattr(self, "mosaic_panstarrs_reprojection_cache", None)
+        if not cache or cache.get("key") != cache_key:
+            projected = reproject_dss_fits_overlay(overlay, world_bounds, output_size, alpha=165)
+            cache = {"key": cache_key, **projected}
+            self.mosaic_panstarrs_reprojection_cache = cache
+        if cache["coverage_fraction"] <= 0:
+            return False
+        self.mosaic_panstarrs_photo = ImageTk.PhotoImage(cache["image"])
+        canvas.create_image(plot_x0, plot_y0, anchor="nw", image=self.mosaic_panstarrs_photo, tags="panstarrs_background")
+        footprint_points = [map_point(ra, dec) for ra, dec in overlay["corners"]]
+        canvas.create_polygon(
+            [coordinate for point in footprint_points for coordinate in point],
+            fill="", outline="#c084fc", width=2, dash=(5, 3),
+        )
+        filter_name = (getattr(self, "panstarrs_fits_layer", None) or {}).get("filter", "?")
+        canvas.create_text(
+            plot_x0 + 8, plot_y0 + 28, anchor="w",
+            text=f"Pan-STARRS {filter_name} pixel-WCS reprojection ({cache['coverage_fraction']:.0%} of view)",
+            fill="#c084fc", font=("Segoe UI", 8, "bold"),
         )
         return True
     def set_easy_all_sensors_status(self, stage, message, mirror=True):
@@ -4281,6 +4385,9 @@ class ObservatoryWorkflowMixin:
 
         canvas.create_rectangle(plot_x0, plot_y0, plot_x1, plot_y1, outline="#6b7280")
         dss_background_drawn = self.observatory_draw_dss_background(
+            canvas, map_point, (plot_x0, plot_y0, plot_x1, plot_y1)
+        )
+        panstarrs_background_drawn = self.observatory_draw_panstarrs_background(
             canvas, map_point, (plot_x0, plot_y0, plot_x1, plot_y1)
         )
         for i in range(6):

@@ -29,7 +29,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "preview",
         "role": "Optical sky-survey context and color-reference layer.",
-        "activation": "survey cutout color-reference retrieval is available; FITS/WCS registration remains planned.",
+        "activation": "survey cutout color-reference retrieval and FITS/WCS mosaic reprojection are available.",
     },
     {
         "name": "DSS",
@@ -217,7 +217,7 @@ def composition_strategy_lines(summary=None):
             lines.append("- Search " + ", ".join(missing) + " when the target needs broader wavelength coverage.")
 
     lines.append("- Use the sky mosaic to check whether the chosen layers overlap before downloading or composing.")
-    lines.append("- Treat planned Chandra, Pan-STARRS, and DSS layers as future context overlays until their retrieval and registration tools are active.")
+    lines.append("- Use DSS or Pan-STARRS as registered optical context when useful; Chandra remains a planned X-ray layer.")
     return lines
 
 

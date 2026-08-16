@@ -26,6 +26,7 @@ debug_hubble.txt
 hubble_settings.json
 
 # Local project/session files
+OPEN_API_KEY
 *.bak
 *_backup_*.py
 hubble_workbench_backup_*.py

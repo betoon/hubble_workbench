@@ -9,6 +9,12 @@ from hubble_workbench_app.product_browser import ProductBrowserMixin
 from hubble_workbench_app.product_scoring import ProductScoringMixin
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 from hubble_workbench_app.dss_context import dec_degrees_to_dms, dss_fits_url, dss_jpeg_url, load_dss_fits_overlay, ra_degrees_to_hms, reproject_dss_fits_overlay
+from hubble_workbench_app.panstarrs_context import (
+    panstarrs_color_cutout_url,
+    panstarrs_filenames_url,
+    parse_panstarrs_filename_table,
+    select_panstarrs_color_files,
+)
 
 from hubble_workbench_app.observatory_sources import (
     layer_readiness_line,
@@ -27,6 +33,55 @@ from hubble_workbench_app.observatory_sources import (
 
 
 class ObservatorySourceTests(unittest.TestCase):
+    def test_panstarrs_filename_query_uses_stacked_giy_filters(self):
+        url = panstarrs_filenames_url(370.0, 20.0)
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        self.assertEqual(query["ra"], ["10.00000000"])
+        self.assertEqual(query["dec"], ["20.00000000"])
+        self.assertEqual(query["filters"], ["giy"])
+        self.assertEqual(query["type"], ["stack"])
+
+    def test_panstarrs_color_selection_and_cutout_url(self):
+        table = (
+            "projcell,subcell,ra,dec,filter,mjd,type,filename,shortname\n"
+            "1,2,10,20,g,0,stack,/data/g.fits,g.fits\n"
+            "1,2,10,20,i,0,stack,/data/i.fits,i.fits\n"
+            "1,2,10,20,y,0,stack,/data/y.fits,y.fits\n"
+        )
+        files = select_panstarrs_color_files(parse_panstarrs_filename_table(table))
+        self.assertEqual(files["filters"], {"red": "y", "green": "i", "blue": "g"})
+        url = panstarrs_color_cutout_url(10.0, 20.0, 0.1, files)
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        self.assertEqual(query["size"], ["1440"])
+        self.assertEqual(query["format"], ["jpg"])
+        self.assertEqual(query["red"], ["/data/y.fits"])
+        self.assertEqual(query["green"], ["/data/i.fits"])
+        self.assertEqual(query["blue"], ["/data/g.fits"])
+
+    def test_finished_panstarrs_context_opens_color_reference(self):
+        class Variable:
+            def set(self, value):
+                self.value = value
+
+        class Dummy(ObservatoryWorkflowMixin):
+            browser_operation_id = 8
+            mosaic_status_var = Variable()
+
+            def stop_browser_activity(self, message):
+                self.stopped = message
+
+            def open_file(self, path):
+                self.opened = path
+
+        app = Dummy()
+        metadata = {
+            "image_path": "target_panstarrs_context.jpg",
+            "filters": {"blue": "g", "green": "i", "red": "y"},
+        }
+        self.assertEqual(app.observatory_finish_panstarrs_context(8, (metadata, None)), metadata)
+        self.assertEqual(str(app.opened), "target_panstarrs_context.jpg")
+        self.assertIn("g/i/y", app.mosaic_status_var.value)
+
     def test_dss_context_url_uses_mast_parameters_and_bounds(self):
         url = dss_jpeg_url(370.0, 20.0, 0.2, image_pixels=1200)
         query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)

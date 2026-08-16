@@ -27,9 +27,9 @@ MULTI_TELESCOPE_SOURCES = [
         "name": "Pan-STARRS",
         "code": "PANSTARRS",
         "kind": "survey",
-        "status": "planned",
+        "status": "preview",
         "role": "Optical sky-survey context and color-reference layer.",
-        "activation": "Needs survey cutout retrieval, registration, and color-reference handling.",
+        "activation": "Survey cutout color-reference retrieval is available; FITS/WCS registration remains planned.",
     },
     {
         "name": "DSS",

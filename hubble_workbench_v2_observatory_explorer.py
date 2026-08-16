@@ -118,6 +118,9 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
     def observatory_fetch_dss_fits_async(self):
         return ObservatoryWorkflowMixin.observatory_fetch_dss_fits_async(self)
 
+    def observatory_fetch_panstarrs_context_async(self):
+        return ObservatoryWorkflowMixin.observatory_fetch_panstarrs_context_async(self)
+
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -701,6 +704,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         ttk.Button(controls_secondary, text="Image Readiness", command=self.observatory_show_composition_readiness).pack(side="left", padx=(8, 0))
         ttk.Button(controls_secondary, text="Fetch DSS Context", command=self.observatory_fetch_dss_context_async).pack(side="left", padx=(8, 0))
         ttk.Button(controls_secondary, text="Fetch DSS FITS Layer", command=self.observatory_fetch_dss_fits_async).pack(side="left", padx=(8, 0))
+        ttk.Button(controls_secondary, text="Fetch Pan-STARRS Color", command=self.observatory_fetch_panstarrs_context_async).pack(side="left", padx=(8, 0))
 
         sensor_panel = ttk.LabelFrame(observatory_content, text="Sensor / Instrument Coverage", padding=8)
         sensor_panel.pack(fill="x", pady=(0, 8))

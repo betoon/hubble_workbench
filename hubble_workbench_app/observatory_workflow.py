@@ -7,10 +7,11 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import messagebox
 
-from hubble_workbench_app.paths import DSS_CONTEXT_DIR, ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
+from hubble_workbench_app.paths import DSS_CONTEXT_DIR, PANSTARRS_CONTEXT_DIR, ENHANCED_PRODUCT_TOKENS, PRODUCT_LOG_DIR, SEARCH_LOG_DIR
 from hubble_workbench_app.catalogs import HST_BLUE_FILTERS, HST_GREEN_FILTERS, HST_RED_FILTERS, TELESCOPE_CHOICES
 from hubble_workbench_app.fits_io import OBSERVATIONS
 from hubble_workbench_app.dss_context import download_dss_context, download_dss_fits, load_dss_fits_overlay, reproject_dss_fits_overlay
+from hubble_workbench_app.panstarrs_context import download_panstarrs_context
 from hubble_workbench_app.observatory_sources import active_sources, composition_readiness_lines, composition_readiness_state, composition_strategy_lines, planned_sources, project_checklist_lines, project_plan_lines, project_state
 
 
@@ -115,6 +116,48 @@ class ObservatoryWorkflowMixin:
         if hasattr(self, "mosaic_status_var"):
             self.mosaic_status_var.set(
                 f"DSS reference ready: {image_path.name}. It is for framing and is not yet WCS-registered."
+            )
+        self.open_file(image_path)
+        return metadata
+
+    def observatory_fetch_panstarrs_context_async(self):
+        request = self.observatory_dss_context_request()
+        if request is None:
+            message = "Run a MAST search first so Pan-STARRS can use the target sky coordinates."
+            if hasattr(self, "mosaic_status_var"):
+                self.mosaic_status_var.set(message)
+            return False
+        operation_id = self.start_browser_activity("Fetching Pan-STARRS color reference from MAST/STScI...")
+        destination = PANSTARRS_CONTEXT_DIR / f"{self.current_target_for_log()}_panstarrs_context.jpg"
+
+        def worker():
+            try:
+                metadata = download_panstarrs_context(
+                    request["ra"], request["dec"], request["size_degrees"], destination
+                )
+                result = (metadata, None)
+            except Exception as exc:
+                result = (None, exc)
+            self.after(0, lambda: self.observatory_finish_panstarrs_context(operation_id, result))
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
+    def observatory_finish_panstarrs_context(self, operation_id, result):
+        if operation_id != self.browser_operation_id:
+            return None
+        metadata, error = result
+        if error:
+            self.stop_browser_activity(f"Pan-STARRS context retrieval failed: {self.format_error_message(error)}")
+            return None
+        self.panstarrs_context_layer = metadata
+        image_path = Path(metadata["image_path"])
+        filters = metadata.get("filters", {})
+        filter_text = "/".join(filters.get(channel, "?") for channel in ("blue", "green", "red"))
+        self.stop_browser_activity(f"Saved Pan-STARRS color reference: {image_path.name}")
+        if hasattr(self, "mosaic_status_var"):
+            self.mosaic_status_var.set(
+                f"Pan-STARRS color reference ready ({filter_text}): {image_path.name}. WCS registration remains planned."
             )
         self.open_file(image_path)
         return metadata
@@ -2111,7 +2154,7 @@ class ObservatoryWorkflowMixin:
         lines.append("")
         lines.append(
             f"Phase 3 foundation: {len(active_sources())} active source(s), "
-            f"{len(planned_sources())} preview/planned context layer(s). DSS preview retrieval is available; other planned sources remain project placeholders."
+            f"{len(planned_sources())} preview/planned context layer(s). DSS and Pan-STARRS preview retrieval are available; other planned sources remain project placeholders."
         )
         return "\n".join(lines)
 

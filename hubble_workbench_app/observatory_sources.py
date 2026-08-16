@@ -29,7 +29,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "preview",
         "role": "Optical sky-survey context and color-reference layer.",
-        "activation": "Survey cutout color-reference retrieval is available; FITS/WCS registration remains planned.",
+        "activation": "survey cutout color-reference retrieval is available; FITS/WCS registration remains planned.",
     },
     {
         "name": "DSS",

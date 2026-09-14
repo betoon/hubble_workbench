@@ -1,3 +1,4 @@
+from hubble_workbench_app.mast_products import mast_product_table
 import html
 import threading
 import urllib.request
@@ -59,7 +60,7 @@ class DownloadWorkflowMixin:
                         ),
                     )
                     try:
-                        manifest = OBSERVATIONS.download_products(rows, download_dir=str(download_path), cache=True)
+                        manifest = OBSERVATIONS.download_products(mast_product_table(rows), download_dir=str(download_path), cache=True)
                     except Exception as exc:
                         self.after(
                             0,

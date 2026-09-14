@@ -1,3 +1,4 @@
+from hubble_workbench_app.mast_products import mast_product_table
 import threading
 import traceback
 from datetime import datetime
@@ -174,7 +175,7 @@ class SearchWorkflowMixin:
                 if selected_rows and selected_rows[0].get("_source") == "HLA":
                     manifest = self.download_hla_products(download_rows, download_path, operation_id)
                 else:
-                    manifest = OBSERVATIONS.download_products(download_rows, download_dir=str(download_path), cache=True)
+                    manifest = OBSERVATIONS.download_products(mast_product_table(download_rows), download_dir=str(download_path), cache=True)
                 downloaded = self.extract_downloaded_paths(manifest, download_path)
                 channel_paths = self.match_downloaded_rgb_paths(downloaded, rgb_set)
                 if any(channel not in channel_paths for channel in ("blue", "green", "red")):

@@ -60,7 +60,7 @@ class DownloadWorkflowMixin:
                         ),
                     )
                     try:
-                        manifest = OBSERVATIONS.download_products(mast_product_table(rows), download_dir=str(download_path), cache=True)
+                        manifest = OBSERVATIONS.download_products(mast_product_table(rows), download_dir=str(download_path), cache=True, verbose=False)
                     except Exception as exc:
                         self.after(
                             0,
@@ -241,7 +241,7 @@ class DownloadWorkflowMixin:
                     f"Downloading file {i} of {total}: {name}",
                 ),
             )
-            OBSERVATIONS.download_file(data_uri, local_path=str(output_path), cache=True)
+            OBSERVATIONS.download_file(data_uri, local_path=str(output_path), cache=True, verbose=False)
             downloaded.append(str(output_path))
             self.after(
                 0,

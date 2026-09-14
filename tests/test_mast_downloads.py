@@ -1,3 +1,5 @@
+import ast
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
@@ -8,6 +10,21 @@ from hubble_workbench_app.mast_products import mast_product_table
 
 
 class MastDownloadTests(unittest.TestCase):
+    def test_gui_downloads_disable_console_progress(self):
+        root = Path(__file__).resolve().parents[1] / "hubble_workbench_app"
+        calls = []
+        for name in ("search_workflow.py", "download_workflow.py"):
+            tree = ast.parse((root / name).read_text(encoding="utf-8"))
+            calls.extend(node for node in ast.walk(tree)
+                         if isinstance(node, ast.Call)
+                         and isinstance(node.func, ast.Attribute)
+                         and node.func.attr in ("download_products", "download_file"))
+        self.assertEqual(len(calls), 3)
+        for call in calls:
+            verbose = next((kw.value for kw in call.keywords if kw.arg == "verbose"), None)
+            self.assertIsInstance(verbose, ast.Constant)
+            self.assertIs(verbose.value, False)
+
     def test_selected_products_reach_download_without_observation_lookup(self):
         rows = [
             {"dataURI": f"mast:HST/product/{name}.fits",

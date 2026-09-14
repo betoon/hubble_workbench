@@ -97,6 +97,7 @@ class BrowserActivityMixin:
         self.extend_browser_timeout(operation_id)
         self.download_progress_var.set(max(0, min(100, value)))
         self.download_detail.set(detail)
+        self.browser_busy_message = detail
         self.log_background_activity(f"Progress: {detail} ({max(0, min(100, value)):.0f}%)")
 
     def stop_browser_activity(self, message):

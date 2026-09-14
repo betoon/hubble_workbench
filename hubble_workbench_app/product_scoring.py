@@ -373,17 +373,33 @@ class ProductScoringMixin:
         prefix = "_".join(parts[:3]) if len(parts) >= 3 else name[:12]
         return target, detector, prefix
 
-    @staticmethod
-    def suggested_rgb_label(rgb_set):
-        blue = rgb_set["blue"]
-        green = rgb_set["green"]
-        red = rgb_set["red"]
-        target = blue.get("Target", "") or blue.get("obs_id", "")
+    def suggested_rgb_label(self, rgb_set):
+        picks = [rgb_set[ch] for ch in ("blue", "green", "red")]
+        blue = picks[0]
+        target = blue.get("Target", "") or blue.get("target_name", "") or blue.get("obs_id", "")
         detector = blue.get("Detector", "") or blue.get("instrument_name", "")
-        return (
-            f"{target} | {detector} | "
-            f"B {blue.get('Spectral_Elt', '')}  G {green.get('Spectral_Elt', '')}  R {red.get('Spectral_Elt', '')}"
+        filters = "  ".join(
+            f"{label} {row.get('Spectral_Elt') or row.get('filters') or 'unknown'}"
+            for label, row in zip(("B", "G", "R"), picks)
         )
+        overlaps = [self.product_overlap_status(picks[a], picks[b])
+                    for a, b in ((0, 1), (0, 2), (1, 2))]
+        coverage = "coverage unverified" if 1 in overlaps else "estimated overlap"
+        if 0 in overlaps:
+            coverage = "separated fields"
+        sizes = []
+        for row in self.unique_product_rows(picks):
+            try:
+                size = float(row.get("size", 0) or 0)
+            except (TypeError, ValueError):
+                size = 0
+            sizes.append(size)
+        if sizes and all(math.isfinite(size) and size > 0 for size in sizes):
+            total = sum(sizes)
+            size_text = f"{total / 1e9:.2f} GB" if total >= 1e9 else f"{total / 1e6:.1f} MB"
+        else:
+            size_text = "size unknown"
+        return f"{target} | {detector} | {filters} | {coverage} | {size_text}"
 
     def rgb_set_score(self, rgb_set, recipe=None):
         score = 0

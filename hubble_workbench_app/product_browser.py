@@ -244,7 +244,7 @@ class ProductBrowserMixin:
         rgb_set = self.rgb_suggested_sets[selection[0]]
         for channel in ("blue", "green", "red"):
             self.select_rgb_candidate_row(channel, rgb_set[channel])
-        self.browser_status.set("Selected the suggested RGB set.")
+        self.browser_status.set("Selected: " + self.suggested_rgb_label(rgb_set))
 
     def use_best_rgb_set(self):
         if not self.rgb_suggested_sets:
@@ -260,9 +260,15 @@ class ProductBrowserMixin:
         if missing:
             self.browser_status.set(f"Missing {', '.join(missing)} candidates. Try Get All Products or uncheck strict filters.")
             return
+        rows = [row for channel in ("blue", "green", "red")
+                for row in self.rgb_candidate_rows[channel]]
+        sets = self.suggest_rgb_sets_for_rows(rows)
+        if not sets:
+            self.browser_status.set("No compatible RGB set: try Get All Products or a different target. Manual channel selection is available in RGB Picker.")
+            return
         for channel in ("blue", "green", "red"):
-            self.select_rgb_candidate_row(channel, self.best_rgb_candidate(channel))
-        self.browser_status.set("Picked the best available blue, green, and red channels. Choose Download Selected RGB Channels.")
+            self.select_rgb_candidate_row(channel, sets[0][channel])
+        self.browser_status.set("Selected: " + self.suggested_rgb_label(sets[0]))
 
     def select_best_rgb_products(self):
         if not self.rgb_suggested_sets:

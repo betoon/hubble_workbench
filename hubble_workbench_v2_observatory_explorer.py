@@ -261,6 +261,23 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         return content
 
     def build_browser_tab(self):
+        activity_panel = ttk.Frame(self.browser_tab, padding=(12, 4, 12, 8))
+        activity_panel.pack(side="bottom", fill="x")
+        self.browser_status = tk.StringVar(value="")
+        self.browser_progress = ttk.Progressbar(activity_panel, mode="indeterminate")
+        self.browser_progress.pack(fill="x", pady=(8, 0))
+        self.download_progress_var = tk.DoubleVar(value=0)
+        self.download_progress = ttk.Progressbar(
+            activity_panel,
+            mode="determinate",
+            variable=self.download_progress_var,
+            maximum=100,
+        )
+        self.download_progress.pack(fill="x", pady=(6, 0))
+        self.download_detail = tk.StringVar(value="")
+        ttk.Label(activity_panel, textvariable=self.download_detail, wraplength=1000, justify="left").pack(anchor="w", pady=(4, 0))
+        ttk.Label(activity_panel, textvariable=self.browser_status, wraplength=1000, justify="left").pack(anchor="w", pady=(6, 0))
+
         browser_content = self.build_scrollable_tab_content(self.browser_tab)
         gallery = ttk.Frame(browser_content)
         gallery.pack(fill="x", pady=(0, 8))
@@ -496,20 +513,6 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
             wraplength=920,
         ).pack(anchor="w", padx=8, pady=(4, 6))
 
-        self.browser_status = tk.StringVar(value="")
-        self.browser_progress = ttk.Progressbar(browser_content, mode="indeterminate")
-        self.browser_progress.pack(fill="x", pady=(8, 0))
-        self.download_progress_var = tk.DoubleVar(value=0)
-        self.download_progress = ttk.Progressbar(
-            browser_content,
-            mode="determinate",
-            variable=self.download_progress_var,
-            maximum=100,
-        )
-        self.download_progress.pack(fill="x", pady=(6, 0))
-        self.download_detail = tk.StringVar(value="")
-        ttk.Label(browser_content, textvariable=self.download_detail).pack(anchor="w", pady=(4, 0))
-        ttk.Label(browser_content, textvariable=self.browser_status).pack(anchor="w", pady=(6, 0))
 
     def build_rgb_candidate_column(self, parent, title, column):
         frame = ttk.Frame(parent)

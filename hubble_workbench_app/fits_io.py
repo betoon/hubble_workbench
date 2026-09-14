@@ -41,6 +41,8 @@ def optional_imports():
         missing.append("astropy")
     try:
         from astroquery.mast import Observations
+        from .mast_network import configure_mast_network
+        configure_mast_network(Observations)
     except Exception:
         Observations = None
         missing.append("astroquery")

@@ -21,12 +21,20 @@ class ProjectWorkflowMixin:
         try:
             self.rgb_image.save(path)
             self.last_output_path = path
+            provenance = getattr(self, "archive_provenance", {})
+            if provenance.get("run_directory"):
+                run = Path(provenance["run_directory"])
+                if run.is_dir():
+                    self.rgb_image.save(run / "preview.png")
+                    (run / "project.json").write_text(json.dumps(self.project_state(), indent=2), encoding="utf-8")
             return path
         except Exception:
             return None
 
     def project_state(self):
         return {
+            "image_wizard": self.wizard_state() if hasattr(self, "wizard_records") else {},
+            "archive_provenance": getattr(self, "archive_provenance", {}),
             "target": self.target_var.get(),
             "radius": self.radius_var.get(),
             "stretch": self.compose_stretch_var.get(),
@@ -94,6 +102,9 @@ class ProjectWorkflowMixin:
         self.red_balance_var.set(float(tuning.get("red_balance", self.red_balance_var.get())))
         self.green_balance_var.set(float(tuning.get("green_balance", self.green_balance_var.get())))
         self.blue_balance_var.set(float(tuning.get("blue_balance", self.blue_balance_var.get())))
+        self.archive_provenance = data.get("archive_provenance", {})
+        if data.get("image_wizard") and hasattr(self, "wizard_records"):
+            self.wizard_restore(data["image_wizard"])
         self.compose_status.set("Project loaded.")
 
     def save_project_file(self):
@@ -207,7 +218,11 @@ class ProjectWorkflowMixin:
         for label, header in zip(("Red", "Green", "Blue"), getattr(self, "rgb_headers", [])):
             filters = [str(header.get(key, "")) for key in ("FILTER", "FILTER1", "FILTER2") if header.get(key)]
             notes.append(f"{label}: {', '.join(filters) or 'not listed'}")
+        provenance = getattr(self, "archive_provenance", {})
+        if provenance:
+            notes.extend(["", "Archive sources and alignment:", json.dumps(provenance, indent=2)])
         notes_path.write_text("\n".join(notes), encoding="utf-8")
+        png_path.with_suffix(".project.json").write_text(json.dumps(self.project_state(), indent=2), encoding="utf-8")
         self.last_output_path = png_path
         bit_note = "16-bit TIFF" if saved_16bit else "8-bit TIFF"
         self.compose_status.set(f"Saved {png_path.name}, {tif_path.name} ({bit_note}), and notes.")

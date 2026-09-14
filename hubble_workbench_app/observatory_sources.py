@@ -21,7 +21,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "space telescope",
         "status": "planned",
         "role": "X-ray context layer for energetic sources and galaxy clusters.",
-        "activation": "Needs Chandra archive search, product selection, and X-ray overlay handling.",
+        "activation": "Curated images available in Image Wizard. Full Chandra archive search and Explorer overlay integration remain planned.",
     },
     {
         "name": "Pan-STARRS",
@@ -29,7 +29,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "planned",
         "role": "Optical sky-survey context and color-reference layer.",
-        "activation": "Needs survey cutout retrieval, registration, and color-reference handling.",
+        "activation": "Image Wizard provides survey cutout retrieval and registration. Explorer color-reference integration remains planned.",
     },
     {
         "name": "DSS",
@@ -37,7 +37,7 @@ MULTI_TELESCOPE_SOURCES = [
         "kind": "survey",
         "status": "planned",
         "role": "Broad reference imagery for target identification and framing.",
-        "activation": "Needs reference image retrieval, registration, and framing controls.",
+        "activation": "Image Wizard provides reference image retrieval, registration and framing. Explorer integration remains planned.",
     },
 ]
 
@@ -60,7 +60,7 @@ def planned_activation_lines():
 def source_status_lines():
     lines = []
     for source in MULTI_TELESCOPE_SOURCES:
-        status = "active" if source["status"] == "active" else "planned"
+        status = "active" if source["status"] == "active" else "Image Wizard available; Explorer integration planned"
         lines.append(f"- {source['name']} ({source['code']}): {status} - {source['role']}")
     return lines
 
@@ -217,7 +217,7 @@ def composition_strategy_lines(summary=None):
             lines.append("- Search " + ", ".join(missing) + " when the target needs broader wavelength coverage.")
 
     lines.append("- Use the sky mosaic to check whether the chosen layers overlap before downloading or composing.")
-    lines.append("- Treat planned Chandra, Pan-STARRS, and DSS layers as future context overlays until their retrieval and registration tools are active.")
+    lines.append("- Use Image Wizard for Chandra, Pan-STARRS, DSS, WISE, Spitzer and GALEX retrieval and alignment; advanced Explorer overlays remain planned.")
     return lines
 
 
@@ -345,11 +345,11 @@ def project_plan_lines(summary=None):
     for source in active_sources():
         lines.append(layer_readiness_line(summary, source))
 
-    lines.append("Planned context layers:")
+    lines.append("Planned Explorer integration (images available in Image Wizard):")
     for source in state["planned_sources"]:
         lines.append(f"- {source['name']} ({source['code']}): {source['role']} [planned]")
         if source.get("activation"):
-            lines.append(f"  Activation needed: {source['activation']}")
+            lines.append(f"  Integration status: {source['activation']}")
 
     lines.append("Project guidance:")
     if not summary or not summary.get("observations"):
@@ -360,7 +360,7 @@ def project_plan_lines(summary=None):
         lines.append("- One active telescope source is loaded. Search the other active source when the target needs broader wavelength coverage.")
     else:
         lines.append("- Observations are loaded, but they do not match the active source registry yet. Review mission names before composing.")
-    lines.append("- Keep planned context layers visible here until their search/download workflows are added.")
+    lines.append("- Use Image Wizard for the additional archives; this Explorer plan tracks the MAST workflow separately.")
 
     lines.append("Project checklist:")
     lines.extend(project_checklist_lines(summary))

@@ -1950,7 +1950,7 @@ class ObservatoryWorkflowMixin:
         lines.append("")
         lines.append(
             f"Phase 3 foundation: {len(active_sources())} active source(s), "
-            f"{len(planned_sources())} planned source layer(s). Planned sources are visible for project tracking and are not searched yet."
+            f"{len(planned_sources())} planned source layer(s). Additional archives are available in Image Wizard; this panel tracks their future Explorer integration."
         )
         return "\n".join(lines)
 

@@ -239,7 +239,7 @@ class ObservatorySourceTests(unittest.TestCase):
         text = Dummy().observatory_project_plan_text()
         self.assertIn("Multi-Telescope Project Plan for M51", text)
         self.assertIn("Active search sources:", text)
-        self.assertIn("Planned context layers:", text)
+        self.assertIn("Planned Explorer integration (images available in Image Wizard):", text)
 
     def test_copy_marker_details_requires_selection(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
@@ -535,10 +535,10 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Project checklist:", report)
         self.assertIn("Hubble (HST)", report)
         self.assertIn("current observations loaded: 3", report)
-        self.assertIn("Planned context layers:", report)
+        self.assertIn("Planned Explorer integration (images available in Image Wizard):", report)
         self.assertIn("Chandra (CHANDRA)", report)
         self.assertIn("[planned]", report)
-        self.assertIn("Activation needed:", report)
+        self.assertIn("Integration status:", report)
 
 
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin

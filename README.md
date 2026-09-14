@@ -63,3 +63,8 @@ Some Hubble detector products include black no-data gaps or a rotated detector f
 For multi-exposure RGB sets, **Mosaic coverage** defaults to **Full mosaic** so recorded sky is not silently discarded. Use **Stack Coverage Report** before choosing **Shared exposure overlap**; shared mode can create a cleaner central image but may remove most of a low-overlap field.
 
 **Hydrogen Enhance** is a visual H-II/H-alpha proxy derived from RGB structure. It is intended for artistic enhancement and inspection, not calibrated narrowband measurement.
+
+
+## Image Wizard
+
+The Image Wizard adds Pan-STARRS, DSS, WISE, Spitzer, GALEX and curated Chandra images, with coverage previews, verified download reuse, cancellation, shared-sky alignment and saved projects. See [the Image Wizard guide](IMAGE_WIZARD_GUIDE.md).

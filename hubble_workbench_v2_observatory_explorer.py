@@ -77,6 +77,7 @@ from hubble_workbench_app.browser_activity import BrowserActivityMixin
 from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
 from hubble_workbench_app.compose_workflow import ComposeWorkflowMixin
 from hubble_workbench_app.hydrogen_workflow import HydrogenWorkflowMixin
+from hubble_workbench_app.image_wizard import ImageWizardMixin
 from hubble_workbench_app.project_workflow import ProjectWorkflowMixin
 from hubble_workbench_app.preview_workflow import PreviewWorkflowMixin
 from hubble_workbench_app.download_workflow import DownloadWorkflowMixin
@@ -101,7 +102,7 @@ atexit.register(log_shutdown)# -------------------------------------------------
 
 
 
-class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, HydrogenWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
+class HubbleWorkbench(ImageWizardMixin, DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin, ProductBrowserMixin, SearchWorkflowMixin, HlaWorkflowMixin, AppUtilitiesMixin, QualitySettingsMixin, TargetGalleryMixin, DependencyStatusMixin, BrowserActivityMixin, ObservatoryWorkflowMixin, ComposeWorkflowMixin, HydrogenWorkflowMixin, ProjectWorkflowMixin, PreviewWorkflowMixin, DownloadWorkflowMixin, ProductScoringMixin, MastSearchHelperMixin, tk.Tk):
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
@@ -197,6 +198,7 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         self.build_compose_tab()
         self.build_hydrogen_tab()
         self.build_debug_console_tab()
+        self.build_image_wizard()
 
     def build_setup_tab(self):
         setup_content = self.build_scrollable_tab_content(self.setup_tab)
@@ -1259,6 +1261,8 @@ class HubbleWorkbench(DebugConsoleMixin, DeveloperToolsMixin, BetterSourcesMixin
         return super().open_file(path)
 
     def on_close(self):
+        if hasattr(self, "wizard_cancel_event"):
+            self.wizard_cancel_event.set()
         return super().on_close()
 
 def instrument_debug_methods():

@@ -171,20 +171,54 @@ class ProductBrowserMixin:
             for row in channel_rows:
                 group = groups.setdefault(self.rgb_group_key(row), {"blue": [], "green": [], "red": []})
                 group[channel].append(row)
+        def compatible_set(group, require_coverage=False):
+            # Search alternatives when the highest-ranked file covers another field.
+            # Limit each channel to keep interactive suggestions inexpensive.
+            from itertools import product
+
+            best = None
+            best_score = float("-inf")
+            for blue, green, red in product(*(group[ch][:12] for ch in ("blue", "green", "red"))):
+                picks = (blue, green, red)
+                sensors = {
+                    (str(row.get("obs_collection", "") or row.get("mission", "")).upper(),
+                     str(row.get("Detector", "") or row.get("instrument_name", "")).upper())
+                    for row in picks
+                }
+                if len(sensors) != 1:
+                    continue
+                overlaps = [self.product_overlap_status(picks[a], picks[b])
+                            for a, b in ((0, 1), (0, 2), (1, 2))]
+                if 0 in overlaps or (require_coverage and any(value != 2 for value in overlaps)):
+                    continue
+                candidate = dict(zip(("blue", "green", "red"), picks))
+                if not self.planetary_rgb_time_coherent(candidate):
+                    continue
+                score = self.rgb_set_score(candidate, recipe) + sum(self.product_quality_score(row) for row in picks)
+                if score > best_score:
+                    best, best_score = candidate, score
+            return best
+
         rgb_sets = []
         for group in groups.values():
-            if group["blue"] and group["green"] and group["red"]:
-                rgb_sets.append({
-                    "blue": group["blue"][0],
-                    "green": group["green"][0],
-                    "red": group["red"][0],
-                })
-        if not rgb_sets and all(candidate_rows[channel] for channel in ("blue", "green", "red")):
-            rgb_sets.append({
-                "blue": candidate_rows["blue"][0],
-                "green": candidate_rows["green"][0],
-                "red": candidate_rows["red"][0],
-            })
+            candidate = compatible_set(group)
+            if candidate:
+                rgb_sets.append(candidate)
+        if not rgb_sets:
+            # Cross-observation fallback stays within one sensor and requires
+            # coverage evidence; never fill missing optical channels with JWST.
+            sensors = {}
+            for channel, channel_rows in candidate_rows.items():
+                for row in channel_rows:
+                    sensor = (str(row.get("obs_collection", "") or row.get("mission", "")).upper(),
+                              str(row.get("Detector", "") or row.get("instrument_name", "")).upper())
+                    if not sensor[1]:
+                        continue
+                    sensors.setdefault(sensor, {"blue": [], "green": [], "red": []})[channel].append(row)
+            for group in sensors.values():
+                candidate = compatible_set(group, require_coverage=True)
+                if candidate:
+                    rgb_sets.append(candidate)
         rgb_sets.sort(key=lambda rgb_set: self.rgb_set_score(rgb_set, recipe), reverse=True)
         return rgb_sets
 

@@ -132,6 +132,7 @@ class SearchWorkflowMixin:
                     raise RuntimeError("No image observations found for this target.")
 
                 best = None
+                scanned_products = []
                 checked = 0
                 scan_limit = 60 if self.is_solar_system_target(target) else 25
                 for obs_row in obs_rows[:scan_limit]:
@@ -144,7 +145,8 @@ class SearchWorkflowMixin:
                         item for item in rows
                         if str(item.get("productFilename", "")).lower().endswith((".fits", ".fits.gz"))
                     ]
-                    rows.sort(key=self.product_sort_key)
+                    scanned_products = self.unique_product_rows(scanned_products + rows)
+                    rows = sorted(scanned_products, key=self.product_sort_key)
                     rgb_sets = self.suggest_rgb_sets_for_rows(rows, recipe=recipe)
                     if rgb_sets:
                         candidate = rgb_sets[0]

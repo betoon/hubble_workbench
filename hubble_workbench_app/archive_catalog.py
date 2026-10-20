@@ -16,6 +16,7 @@ SOURCES = {
     "WISE": "Infrared survey cutouts in four wavelength bands.",
     "Spitzer": "IRSA IRAC mosaics or calibrated exposures; files may exceed the requested field. Up to 20 exposures per band.",
     "GALEX": "Far- and near-ultraviolet reference cutouts; two bands, not a natural RGB set.",
+    "Chandra Archive": "Public observation FITS images by target or coordinates; includes full/central fields, often one broad X-ray band.",
     "Chandra": "Curated OpenFITS targets, searched by name; X-ray energy bands, not full archive coverage.",
 }
 SKY_SURVEYS = {
@@ -136,6 +137,9 @@ def search_archive(source, target, field_arcmin=5, pixels=512, cancel=None, prog
     ra, dec = float(coord.ra.deg), float(coord.dec.deg)
     check_cancel(cancel)
     progress(f"Searching {source}...")
+    if source == "Chandra Archive":
+        from .chandra_archive import search_chandra_archive
+        return search_chandra_archive(target, ra, dec, field_arcmin, cancel, progress)
     if source == "Pan-STARRS":
         if dec < -30:
             raise ValueError("Pan-STARRS does not cover this target (south of -30 degrees). Try DSS.")

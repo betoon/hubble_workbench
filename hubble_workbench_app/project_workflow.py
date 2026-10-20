@@ -1,3 +1,5 @@
+from .explorer_wizard import explorer_state, restore_explorer_state
+from .portable_projects import export_portable_project, load_project_document, portable_folder_name
 import json
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +35,7 @@ class ProjectWorkflowMixin:
 
     def project_state(self):
         return {
+            "explorer": explorer_state(self),
             "image_wizard": self.wizard_state() if hasattr(self, "wizard_records") else {},
             "archive_provenance": getattr(self, "archive_provenance", {}),
             "target": self.target_var.get(),
@@ -103,9 +106,13 @@ class ProjectWorkflowMixin:
         self.green_balance_var.set(float(tuning.get("green_balance", self.green_balance_var.get())))
         self.blue_balance_var.set(float(tuning.get("blue_balance", self.blue_balance_var.get())))
         self.archive_provenance = data.get("archive_provenance", {})
-        if data.get("image_wizard") and hasattr(self, "wizard_records"):
-            self.wizard_restore(data["image_wizard"])
-        self.compose_status.set("Project loaded.")
+        if hasattr(self, "wizard_records"):
+            self.wizard_restore(data.get("image_wizard") or {})
+        restore_explorer_state(self, data.get("explorer") or {})
+        missing = sum(bool(r.get("local_path")) and not Path(r["local_path"]).is_file()
+                      for r in getattr(self, "wizard_records", []))
+        self.compose_status.set(f"Project loaded. {missing} Wizard file(s) missing; re-download in Image Wizard."
+                                if missing else "Project loaded.")
 
     def save_project_file(self):
         path = filedialog.asksaveasfilename(
@@ -127,11 +134,30 @@ class ProjectWorkflowMixin:
         )
         if not path:
             return
-        try:
-            data = json.loads(Path(path).read_text(encoding="utf-8"))
-            self.apply_project_state(data)
-        except Exception as exc:
-            messagebox.showinfo("Open Project", f"Could not open project: {exc}")
+        if hasattr(self, 'wizard_start'):
+            def work(cancel):
+                return load_project_document(path,cancel,lambda message:self.wizard_queue.put(('progress',(None,message))))
+            self.wizard_start(work,self.apply_project_state)
+        else:
+            try:
+                self.apply_project_state(load_project_document(path))
+            except Exception as exc:
+                messagebox.showinfo('Open Project',f'Could not open project: {exc}')
+
+    def export_portable_project(self):
+        if getattr(self,'wizard_busy',False):
+            self.wizard_status.set('Finish or stop the current Wizard operation before packaging a project.')
+            return
+        parent=filedialog.askdirectory(title='Choose a parent folder for the portable project',initialdir=str(OUTPUT_DIR))
+        if not parent:return
+        state=self.project_state()
+        destination=Path(parent)/portable_folder_name(state.get('target','project'))
+        def work(cancel):
+            return export_portable_project(state,destination,cancel,lambda message:self.wizard_queue.put(('progress',(None,message))))
+        def finish(path):
+            message=f'Portable project saved: {path}. Move the entire containing folder.'
+            self.wizard_status.set(message);self.compose_status.set(message)
+        self.wizard_start(work,finish)
 
     def open_latest_output(self):
         candidates = sorted(

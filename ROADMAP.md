@@ -1,81 +1,58 @@
 # Hubble Workbench Roadmap
 
-This roadmap starts after the v2.0.1 modularization pass on `v2.0.1-development`.
+Updated October 20, 2026.
 
-## Phase 2 - Observatory Explorer
+## Current status
 
-Goal: make the Observatory Explorer tab the place where a user can understand what data exists for a target before downloading or composing.
+The earlier roadmap's major image-workflow items are now implemented: Observatory Explorer, multi-archive image projects, guided RGB selection, LRGB composition, public Chandra observation-image search, and Explorer image overlays. The available workflows and limits are documented in `IMAGE_WIZARD_GUIDE.md`.
 
-### Observation Explorer
+## Available features
 
-- Summarize observations by mission, instrument, wavelength bucket, exposure, and sky-coordinate availability.
-- Highlight the most useful observations and products for RGB work.
-- Explain what appears complete, what is missing, and which button should be used next.
+### Observatory Explorer
 
-### Sky Mosaic Viewer
+- Hubble/JWST observation summaries, source/instrument filters, RGB readiness and product guidance.
+- Sky markers, metadata footprints, coverage reports, CSV/report exports and observation selection.
+- Wizard source status, targets, bands, available/missing files and RGB/L assignments in project reports.
+- Per-source and combined Wizard coverage layers; requested fields remain distinct from archive/FITS boundaries.
+- Click a Wizard footprint to open its matching image record.
+- Display up to eight downloaded FITS images as WCS-registered grayscale or source-colored overlays with adjustable opacity.
+- Save/restore the selected layer, overlay records, mode and opacity. Local overlays reopen offline; old projects clear previous Wizard state.
 
-- Improve the current coordinate map into a clearer sky coverage view.
-- Keep the first version as a center-point map using MAST coordinates.
-- Later: use true footprint polygons when reliable `s_region` data is available.
-- Add optional color modes over time: mission, instrument, wavelength bucket, and exposure.
+### Image Wizard and composition
 
-### Completeness Analyzer
+- Pan-STARRS, DSS, WISE, Spitzer, GALEX, curated Chandra and loaded HST/JWST products.
+- Chandra Archive: name/coordinate searches of public observation FITS images through the replacement CDA API, with observation identifiers and full/central-field labels.
+- Verified reusable downloads, cancellation, previews, coverage inspection and shared-sky alignment.
+- Suggest RGB prefers mosaic/combined products and uses local availability as a tie-breaker while keeping targets, instruments and sources separate.
+- Optional L channel and strength for guided LRGB, with four-image WCS checks and no luminance fill across missing RGB data.
+- Saved assignments, aligned FITS files, provenance, tuning and PNG/TIFF exports through Color Composer.
 
-- Check whether blue, green, and red candidates exist.
-- Check whether a complete RGB set appears to come from the same alignment group.
-- Prefer enhanced products such as drizzle, mosaic, combined, and JWST i2d products.
-- Explain a recommended next action in plain language.
+## Validation completed
 
-## Phase 3 - Multi-Telescope Projects
+- Full local unittest discovery: 131 tests passed, including Chandra parsing/search, local overlays, restoration and earlier RGB/LRGB workflows.
+- Live replacement Chandra API query around Centaurus A returned 50 image records; downloaded and validated one public ACIS-I FITS image and its WCS.
+- Desktop checks in an isolated copy verified Wizard source controls, loading local overlays, and switching between source colors and grayscale.
+- Earlier desktop checks verified coverage labels/click-through and L assignment. Automated tests cover RGB/LRGB, missing files, WCS alignment, RA wrap, project restoration and stale asynchronous results.
+- Network behavior depends on the remote archives. The live Chandra check is one representative query/download, not an exhaustive archive survey.
 
-Goal: support target projects that combine data and context from multiple observatories.
+## Scope and limits
 
-Initial sources:
+- Chandra Archive searches public image products; it does not access proprietary observations or extract new energy bands from event lists. The curated Chandra option remains available.
+- Image overlays are independently stretched display previews, not calibrated flux comparisons. Original images and exported science files are not modified by overlay display.
+- Overlay preview is limited to eight selected local images, with bounded sampling/raster sizes. Missing pixels remain transparent.
+- Different resolutions, epochs and instrument responses still need user judgment.
 
-- Hubble / HST: active
-- James Webb / JWST: active
-- DSS reference imagery: planned
-- Pan-STARRS context imagery: planned
-- Chandra: planned X-ray context layer
+## Completed in 2.1.0
 
-Later sources:
+- Per-image visibility, opacity and ordering, persisted with projects.
+- Portable project folders with deduplicated FITS files, relative paths and SHA-256 verification.
+- Optional user-estimated Gaussian resolution matching with RGB/L support and provenance.
+- Updated beginner documentation and versioned source release/build preparation.
 
-- GALEX
-- WISE
-- Additional observatories as useful APIs and workflows are identified
+## Possible future work
 
-## Phase 4 - NASA Image Wizard
+No remaining feature from the earlier major-feature shortlist is currently marked blocked or required for ordinary use. Further work should follow practical feedback. Potential larger additions include Chandra event-list processing and measured, spatially varying PSF matching; these are new optional scope, not promised work in this pass.
 
-Goal: create a guided workflow that can choose good datasets and build a polished image with less manual work.
+## Maintenance
 
-Planned capabilities:
-
-- Intelligent dataset selection
-- Automatic or guided registration/alignment
-- Guided RGB/LRGB composition
-- Product-quality explanations
-- Saved project notes explaining what data was used and why
-
-### Phase 3 Foundation
-
-- Added `hubble_workbench_app/observatory_sources.py` as the source registry for active and planned observatories.
-- Observatory Explorer reports now show active versus planned multi-telescope sources.
-- Added a project-plan section that explains loaded active sources and planned context layers.
-- Added layer readiness checks for active sources, including observations, products, RGB coverage, and next action.
-- Saved structured project state in Observatory Explorer diagnostics for future multi-telescope project tools.
-- Added a project checklist that turns layer status into immediate next actions.
-- Added activation requirements for planned Chandra, Pan-STARRS, and DSS layers.
-- Added an Observatory Explorer action to prepare the best RGB layer from loaded products.
-- Added a sky mosaic layer selector for all active sources, Hubble, and JWST.
-- Added a best-candidates-only option for the sky mosaic viewer.
-- Added copy and save actions for the Observatory Explorer report.
-- Added CSV export for the currently selected sky mosaic layer.
-- Added clipboard copy for the currently selected sky mosaic rows.
-- Added clickable sky mosaic markers that show observation details and select the matching observation row.
-- Added a Get Marker Products action for the selected mosaic observation.
-- Added selected marker highlighting and marker-detail clipboard copy.
-- Planned sources are visible for project tracking but are not searched yet.
-
-## Current Implementation Notes
-
-Phase 2 begins in `hubble_workbench_app/observatory_workflow.py`. The first implementation step improves the Observatory Explorer report so it gives clearer observation/product summaries and recommended next actions. The Sky Mosaic Viewer now has clearer grid labels, marker sizing, and a legend while still using MAST observation-center coordinates. The Completeness Analyzer now reports a plain-English checklist for RGB coverage, alignment confidence, enhanced products, wider context, and next actions.
+Preserve callback names, launch paths, output conventions and older project compatibility. See `MODULARIZATION_PLAN.md` for the module layout. Run relevant tests after changes and keep this roadmap synchronized with shipped behavior.

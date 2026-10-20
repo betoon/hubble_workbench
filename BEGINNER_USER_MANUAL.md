@@ -536,3 +536,33 @@ Hubble combined/drizzled image products. Usually good choices.
 ### raw / uncal
 
 Raw data. Usually not the best first choice for making pretty images.
+
+## Version 2.1.0: layers, portable projects and resolution matching
+
+### Control individual Explorer images
+
+1. Download images in Image Wizard, select up to eight, and click **Show selected images in Explorer**.
+2. Select Grayscale or Source colors under Wizard images.
+3. Click **Image layers...**, select an image, set Visible and Opacity, then click Apply.
+4. Use Lower or Raise to change the drawing order. The list runs from bottom layer to top layer. The top image can cover images beneath it.
+5. Save the project to retain layer order, visibility and opacity. Global opacity multiplies each image's opacity. Hidden images keep their coverage outlines.
+
+### Move a project to another folder or computer
+
+1. Finish downloading the images referenced by your project.
+2. Click **Export portable** in Image Wizard and choose a parent folder.
+3. The app creates a new Hubble_<target>_<timestamp> folder with project.json, data/, results/ and manifest.json.
+4. Copy the entire folder to the new location. Open its project.json using **Open project**.
+
+The bundle includes every referenced local FITS image, including unused downloaded catalog records and aligned RGB/L images. Repeated references are copied once. Large projects can therefore need substantial disk space. Missing referenced files stop export with a message. Images are checked against SHA-256 checksums when opened. Keep filenames and manifest.json intact. Network access is unnecessary for bundled images; archive searches and new downloads still require it. Application dependencies must already be installed on the other computer. Original external preview exports are not bundled; rebuild/export them after opening. Regular Save project remains a lightweight JSON file referencing existing files.
+
+### Match channel resolution
+
+1. Assign R, G, B and optionally L.
+2. Click **Resolution matching...** and enable matching.
+3. Enter the estimated FWHM (full width at half maximum) in arcseconds for each assigned channel, then Save settings.
+4. Click **Build RGB / LRGB** again.
+
+The sharpest channels are smoothed to the largest supplied FWHM, after WCS alignment and before stretching. The added Gaussian width is the square root of the difference of squared FWHMs. The broadest channel needs no additional smoothing. Settings are saved in projects; input and target FWHM are recorded in alignment provenance and the output PSFFWHM FITS card records the assumed target.
+
+This optional tool uses a circular Gaussian approximation and local WCS pixel scales. It does not measure a telescope PSF, account for spatially varying PSFs or interpolation blur, calibrate fluxes across instruments, or perform deconvolution. It is intended for visual comparisons on small, approximately orthogonal sky grids. Original FITS files remain unchanged. Missing pixels stay missing; values near masked edges use normalized valid-pixel weights. Requested kernels above 64 pixels sigma are rejected to bound memory use. Disable matching to retain the original workflow.

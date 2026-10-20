@@ -1,6 +1,8 @@
-# Space Telescope Workbench
+# Space Telescope Workbench 2.1.0
 
 Space Telescope Workbench is a local starter tool for searching, downloading, previewing, and composing Hubble/HST and James Webb/JWST FITS image data from MAST.
+
+Version 2.1.0 adds per-image Explorer controls, portable FITS project folders, and optional Gaussian resolution matching. See RELEASE_NOTES.md for validation and limits.
 
 ## Start
 
@@ -27,6 +29,7 @@ The required packages are:
 - numpy
 - Pillow
 - tifffile
+- requests
 
 ## Workflow
 

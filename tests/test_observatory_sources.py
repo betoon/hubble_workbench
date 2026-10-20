@@ -143,7 +143,7 @@ class ObservatorySourceTests(unittest.TestCase):
     def test_planned_sources_explain_activation_requirements(self):
         report = "\n".join(planned_activation_lines())
         self.assertIn("Chandra (CHANDRA)", report)
-        self.assertIn("archive search", report)
+        self.assertIn("Chandra Archive searches are available", report)
         self.assertIn("Pan-STARRS (PANSTARRS)", report)
         self.assertIn("survey cutout", report)
         self.assertIn("DSS (DSS)", report)
@@ -239,7 +239,7 @@ class ObservatorySourceTests(unittest.TestCase):
         text = Dummy().observatory_project_plan_text()
         self.assertIn("Multi-Telescope Project Plan for M51", text)
         self.assertIn("Active search sources:", text)
-        self.assertIn("Planned Explorer integration (images available in Image Wizard):", text)
+        self.assertIn("Additional archive layers (images available in Image Wizard):", text)
 
     def test_copy_marker_details_requires_selection(self):
         from hubble_workbench_app.observatory_workflow import ObservatoryWorkflowMixin
@@ -535,9 +535,9 @@ class ObservatorySourceTests(unittest.TestCase):
         self.assertIn("Project checklist:", report)
         self.assertIn("Hubble (HST)", report)
         self.assertIn("current observations loaded: 3", report)
-        self.assertIn("Planned Explorer integration (images available in Image Wizard):", report)
+        self.assertIn("Additional archive layers (images available in Image Wizard):", report)
         self.assertIn("Chandra (CHANDRA)", report)
-        self.assertIn("[planned]", report)
+        self.assertIn("[available] coverage and image overlays", report)
         self.assertIn("Integration status:", report)
 
 
@@ -768,3 +768,4 @@ class ObservatorySensorCoverageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

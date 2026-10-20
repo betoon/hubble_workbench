@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('The Complete Messier List.txt', '.')]
+datas = [(name, ".") for name in ("The Complete Messier List.txt", "README.md", "BEGINNER_USER_MANUAL.md", "IMAGE_WIZARD_GUIDE.md", "RELEASE_NOTES.md")]
 binaries = []
 hiddenimports = ['astroquery', 'astroquery.mast', 'astroquery.mast.observations', 'pyvo', 'requests']
 hiddenimports += collect_submodules('astroquery')

@@ -1,3 +1,4 @@
+from .explorer_wizard import draw_wizard_layer, select_wizard_footprint
 import csv
 import json
 import logging
@@ -1939,7 +1940,7 @@ class ObservatoryWorkflowMixin:
             lines.append(f"- {recommendation}")
         lines.append("")
         lines.append("Multi-Telescope Project Plan:")
-        for source_line in project_plan_lines(summary):
+        for source_line in project_plan_lines(summary, getattr(self, "wizard_records", []), getattr(self, "wizard_channels", {})):
             lines.append(source_line)
         lines.append("")
         for source_line in composition_strategy_lines(summary):
@@ -1950,7 +1951,7 @@ class ObservatoryWorkflowMixin:
         lines.append("")
         lines.append(
             f"Phase 3 foundation: {len(active_sources())} active source(s), "
-            f"{len(planned_sources())} planned source layer(s). Additional archives are available in Image Wizard; this panel tracks their future Explorer integration."
+            f"{len(planned_sources())} additional Wizard source layer(s). Wizard records and local file status are included above; downloaded images can be compared using Explorer image overlays."
         )
         return "\n".join(lines)
 
@@ -1965,7 +1966,7 @@ class ObservatoryWorkflowMixin:
             self.save_diagnostic_json(SEARCH_LOG_DIR, f"{self.current_target_for_log()}_observatory_explorer", {
                 "target": self.current_target_for_log(),
                 "summary": summary,
-                "project_state": project_state(summary),
+                "project_state": project_state(summary, getattr(self, "wizard_records", []), getattr(self, "wizard_channels", {})),
                 "report": report,
             })
         except Exception as exc:
@@ -2026,7 +2027,7 @@ class ObservatoryWorkflowMixin:
             f"Current radius: {self.radius_var.get()}",
             "",
         ]
-        lines.extend(project_plan_lines(summary))
+        lines.extend(project_plan_lines(summary, getattr(self, "wizard_records", []), getattr(self, "wizard_channels", {})))
         return "\n".join(lines)
 
     def observatory_project_plan_payload(self):
@@ -2034,7 +2035,7 @@ class ObservatoryWorkflowMixin:
         return {
             "target": self.current_target_for_log(),
             "summary": summary,
-            "project_state": project_state(summary),
+            "project_state": project_state(summary, getattr(self, "wizard_records", []), getattr(self, "wizard_channels", {})),
             "project_checklist": project_checklist_lines(summary),
             "composition_strategy": composition_strategy_lines(summary),
             "composition_readiness": composition_readiness_state(summary),
@@ -2249,6 +2250,8 @@ class ObservatoryWorkflowMixin:
             layer = self.mosaic_layer_var.get()
         except Exception:
             pass
+        if layer.startswith("Image Wizard: "):
+            return []
         if layer == "Hubble / HST":
             return [row for row in rows if str(row.get("obs_collection", "")).upper() == "HST"]
         if layer == "JWST":
@@ -3055,6 +3058,8 @@ class ObservatoryWorkflowMixin:
         return row
 
     def observatory_mosaic_click(self, event):
+        if self.observatory_selected_mosaic_label().startswith("Image Wizard: "):
+            return select_wizard_footprint(self, event)
         markers = list(getattr(self, "mosaic_marker_points", []) or [])
         footprints = list(getattr(self, "mosaic_footprint_polygons", []) or [])
         if not markers and not footprints:
@@ -3232,6 +3237,9 @@ class ObservatoryWorkflowMixin:
         canvas.delete("all")
         self.mosaic_marker_points = []
         self.mosaic_footprint_polygons = []
+        self.wizard_mosaic_polygons = []
+        if self.observatory_selected_mosaic_label().startswith("Image Wizard: "):
+            return draw_wizard_layer(self)
         width = max(400, int(canvas.winfo_width() or 700))
         height = max(300, int(canvas.winfo_height() or 500))
         rows = self.observatory_current_mosaic_rows()

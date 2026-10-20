@@ -1,3 +1,5 @@
+from pathlib import Path
+
 MULTI_TELESCOPE_SOURCES = [
     {
         "name": "Hubble",
@@ -19,27 +21,76 @@ MULTI_TELESCOPE_SOURCES = [
         "name": "Chandra",
         "code": "CHANDRA",
         "kind": "space telescope",
-        "status": "planned",
+        "status": "wizard",
         "role": "X-ray context layer for energetic sources and galaxy clusters.",
-        "activation": "Curated images available in Image Wizard. Full Chandra archive search and Explorer overlay integration remain planned.",
+        "activation": "Curated images and public Chandra Archive searches are available in Image Wizard, with local FITS image overlays in Explorer.",
     },
     {
         "name": "Pan-STARRS",
         "code": "PANSTARRS",
         "kind": "survey",
-        "status": "planned",
+        "status": "wizard",
         "role": "Optical sky-survey context and color-reference layer.",
-        "activation": "Image Wizard provides survey cutout retrieval and registration. Explorer color-reference integration remains planned.",
+        "activation": "Image Wizard provides survey cutout retrieval and registration. Explorer coverage and local FITS image overlays are available.",
     },
     {
         "name": "DSS",
         "code": "DSS",
         "kind": "survey",
-        "status": "planned",
+        "status": "wizard",
         "role": "Broad reference imagery for target identification and framing.",
-        "activation": "Image Wizard provides reference image retrieval, registration and framing. Explorer integration remains planned.",
+        "activation": "Image Wizard provides reference image retrieval, registration and framing. Explorer coverage and local FITS image overlays are available.",
     },
 ]
+
+
+MULTI_TELESCOPE_SOURCES.extend([
+    {"name": name, "code": name.upper(), "kind": "survey", "status": "wizard",
+     "role": role, "activation": "Available in Image Wizard; Explorer coverage and local FITS image overlays are available."}
+    for name, role in [("WISE", "Infrared survey context."),
+                       ("Spitzer", "IRAC infrared imaging."),
+                       ("GALEX", "Ultraviolet context; two bands do not form an automatic RGB set.")]
+])
+
+
+def wizard_source_states(records=None, channels=None):
+    """Describe loaded Wizard records without mixing them into MAST readiness."""
+    records, channels = records or [], channels or {}
+    result = []
+    for source in MULTI_TELESCOPE_SOURCES:
+        rows = [r for r in records if str(r.get("source", "")).upper() in source_names(source)]
+        # Repeated catalog records should not inflate the project counts.
+        rows = list({r.get("key") or r.get("url") or repr(r): r for r in rows}.values())
+        keys = {r.get("key") for r in rows if r.get("key")}
+        assigned = [c for c in ("red", "green", "blue", "luminance")
+                    if isinstance(channels.get(c), dict) and channels[c].get("key") in keys]
+        downloaded = sum(bool(r.get("local_path")) and Path(r["local_path"]).is_file() for r in rows)
+        missing = sum(bool(r.get("local_path")) and not Path(r["local_path"]).is_file() for r in rows)
+        result.append({"name": source["name"], "code": source["code"],
+                       "available": True, "records": len(rows), "downloaded": downloaded,
+                       "missing_files": missing, "assigned_channels": assigned,
+                       "targets": sorted({str(r.get("target", "")) for r in rows}),
+                       "bands": sorted({str(r.get("band", "")) for r in rows})})
+    return result
+
+
+def wizard_project_lines(states):
+    lines = ["Image Wizard project (separate from MAST search results):"]
+    for source in states:
+        if not source["records"]:
+            lines.append(f"- {source['name']}: available; no Wizard records loaded.")
+            continue
+        assignments = ", ".join(source["assigned_channels"]) or "none"
+        lines.append(f"- {source['name']}: {source['records']} records; "
+                     f"{source['downloaded']} local files available; "
+                     f"{source['missing_files']} missing saved files; assigned channels: {assignments}.")
+        lines.append("  Targets: " + ", ".join(source["targets"]) + "; bands: " + ", ".join(source["bands"]))
+        if source["missing_files"]:
+            lines.append("  Re-download missing files in Image Wizard before offline composition.")
+        if len(source["bands"]) < 3:
+            lines.append("  Fewer than three distinct bands; preview or assign overlapping sources manually.")
+    lines.append("- Review assignments and valid sky overlap in Image Wizard before building RGB.")
+    return lines
 
 
 def active_sources():
@@ -60,7 +111,7 @@ def planned_activation_lines():
 def source_status_lines():
     lines = []
     for source in MULTI_TELESCOPE_SOURCES:
-        status = "active" if source["status"] == "active" else "Image Wizard available; Explorer integration planned"
+        status = "active" if source["status"] == "active" else "Image Wizard and Explorer image overlays available"
         lines.append(f"- {source['name']} ({source['code']}): {status} - {source['role']}")
     return lines
 
@@ -130,12 +181,13 @@ def source_layer_state(summary, source):
     }
 
 
-def project_state(summary=None):
+def project_state(summary=None, wizard_records=None, wizard_channels=None):
     active = [source_layer_state(summary, source) for source in active_sources()]
     planned = [source_layer_state(summary, source) for source in planned_sources()]
     active_with_observations = sum(1 for source in active if source["observations"])
     active_ready_for_rgb = sum(1 for source in active if source["rgb_complete"])
     return {
+        "wizard_sources": wizard_source_states(wizard_records, wizard_channels),
         "active_sources": active,
         "planned_sources": planned,
         "active_with_observations": active_with_observations,
@@ -167,9 +219,9 @@ def project_checklist_lines(summary=None):
             lines.append(f"- Review {source['name']} RGB candidates and choose the best set.")
 
     if state["active_ready_for_rgb"]:
-        lines.append("- Try an RGB composition with the ready source before adding planned context layers.")
+        lines.append("- Try an RGB composition with the ready source before adding additional context layers.")
     else:
-        lines.append("- Build at least one complete active-source RGB layer before moving to planned context layers.")
+        lines.append("- Build at least one complete active-source RGB layer before moving to additional context layers.")
     return lines
 
 
@@ -217,7 +269,7 @@ def composition_strategy_lines(summary=None):
             lines.append("- Search " + ", ".join(missing) + " when the target needs broader wavelength coverage.")
 
     lines.append("- Use the sky mosaic to check whether the chosen layers overlap before downloading or composing.")
-    lines.append("- Use Image Wizard for Chandra, Pan-STARRS, DSS, WISE, Spitzer and GALEX retrieval and alignment; advanced Explorer overlays remain planned.")
+    lines.append("- Use Image Wizard for Chandra, Pan-STARRS, DSS, WISE, Spitzer and GALEX retrieval and alignment; Explorer image overlays are available for downloaded FITS files.")
     return lines
 
 
@@ -329,9 +381,9 @@ def composition_readiness_lines(summary=None):
         lines.append(f"- {action}")
     return lines
 
-def project_plan_lines(summary=None):
+def project_plan_lines(summary=None, wizard_records=None, wizard_channels=None):
     lines = []
-    state = project_state(summary)
+    state = project_state(summary, wizard_records, wizard_channels)
 
     lines.append("Active search sources:")
     for source in state["active_sources"]:
@@ -345,11 +397,13 @@ def project_plan_lines(summary=None):
     for source in active_sources():
         lines.append(layer_readiness_line(summary, source))
 
-    lines.append("Planned Explorer integration (images available in Image Wizard):")
+    lines.append("Additional archive layers (images available in Image Wizard):")
     for source in state["planned_sources"]:
-        lines.append(f"- {source['name']} ({source['code']}): {source['role']} [planned]")
+        lines.append(f"- {source['name']} ({source['code']}): {source['role']} [available] coverage and image overlays")
         if source.get("activation"):
             lines.append(f"  Integration status: {source['activation']}")
+
+    lines.extend(wizard_project_lines(state["wizard_sources"]))
 
     lines.append("Project guidance:")
     if not summary or not summary.get("observations"):

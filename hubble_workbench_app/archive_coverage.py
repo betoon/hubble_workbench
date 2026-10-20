@@ -62,13 +62,17 @@ def project_polygons(polygons):
                              np.array(p)[:,1]-dec0)) for p in polygons]
 
 
-def align_shared(paths, output_dir, shared=True, cancel=None):
+def align_shared(paths, output_dir, shared=True, cancel=None, resolution=None):
     from astropy.io import fits
     from .fits_io import wcs_align_fits_channels
     from .archive_catalog import check_cancel
     check_cancel(cancel)
     arrays, headers, metadata = wcs_align_fits_channels(paths, max_output_pixels=4_000_000)
     check_cancel(cancel)
+    if resolution is not None:
+        from .resolution_matching import match_resolution
+        arrays, details = match_resolution(arrays, headers, resolution, cancel)
+        metadata["resolution_matching"] = details
     mask = np.logical_and.reduce([np.isfinite(a) for a in arrays])
     if shared and not mask.any():
         raise ValueError("These images have no shared sky coverage. Select a different set.")

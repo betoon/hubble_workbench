@@ -13,33 +13,16 @@ from PIL import Image, ImageTk
 
 from .archive_catalog import SOURCES, Cancelled, check_cancel, image_record, search_archive
 from .archive_downloads import DownloadCache
+from .rgb_recommendations import recommend_rgb
+from .image_overlays import start_overlay_load
+from .resolution_matching import show_resolution_controls, validate_resolution
 from .archive_coverage import align_shared, display_footprints, fits_footprint, project_polygons
 from .paths import DOWNLOAD_DIR, OUTPUT_DIR
 
 
 def recommend_channels(records):
-    """Keep automatic false-color choices within one source and instrument."""
-    groups = {}
-    for record in records:
-        groups.setdefault((record["source"], record.get("instrument", "")), []).append(record)
-    choices = []
-    for group in groups.values():
-        named = {}
-        for record in group:
-            if record.get("channel") in ("red","green","blue"):
-                named.setdefault(record["channel"],record)
-        if len(named) == 3:
-            choices.append(named)
-            continue
-        bands = {}
-        for record in group:
-            wave = record.get("wavelength")
-            if wave is not None and np.isfinite(wave):
-                bands.setdefault(round(wave,5),record)
-        if len(bands) >= 3:
-            ordered = [bands[key] for key in sorted(bands)]
-            choices.append(dict(zip(("blue","green","red"), (ordered[0],ordered[len(ordered)//2],ordered[-1]))))
-    return choices[0] if choices else {}
+    """Compatibility entry point for metadata-ranked RGB suggestions."""
+    return recommend_rgb(records)[0]
 
 
 def size_summary(records):
@@ -60,6 +43,7 @@ class ImageWizardMixin:
         self.wizard_field = tk.StringVar(value="5")
         self.wizard_pixels = tk.StringVar(value="512")
         self.wizard_shared = tk.BooleanVar(value=True)
+        self.wizard_luminance_strength = tk.DoubleVar(value=0.5)
         self.wizard_status = tk.StringVar(value="Choose a source and target, then find images. No files download until you choose an action.")
         self.wizard_source_help = tk.StringVar(value=SOURCES["Pan-STARRS"])
         self.wizard_channel_text = tk.StringVar(value="No RGB channels assigned.")
@@ -101,7 +85,8 @@ class ImageWizardMixin:
         actions.pack(fill="x",pady=6)
         self.wizard_action_buttons=[]
         for label,command in (("Suggest RGB",self.wizard_suggest),("Use as R",lambda:self.wizard_assign("red")),
-                              ("Use as G",lambda:self.wizard_assign("green")),("Use as B",lambda:self.wizard_assign("blue"))):
+                              ("Use as G",lambda:self.wizard_assign("green")),("Use as B",lambda:self.wizard_assign("blue")),
+                              ("Use as L",lambda:self.wizard_assign("luminance")),("Clear L",self.wizard_clear_luminance)):
             button=ttk.Button(actions,text=label,command=command)
             button.pack(side="left",padx=2)
             self.wizard_action_buttons.append(button)
@@ -112,13 +97,21 @@ class ImageWizardMixin:
         self.wizard_report=tk.Text(right,height=7,wrap="word",state="disabled",font=("Segoe UI",9))
         self.wizard_report.pack(fill="x",pady=(5,0))
         bottom=ttk.LabelFrame(self.wizard_tab,text="3. Download, align and create",padding=8)
-        bottom.pack(fill="x")
+        bottom.pack(side="bottom",fill="x",before=body)
         ttk.Checkbutton(bottom,text="Crop to shared sky coverage (recommended for RGB)",variable=self.wizard_shared).pack(anchor="w")
+        options_row=ttk.Frame(bottom)
+        options_row.pack(fill="x")
+        ttk.Button(options_row,text="Resolution matching...",command=lambda:show_resolution_controls(self)).pack(side="left")
+        luminance_row=ttk.Frame(bottom)
+        luminance_row.pack(fill="x")
+        ttk.Label(luminance_row,text="Luminance strength (0-1; optional L band):").pack(side="left")
+        ttk.Spinbox(luminance_row,from_=0,to=1,increment=.1,width=5,textvariable=self.wizard_luminance_strength).pack(side="left",padx=6)
+        ttk.Label(luminance_row,text="Rebuild after changing strength. Display enhancement, not photometry.").pack(side="left")
         row=ttk.Frame(bottom)
         row.pack(fill="x",pady=4)
         for label,command in (("Preview selected",self.wizard_preview),("Download selected",self.wizard_download),
-                              ("Build RGB",self.wizard_build),("Save project",self.save_project_file),
-                              ("Open project",self.open_project_file)):
+                              ("Build RGB / LRGB",self.wizard_build),("Save project",self.save_project_file),
+                              ("Open project",self.open_project_file),("Export portable",self.export_portable_project)):
             button=ttk.Button(row,text=label,command=command)
             button.pack(side="left",padx=2)
             self.wizard_action_buttons.append(button)
@@ -127,6 +120,9 @@ class ImageWizardMixin:
         self.wizard_progress=ttk.Progressbar(bottom,mode="determinate",maximum=100)
         self.wizard_progress.pack(fill="x",pady=4)
         ttk.Label(bottom,textvariable=self.wizard_status,wraplength=900,justify="left").pack(anchor="w")
+        overlay_button = ttk.Button(options_row, text="Show selected images in Explorer", command=lambda: start_overlay_load(self))
+        overlay_button.pack(side="left", padx=8)
+        self.wizard_action_buttons.append(overlay_button)
         self.after(100,self.wizard_pump)
 
     def wizard_pump(self):
@@ -215,6 +211,12 @@ class ImageWizardMixin:
         target,records=result
         if self.wizard_records and getattr(self,"wizard_catalog_target",self.wizard_records[0]["target"]).lower()!=target.lower():
             self.wizard_records,self.wizard_channels=[],{}
+            self.wizard_overlay_generation = getattr(self, 'wizard_overlay_generation', 0)+1
+            self.wizard_overlay_cache = []
+            self.wizard_overlay_keys = []
+            self.wizard_overlay_settings = {}
+            self.wizard_resolution = {}
+            self.wizard_overlay_render_key = None
         self.wizard_catalog_target=target
         known={r["key"] for r in self.wizard_records}
         for record in records:
@@ -229,7 +231,7 @@ class ImageWizardMixin:
         for index,record in enumerate(self.wizard_records):
             size=float(record.get("size") or 0)
             size_text=f"{'~' if record.get('size_estimated') else ''}{size/1e6:.1f} MB" if size else "Unknown"
-            self.wizard_tree.insert("","end",iid=str(index),values=(record["source"],record["band"],size_text))
+            self.wizard_tree.insert("","end",iid=str(index),values=(record["source"],record.get("display_label",record["band"]),size_text))
         self.wizard_channel_text.set(" | ".join(f"{ch[0].upper()}: {r['source']} {r['band']}" for ch,r in self.wizard_channels.items()) or "No RGB channels assigned.")
         self.wizard_review()
 
@@ -245,17 +247,24 @@ class ImageWizardMixin:
         self.wizard_channel_text.set(" | ".join(f"{ch[0].upper()}: {r['source']} {r['band']}" for ch,r in self.wizard_channels.items()))
         self.wizard_review()
 
+    def wizard_clear_luminance(self):
+        self.wizard_channels.pop("luminance", None)
+        self.wizard_refresh()
+        self.wizard_status.set("Luminance cleared. Rebuild for ordinary RGB.")
+
     def wizard_suggest(self):
         selected=self.wizard_selected() or self.wizard_records
-        channels=recommend_channels(selected)
+        channels, explanation=recommend_rgb(selected)
         if not channels:
-            self.wizard_status.set("No three distinct bands from one source are available. Preview single-band data, or assign colors manually for an intentional multiwavelength composite.")
+            self.wizard_status.set(explanation)
             return
+        if "luminance" in self.wizard_channels:
+            channels["luminance"] = self.wizard_channels["luminance"]
         self.wizard_channels=channels
         indices=[str(self.wizard_records.index(r)) for r in channels.values()]
         self.wizard_tree.selection_set(indices)
         self.wizard_channel_text.set(" | ".join(f"{ch[0].upper()}: {r['source']} {r['band']}" for ch,r in channels.items()))
-        self.wizard_status.set("Suggested a same-source false-color set. Review footprints; downloaded WCS will verify the actual overlap before composition.")
+        self.wizard_status.set(explanation)
         self.wizard_review()
 
     def wizard_review(self):
@@ -366,17 +375,38 @@ class ImageWizardMixin:
         self.wizard_start(work,finish)
 
     def wizard_build(self):
-        if set(self.wizard_channels)!={"red","green","blue"}:
+        if not {"red","green","blue"}.issubset(self.wizard_channels):
             self.wizard_status.set("Assign R, G and B, or choose Suggest RGB first.")
             return
-        records=[dict(self.wizard_channels[ch]) for ch in ("red","green","blue")]
+        channel_order=["red","green","blue"]
+        strength = 0.0
+        if "luminance" in self.wizard_channels:
+            try:
+                strength = float(self.wizard_luminance_strength.get())
+                if not np.isfinite(strength) or not 0 <= strength <= 1:
+                    raise ValueError()
+            except (ValueError, tk.TclError):
+                self.wizard_status.set("Luminance strength must be a number between 0 and 1.")
+                return
+            channel_order.append("luminance")
+        settings=getattr(self,"wizard_resolution",{})
+        resolution=None
+        if settings.get("enabled"):
+            try:
+                resolution=validate_resolution([settings.get(ch, "") for ch in channel_order],len(channel_order))
+            except ValueError:
+                self.wizard_status.set("Set positive RGB/L FWHM values in Resolution matching first.")
+                return
+        records=[dict(self.wizard_channels[ch]) for ch in channel_order]
         shared=self.wizard_shared.get()
         target=self.wizard_target.get()
         run=OUTPUT_DIR/("archive_project_"+datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
         def work(cancel):
             downloaded=self.wizard_fetch_records(records,cancel)
             self.wizard_queue.put(("progress",(None,"Aligning sky coordinates and measuring shared coverage...")))
-            paths,metadata=align_shared([r["local_path"] for r in downloaded],run,shared,cancel)
+            paths,metadata=align_shared([r["local_path"] for r in downloaded],run,shared,cancel,resolution=resolution)
+            if len(channel_order) == 4 and metadata["overlap_fraction"] <= 0:
+                raise ValueError("The luminance image and RGB images have no common sky coverage.")
             return downloaded,paths,metadata
         def finish(result):
             downloaded,paths,metadata=result
@@ -389,7 +419,8 @@ class ImageWizardMixin:
             self.mosaic_coverage_mode_var.set("Full mosaic")
             self.presentation_cleanup_var.set(False)
             self.archive_provenance={"run_directory":str(run),"target":target,"sources":downloaded,
-                                     "channel_order":["red","green","blue"],"alignment":metadata,"aligned_paths":paths,
+                                     "channel_order":channel_order,"alignment":metadata,"aligned_paths":paths,
+                                     "luminance":{"strength":strength} if len(channel_order)==4 else {},
                                      "color_mapping":"display false color; not calibrated photometry"}
             (run/"project.json").write_text(json.dumps(self.project_state(),indent=2),encoding="utf-8")
             self.wizard_status.set(f"Aligned; {metadata['overlap_fraction']:.1%} common overlap before cropping. Project saved. Composing RGB...")
@@ -398,17 +429,19 @@ class ImageWizardMixin:
         self.wizard_start(work,finish)
 
     def wizard_state(self):
-        return {"target":self.wizard_target.get(),"source":self.wizard_source.get(),
+        return {"resolution":getattr(self,"wizard_resolution",{}),"target":self.wizard_target.get(),"source":self.wizard_source.get(),
                 "field_arcmin":self.wizard_field.get(),"pixels":self.wizard_pixels.get(),
-                "shared":self.wizard_shared.get(),"records":self.wizard_records,"channels":self.wizard_channels,
+                "shared":self.wizard_shared.get(),"luminance_strength":self.wizard_luminance_strength.get(),"records":self.wizard_records,"channels":self.wizard_channels,
                 "catalog_target":getattr(self,"wizard_catalog_target",self.wizard_target.get())}
 
     def wizard_restore(self,data):
+        self.wizard_resolution=dict(data.get("resolution") or {})
         self.wizard_target.set(data.get("target",""))
         self.wizard_source.set(data.get("source","Pan-STARRS"))
         self.wizard_field.set(data.get("field_arcmin","5"))
         self.wizard_pixels.set(data.get("pixels","512"))
         self.wizard_shared.set(data.get("shared",True))
+        self.wizard_luminance_strength.set(data.get("luminance_strength",0.5))
         self.wizard_records=data.get("records",[])
         self.wizard_channels=data.get("channels",{})
         self.wizard_catalog_target=data.get("catalog_target",data.get("target",""))

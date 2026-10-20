@@ -1,3 +1,6 @@
+from hubble_workbench_app import __version__
+from hubble_workbench_app.overlay_controls import show_overlay_controls
+from hubble_workbench_app.explorer_wizard import MAST_LAYERS, WIZARD_LAYERS
 import math
 import atexit
 import shutil
@@ -106,7 +109,7 @@ class HubbleWorkbench(ImageWizardMixin, DebugConsoleMixin, DeveloperToolsMixin, 
     def __init__(self):
         info_log("Creating HubbleWorkbench Tk root")
         super().__init__()
-        self.title("Space Telescope Workbench")
+        self.title(f"Space Telescope Workbench {__version__}")
         self.geometry(SETTINGS.get("geometry", "1160x760"))
         self.minsize(940, 620)
         self.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -661,13 +664,30 @@ class HubbleWorkbench(ImageWizardMixin, DebugConsoleMixin, DeveloperToolsMixin, 
         mosaic_rgb_row.pack(fill="x", pady=(4, 0))
         mosaic_export_row = ttk.Frame(mosaic_tools)
         mosaic_export_row.pack(fill="x", pady=(4, 0))
+        overlay_row = ttk.Frame(mosaic_tools)
+        overlay_row.pack(fill="x", pady=(4, 0))
+        ttk.Label(overlay_row, text="Wizard images").pack(side="left")
+        self.wizard_overlay_mode = tk.StringVar(value="Off")
+        self.wizard_overlay_opacity = tk.DoubleVar(value=.65)
+        overlay_mode = ttk.Combobox(overlay_row, textvariable=self.wizard_overlay_mode,
+                                   values=["Off", "Grayscale", "Source colors"], state="readonly", width=14)
+        overlay_mode.pack(side="left", padx=6)
+        overlay_mode.bind("<<ComboboxSelected>>", lambda event: self.observatory_draw_current_mosaic())
+        ttk.Button(overlay_row, text="Image layers...", command=lambda: show_overlay_controls(self)).pack(side="left", padx=6)
+        ttk.Label(overlay_row, text="Opacity").pack(side="left")
+        opacity = ttk.Scale(overlay_row, from_=0, to=1, variable=self.wizard_overlay_opacity)
+        opacity.pack(side="left", padx=6)
+        opacity.bind("<ButtonRelease-1>", lambda event: self.observatory_draw_current_mosaic())
+        opacity.bind("<KeyRelease>", lambda event: self.observatory_draw_current_mosaic())
+        ttk.Label(overlay_row, text="Select downloaded images in Image Wizard, then Show in Explorer.").pack(side="left")
+
         ttk.Label(mosaic_filter_row, text="Sky Mosaic / Coverage Map", style="Section.TLabel").pack(side="left")
         ttk.Label(mosaic_filter_row, text="Layer").pack(side="left", padx=(18, 6))
         self.mosaic_layer_var = tk.StringVar(value="All active sources")
         self.mosaic_layer_combo = ttk.Combobox(
             mosaic_filter_row,
             textvariable=self.mosaic_layer_var,
-            values=["All active sources", "Hubble / HST", "JWST"],
+            values=MAST_LAYERS + WIZARD_LAYERS,
             state="readonly",
             width=18,
         )

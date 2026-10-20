@@ -1,3 +1,4 @@
+from .luminance import luminance_settings, blend_luminance
 import tempfile
 import threading
 from datetime import datetime
@@ -54,7 +55,8 @@ class ComposeWorkflowMixin:
         return downsample_image_for_preview(image), None
 
     def compose_rgb_from_paths(self, paths):
-        if getattr(self, "use_fits_liberator_var", None) is not None and self.use_fits_liberator_var.get():
+        luminance = luminance_settings(getattr(self, "archive_provenance", {}), paths)
+        if not luminance and getattr(self, "use_fits_liberator_var", None) is not None and self.use_fits_liberator_var.get():
             cli_path = find_fits_liberator_cli()
             if cli_path:
                 try:
@@ -73,7 +75,7 @@ class ComposeWorkflowMixin:
                 and self.mosaic_coverage_mode_var.get() == "Shared exposure overlap"
             )
             aligned_data, headers, alignment = wcs_align_fits_channels(
-                paths,
+                paths + [luminance["path"]] if luminance else paths,
                 require_full_stack_coverage=shared_coverage,
             )
             source_shapes = alignment["source_shapes"]
@@ -82,8 +84,10 @@ class ComposeWorkflowMixin:
             if shared_coverage:
                 alignment_note += " + shared stacked-exposure coverage"
         except Exception as exc:
+            if luminance:
+                raise ValueError("LRGB requires valid WCS alignment for all four files; check the saved luminance file.") from exc
             self.after(0, lambda e=exc: self.compose_status.set(f"WCS alignment unavailable; using image-size alignment. {e}"))
-        high_quality = bool(self.high_quality_var.get())
+        high_quality = bool(self.high_quality_var.get()) or bool(luminance)
         channel_names = ("red", "green", "blue")
         for index, (channel_name, path) in enumerate(zip(channel_names, paths)):
             self.after(0, lambda c=channel_name, p=path: self.compose_status.set(f"Reading {c} channel: {Path(p).name}"))
@@ -115,6 +119,14 @@ class ComposeWorkflowMixin:
         if high_quality:
             r, g, b = resize_float_to_match(channels, resize_mode)
             rgb_float = np.dstack([r, g, b]).astype(np.float32)
+            if luminance:
+                valid = np.logical_and.reduce([np.isfinite(a) for a in aligned_data])
+                if not valid.any():
+                    raise ValueError("No common valid pixels for luminance and RGB.")
+                detail = normalize_float_channel(aligned_data[3], stretch=self.compose_stretch_var.get())
+                rgb_float = blend_luminance(rgb_float, detail, luminance["strength"], valid)
+                alignment_note += f" + LRGB luminance {luminance['strength']:.0%}"
+                headers, source_shapes = headers[:3], source_shapes[:3]
             image = Image.fromarray(float_rgb_to_uint8(rgb_float), mode="RGB")
             return image, headers, source_shapes, resize_mode, rgb_float, "Python engine" + alignment_note
         r, g, b = resize_to_match(channels, resize_mode)
